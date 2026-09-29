@@ -151,6 +151,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
     </>
   ),
+  gif: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="3" />
+      <text x="12" y="15.5" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" fontFamily="Arial, Helvetica, sans-serif">
+        GIF
+      </text>
+    </>
+  ),
   sparkle: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.2 2.2M15.5 15.5l2.2 2.2M6.3 17.7l2.2-2.2M15.5 8.5l2.2-2.2" />,
   paw: (
     <g fill="currentColor" stroke="none">

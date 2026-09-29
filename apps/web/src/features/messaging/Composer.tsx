@@ -22,6 +22,7 @@ import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
 import { sendFileMessage } from '../../matrix/upload';
 import { EmojiAndEmotePicker } from './EmojiAndEmotePicker';
+import { GifPicker } from './GifPicker';
 import { membersAsPeople, useMentionAutocomplete } from './useMentionAutocomplete';
 import './Composer.css';
 
@@ -363,6 +364,12 @@ export function Composer({
             void mx.sendStickerMessage(roomId, threadId, sticker.mxcUrl, undefined, sticker.body);
           }}
         />
+        {/* Renders nothing when this deployment has no GIF search configured (gifApi.ts). Staged
+            as an ordinary attachment, same as a picked/dropped file — it already carries the
+            downloaded GIF's real bytes, so `send` below uploads and sends it exactly like any
+            other image: on the user's own homeserver, encrypted like any other attachment in an
+            encrypted room, never a third-party URL. */}
+        <GifPicker onPickGif={(file) => setAttachment(file)} />
         <button
           className="nu-composer__send"
           data-nu-role="composer-send"
