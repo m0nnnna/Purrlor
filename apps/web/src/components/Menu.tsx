@@ -14,6 +14,7 @@ export function Menu({
   triggerClassName,
   role,
   align = 'start',
+  dropUp = false,
   children,
 }: {
   /** Accessible name for the trigger, also its tooltip. */
@@ -23,6 +24,9 @@ export function Menu({
   triggerClassName: string;
   role?: string;
   align?: 'start' | 'end';
+  /** Opens above the trigger instead of below — for a trigger that sits at the bottom of the
+   *  viewport (the composer's attach button), where the default downward list would clip. */
+  dropUp?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -60,7 +64,11 @@ export function Menu({
       </button>
       {open && (
         <CloseContext.Provider value={() => setOpen(false)}>
-          <div className={`nu-menu__list nu-menu__list--${align}`} role="menu" data-nu-role={role && `${role}-list`}>
+          <div
+            className={`nu-menu__list nu-menu__list--${align}${dropUp ? ' nu-menu__list--up' : ''}`}
+            role="menu"
+            data-nu-role={role && `${role}-list`}
+          >
             {children}
           </div>
         </CloseContext.Provider>

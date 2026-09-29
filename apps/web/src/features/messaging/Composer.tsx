@@ -12,6 +12,7 @@ import {
 import { MsgType } from 'matrix-js-sdk';
 import { useSetAtom } from 'jotai';
 import { Icon } from '../../components/Icon';
+import { Menu, MenuItem } from '../../components/Menu';
 import { selectedRoomIdAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
@@ -21,6 +22,7 @@ import { canMentionRoom } from '../../matrix/permissions';
 import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
 import { sendFileMessage } from '../../matrix/upload';
+import { CreatePollModal } from './CreatePollModal';
 import { EmojiAndEmotePicker } from './EmojiAndEmotePicker';
 import { membersAsPeople, useMentionAutocomplete } from './useMentionAutocomplete';
 import { useShortcodeAutocomplete } from './useShortcodeAutocomplete';
@@ -54,6 +56,7 @@ export function Composer({
   const [commandError, setCommandError] = useState<string>();
   const [commandIndex, setCommandIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
   const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -331,16 +334,25 @@ export function Composer({
       {mention.dropdown}
       {shortcodeAutocomplete.dropdown}
       <form className="nu-composer" data-nu-role="composer" onSubmit={handleSubmit}>
-        <button
-          type="button"
-          className="nu-composer__attach"
-          data-nu-role="composer-attach"
-          title="Upload a file"
-          aria-label="Upload a file"
-          onClick={() => fileInputRef.current?.click()}
+        <Menu
+          label="Attach"
+          trigger={<Icon name="plus" size={18} />}
+          triggerClassName="nu-composer__attach"
+          role="composer-attach"
+          dropUp
         >
-          <Icon name="plus" size={18} />
-        </button>
+          <MenuItem icon="image" role="composer-attach-file" onSelect={() => fileInputRef.current?.click()}>
+            Upload a file
+          </MenuItem>
+          {/* Polls don't have a rendering in a thread's own simplified reply list (ThreadPanel.tsx
+              shows plain text bodies only), so the option is hidden there rather than creating a
+              poll that would show as a blank message. */}
+          {threadId == null && (
+            <MenuItem icon="poll" role="composer-attach-poll" onSelect={() => setShowPollModal(true)}>
+              Poll
+            </MenuItem>
+          )}
+        </Menu>
         <input
           ref={fileInputRef}
           type="file"
@@ -381,6 +393,7 @@ export function Composer({
           {uploading ? <span className="nu-composer__send-spinner" aria-hidden="true" /> : <Icon name="arrowUp" size={18} />}
         </button>
       </form>
+      {showPollModal && <CreatePollModal roomId={roomId} onClose={() => setShowPollModal(false)} />}
     </div>
   );
 }

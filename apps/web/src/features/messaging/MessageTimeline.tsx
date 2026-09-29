@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Direction, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
+import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
@@ -19,6 +19,7 @@ import { useThreads, type ThreadSummary } from '../../matrix/hooks/useThreads';
 import { editMessage } from '../../matrix/edits';
 import { canRedactEvent, canSendStateEvent } from '../../matrix/permissions';
 import { pinMessage, unpinMessage } from '../../matrix/pins';
+import { parsePollStart } from '../../matrix/polls';
 import { removeReaction, sendReaction } from '../../matrix/reactions';
 import { redactMessage } from '../../matrix/redaction';
 import { getReplyEventId, type ReplyTarget } from '../../matrix/replies';
@@ -30,6 +31,7 @@ import { FileMessage } from './FileMessage';
 import { ForwardMessageModal } from './ForwardMessageModal';
 import { ImageMessage } from './ImageMessage';
 import { LinkPreviewCard } from './LinkPreviewCard';
+import { PollCard } from './PollCard';
 import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
@@ -106,6 +108,7 @@ function ChannelWelcome({ room }: { room: Room }) {
 
 function previewTextFor(event: MatrixEvent): string {
   const content = event.getContent();
+  if (M_POLL_START.matches(event.getType())) return `📊 ${parsePollStart(event)?.question ?? 'Poll'}`;
   if (event.getType() === 'm.sticker') return `🎨 ${String(content.body ?? 'Sticker')}`;
   if (content.msgtype === 'm.image') return '📷 Image';
   if (content.msgtype === 'm.video') return '📹 Video';
@@ -196,7 +199,8 @@ function MessageRow({
     content.msgtype === 'm.audio' ||
     content.msgtype === 'm.file' ||
     event.getType() === 'm.sticker';
-  const isEditable = isOwnMessage && !isMediaMessage && !event.isDecryptionFailure();
+  const isPollMessage = M_POLL_START.matches(event.getType());
+  const isEditable = isOwnMessage && !isMediaMessage && !isPollMessage && !event.isDecryptionFailure();
   const canDelete = canRedactEvent(room, mx.getUserId() ?? '', event);
   // A local echo (still sending, or sent but not yet confirmed by /sync) has a temporary "~"-
   // prefixed event ID. matrix-js-sdk crashes (`getPendingEvents` requires `pendingEventOrdering:
@@ -329,6 +333,8 @@ function MessageRow({
           </div>
         ) : event.isDecryptionFailure() ? (
           <div className="nu-timeline__message-text">[unable to decrypt]</div>
+        ) : isPollMessage ? (
+          <PollCard room={room} event={event} />
         ) : event.getType() === 'm.sticker' ? (
           <ImageMessage
             body={String(content.body ?? '')}
@@ -423,16 +429,18 @@ function MessageRow({
           >
             <Icon name="threads" size={16} />
           </button>
-          <button
-            type="button"
-            className="nu-timeline__message-pin-action"
-            data-nu-role="timeline-forward-action"
-            title="Forward"
-            aria-label="Forward"
-            onClick={() => setShowForward(true)}
-          >
-            <Icon name="forward" size={16} />
-          </button>
+          {!isPollMessage && (
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action"
+              data-nu-role="timeline-forward-action"
+              title="Forward"
+              aria-label="Forward"
+              onClick={() => setShowForward(true)}
+            >
+              <Icon name="forward" size={16} />
+            </button>
+          )}
           <button
             type="button"
             className="nu-timeline__message-pin-action"
@@ -560,6 +568,10 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     if (event.isRedacted()) return false;
     if (event.isDecryptionFailure()) return true;
     if (event.getType() === 'm.sticker') return true;
+    // A poll's own m.poll.response/m.poll.end events are a different type each, so they fall
+    // through to `return false` below without needing an explicit exclusion — only their
+    // m.poll.start (rendered as PollCard) belongs in the timeline itself.
+    if (M_POLL_START.matches(event.getType())) return true;
     if (event.getType() !== 'm.room.message') return false;
     const relType = event.getContent()['m.relates_to']?.rel_type;
     // Thread replies render inside their thread's panel only (ThreadPanel), not inline here too

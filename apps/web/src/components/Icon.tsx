@@ -152,6 +152,11 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   sparkle: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.2 2.2M15.5 15.5l2.2 2.2M6.3 17.7l2.2-2.2M15.5 8.5l2.2-2.2" />,
+  poll: (
+    <>
+      <path d="M4 20V10M12 20V4M20 20v-7" />
+    </>
+  ),
   paw: (
     <g fill="currentColor" stroke="none">
       <ellipse cx="12" cy="16.2" rx="5.2" ry="4.4" />

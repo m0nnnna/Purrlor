@@ -25,6 +25,11 @@
   right: 0;
 }
 
+.nu-menu__list--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 .nu-menu__item {
   appearance: none;
   border: none;
