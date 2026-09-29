@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAtomValue } from 'jotai';
 import { RoomStateEvent, type Room } from 'matrix-js-sdk';
+import { emoteLibraryAtom } from '../../app/state/emoteLibrary';
 import { findParentSpaceId } from '../spaceChildren';
 import { useMatrixClient } from '../MatrixClientContext';
-import { getRoomStickers, type Sticker } from '../emotes';
+import { getRoomStickers, mergeByShortcode, type Sticker } from '../emotes';
 
-/** Same channel-pack-merged-with-parent-Space-pack treatment as useRoomEmotes.ts — see its
- *  comment for why. */
+/** Same channel-pack-merged-with-parent-Space-pack treatment as useRoomEmotes.ts, global library
+ *  underneath — see its comment for why. */
 function computeStickers(mx: ReturnType<typeof useMatrixClient>, room: Room): Sticker[] {
   const parentSpaceId = findParentSpaceId(mx, room.roomId);
   const space = parentSpaceId ? mx.getRoom(parentSpaceId) : undefined;
-  const merged = new Map<string, Sticker>();
-  if (space) getRoomStickers(space).forEach((s) => merged.set(s.shortcode, s));
-  getRoomStickers(room).forEach((s) => merged.set(s.shortcode, s));
-  return [...merged.values()];
+  return mergeByShortcode(space ? getRoomStickers(space) : [], getRoomStickers(room));
 }
 
 export function useRoomStickers(room: Room | undefined): Sticker[] {
   const mx = useMatrixClient();
+  const library = useAtomValue(emoteLibraryAtom).stickers;
   const [stickers, setStickers] = useState<Sticker[]>(() => (room ? computeStickers(mx, room) : []));
 
   useEffect(() => {
@@ -38,5 +38,5 @@ export function useRoomStickers(room: Room | undefined): Sticker[] {
     };
   }, [mx, room]);
 
-  return stickers;
+  return useMemo(() => mergeByShortcode(library, stickers), [library, stickers]);
 }

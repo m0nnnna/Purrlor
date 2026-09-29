@@ -4,6 +4,7 @@ import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import type { Emote } from '../../matrix/emotes';
 import type { PostContent, PostOrigin, RepostOf } from '../../matrix/feed';
+import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useIgnoredUsers } from '../../matrix/hooks/useIgnoredUsers';
 import { useRepostStatus } from '../../matrix/hooks/useRepostStatus';
 import { LinkPreviewCard } from '../messaging/LinkPreviewCard';
@@ -170,7 +171,7 @@ export function PostCard({
   ts,
   origin,
   myUserId,
-  emotes = [],
+  emotes: placeEmotes = [],
   members = [],
   privateBadge,
   edited,
@@ -193,6 +194,7 @@ export function PostCard({
   };
   const time = new Date(ts);
   const openHashtag = useOpenHashtag();
+  const emotes = useWithLibraryEmotes(placeEmotes);
 
   const repost = content.repostOf;
   const openerFor = (target: PostOrigin) =>

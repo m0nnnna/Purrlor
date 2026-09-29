@@ -257,6 +257,8 @@ else. It just isn't shown there.
 | `xyz.nekous.voice_server` | `""` | A Space | `{ "url": "wss://…", "tokenEndpoint": "https://…/api/livekit/token", "botUserId": "@…" }` (`botUserId` optional) | Space admins |
 | `xyz.nekous.channel_categories` | `""` | A Space | `{ "categories": [ { "id": "…", "name": "…", "channelIds": ["!…"] } ] }` | Space admins |
 | `xyz.nekous.feed` | `""` | A feed room | `{ "owner": "@…", "spaceId": "!…" }`, or `{ "owner": "@…", "profile": true }` for a profile feed | Feed owner, at creation |
+| `im.ponies.room_emotes` | `"@user:server"` | The emote library | A standard MSC2545 pack: that person's own global emotes and stickers. Each image may carry `xyz.nekous.added_at` (ms), which decides who keeps a shortcode two people chose. Packs under any other state key are ignored. | That person only (Matrix rejects an `@`-prefixed state key that isn't the sender's own ID) |
+| `xyz.nekous.emote_moderation` | `""` | The emote library | `{ "hidden": ["mxc://…"] }`: images every Purrlor client leaves out | Library moderators |
 
 A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its own. See
 [`voice-architecture.md`](voice-architecture.md).
@@ -274,6 +276,35 @@ A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its o
 |---|---|
 | `m.space` | Standard Space |
 | `xyz.nekous.profile` | A person's global profile feed. Listed in the room directory (so the global feed can find it), `world_readable`, public join. Discover hides it. |
+| `xyz.nekous.emote_library` | The server's **global emote library**, one per homeserver, at the alias `#purrlor-emotes:<server>` (a client only trusts a room with both this type and that canonical alias). Every Purrlor client joins it in the background and hides it from room lists. |
+
+**Setting up the emote library.** `purrlor emotes setup` creates it as the admin (the installer
+runs that for you). By hand, with any client that can send a raw `createRoom`, as the account that
+should own it:
+
+```json
+{
+  "name": "Emote library",
+  "room_alias_name": "purrlor-emotes",
+  "visibility": "private",
+  "creation_content": { "type": "xyz.nekous.emote_library" },
+  "power_level_content_override": {
+    "users_default": 0, "events_default": 50, "state_default": 50,
+    "invite": 50, "kick": 50, "ban": 50, "redact": 50,
+    "events": { "im.ponies.room_emotes": 0, "xyz.nekous.emote_moderation": 50, "m.room.power_levels": 50 }
+  },
+  "initial_state": [
+    { "type": "m.room.join_rules", "state_key": "", "content": { "join_rule": "public" } },
+    { "type": "m.room.history_visibility", "state_key": "", "content": { "history_visibility": "shared" } },
+    { "type": "m.room.guest_access", "state_key": "", "content": { "guest_access": "forbidden" } }
+  ]
+}
+```
+
+Level 0 lets everyone keep a pack; 50 makes a moderator, who can hide an image
+(`xyz.nekous.emote_moderation`), take down someone's whole pack (redacting their pack event), and
+mute someone (power level -1, below what a pack needs). Moderators can appoint other moderators
+from the app.
 
 ### 5.3 Timeline events
 

@@ -24,6 +24,11 @@
   background: var(--nu-color-bg-tertiary);
 }
 
+/* A global-library image a moderator has hidden: still listed for moderators, shown to no one. */
+.nu-emote-manager__item--hidden {
+  opacity: 0.5;
+}
+
 .nu-emote-manager__item-code {
   flex: 1;
   min-width: 0;

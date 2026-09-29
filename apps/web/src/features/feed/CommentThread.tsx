@@ -4,6 +4,7 @@ import { Avatar } from '../../components/Avatar';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
+import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useUserProfile } from '../../matrix/hooks/useUserProfile';
 import type { Emote } from '../../matrix/emotes';
 import { buildPostContent, POST_MAX_LENGTH, postLength, type PostContent } from '../../matrix/feed';
@@ -145,7 +146,7 @@ export function CommentThread({
   onReport,
   onOpenProfile,
   mentionPeople = [],
-  emotes = [],
+  emotes: placeEmotes = [],
   members = [],
   onAdd,
   onDelete,
@@ -186,6 +187,7 @@ export function CommentThread({
 }) {
   const mx = useMatrixClient();
   const myUserId = mx.getUserId() ?? '';
+  const emotes = useWithLibraryEmotes(placeEmotes);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState('');

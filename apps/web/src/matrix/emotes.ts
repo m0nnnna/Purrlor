@@ -12,14 +12,14 @@ import type { MatrixClient, Room } from 'matrix-js-sdk';
  * with no `usage` at all is treated as emoticon-only here, matching every pack this app itself
  * ever wrote before stickers existed.
  */
-const EMOTE_EVENT_TYPE = 'im.ponies.room_emotes';
+export const EMOTE_EVENT_TYPE = 'im.ponies.room_emotes';
 
 export type Emote = { shortcode: string; mxcUrl: string };
 export type Sticker = { shortcode: string; mxcUrl: string; body: string };
 
-type PackUsage = 'emoticon' | 'sticker';
-type PackImage = { url: string; usage?: PackUsage[]; body?: string };
-type RoomEmotesContent = {
+export type PackUsage = 'emoticon' | 'sticker';
+export type PackImage = { url: string; usage?: PackUsage[]; body?: string };
+export type RoomEmotesContent = {
   pack?: { display_name?: string };
   images?: Record<string, PackImage>;
 };
@@ -28,7 +28,7 @@ function readContent(room: Room): RoomEmotesContent {
   return room.currentState.getStateEvents(EMOTE_EVENT_TYPE, '')?.getContent<RoomEmotesContent>() ?? {};
 }
 
-function isUsableAs(image: PackImage, usage: PackUsage): boolean {
+export function isUsableAs(image: PackImage, usage: PackUsage): boolean {
   return !image.usage ? usage === 'emoticon' : image.usage.includes(usage);
 }
 
@@ -44,6 +44,14 @@ export function getRoomStickers(room: Room): Sticker[] {
   return Object.entries(images)
     .filter((entry): entry is [string, PackImage] => typeof entry[1]?.url === 'string' && isUsableAs(entry[1], 'sticker'))
     .map(([shortcode, image]) => ({ shortcode, mxcUrl: image.url, body: image.body || shortcode }));
+}
+
+/** Lists of images merged by shortcode, a later list winning a collision — so callers pass the
+ *  widest scope first (global library, then Space, then channel) and the most specific wins. */
+export function mergeByShortcode<T extends { shortcode: string }>(...lists: T[][]): T[] {
+  const merged = new Map<string, T>();
+  lists.forEach((list) => list.forEach((item) => merged.set(item.shortcode, item)));
+  return [...merged.values()];
 }
 
 export async function addRoomImage(

@@ -9,6 +9,7 @@ import { buildPostContent, deletePost, editPost, type PostContent, type PostOrig
 import type { FeedSource } from '../../matrix/globalFeed';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canModerateFeed, isRemovedFromSpace } from '../../matrix/feedGovernance';
+import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useIgnoredUsers } from '../../matrix/hooks/useIgnoredUsers';
 import { useOwnProfile } from '../../matrix/hooks/useOwnProfile';
 import { usePostInteractions } from '../../matrix/hooks/usePostInteractions';
@@ -110,6 +111,7 @@ export function InteractivePost({
   const [draft, setDraft] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [saved, setSaved] = useState<PostContent>();
+  const editEmotes = useWithLibraryEmotes(card.emotes ?? []);
   useEffect(() => setSaved(undefined), [card.content.body]);
   const content = saved ?? card.content;
   const edited = !!card.edited || !!saved;
@@ -121,7 +123,7 @@ export function InteractivePost({
     setSavingEdit(true);
     setError(undefined);
     try {
-      const { formattedBody } = buildMessageFormatting(body, card.emotes ?? [], []);
+      const { formattedBody } = buildMessageFormatting(body, editEmotes, []);
       const next = buildPostContent(body, formattedBody, {
         attachments: content.attachments,
         repostOf: content.repostOf,

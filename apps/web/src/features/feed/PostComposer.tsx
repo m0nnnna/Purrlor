@@ -9,6 +9,7 @@ import type { FeedSource } from '../../matrix/globalFeed';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { ACCEPTED_MEDIA_TYPES, formatBytes } from '../../matrix/postMedia';
 import { publishToTarget, type PostTarget } from '../../matrix/postPublishing';
+import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useOwnProfile } from '../../matrix/hooks/useOwnProfile';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { membersAsPeople, useMentionAutocomplete } from '../messaging/useMentionAutocomplete';
@@ -39,7 +40,7 @@ function audienceHint(target: ComposerTarget | undefined, privately: boolean): s
  */
 export function PostComposer({
   targets,
-  emotes = [],
+  emotes: placeEmotes = [],
   placeholder,
   allowPrivate,
   ready = true,
@@ -59,6 +60,7 @@ export function PostComposer({
 }) {
   const mx = useMatrixClient();
   const { displayName } = useOwnProfile();
+  const emotes = useWithLibraryEmotes(placeEmotes);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
   const [targetId, setTargetId] = useState(targets[0]?.id ?? '');

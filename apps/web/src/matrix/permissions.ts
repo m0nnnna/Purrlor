@@ -56,6 +56,16 @@ function getUserPowerLevel(room: Room, content: PowerLevelsContent, userId: stri
   return content.users?.[userId] ?? content.users_default ?? 0;
 }
 
+/** A user's power level in a room, counting a privileged creator as Infinity (see above). */
+export function userPowerLevel(room: Room, userId: string): number {
+  return getUserPowerLevel(room, getPowerLevelsContent(room), userId);
+}
+
+/** The level a room gives anyone it doesn't list — what "no special role" means there. */
+export function defaultUserPowerLevel(room: Room): number {
+  return getPowerLevelsContent(room).users_default ?? 0;
+}
+
 /**
  * Reads `m.room.power_levels` and checks whether a user is allowed to send a given state event
  * type in this room — the same mechanism Matrix uses to gate renaming, changing the topic/

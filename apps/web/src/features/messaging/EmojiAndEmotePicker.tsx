@@ -4,6 +4,8 @@ import type { Room } from 'matrix-js-sdk';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import type { Sticker } from '../../matrix/emotes';
+import { canContributeToLibrary, canModerateLibrary } from '../../matrix/emoteLibrary';
+import { useEmoteLibraryRoom } from '../../matrix/hooks/useEmoteLibrary';
 import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
 import { useRoomStickers } from '../../matrix/hooks/useRoomStickers';
 import { canSendStateEvent } from '../../matrix/permissions';
@@ -39,11 +41,15 @@ export function EmojiAndEmotePicker({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('emoji');
   const [showManager, setShowManager] = useState(false);
+  const library = useEmoteLibraryRoom();
+  const myUserId = mx.getUserId() ?? '';
   const parentSpaceId = room ? findParentSpaceId(mx, room.roomId) : null;
   const space = parentSpaceId ? mx.getRoom(parentSpaceId) : null;
+  // Anyone can add to the global library, so with one set up the manager is open to everyone.
   const canManage = room
-    ? canSendStateEvent(room, mx.getUserId() ?? '', 'im.ponies.room_emotes') ||
-      (!!space && canSendStateEvent(space, mx.getUserId() ?? '', 'im.ponies.room_emotes'))
+    ? canSendStateEvent(room, myUserId, 'im.ponies.room_emotes') ||
+      (!!space && canSendStateEvent(space, myUserId, 'im.ponies.room_emotes')) ||
+      (!!library && (canContributeToLibrary(library, myUserId) || canModerateLibrary(library, myUserId)))
     : false;
 
   return (

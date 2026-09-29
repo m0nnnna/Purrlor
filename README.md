@@ -140,6 +140,10 @@ set a nickname scoped to just that Space, independent of your global display nam
 - Slash commands: `/me`, `/shrug`, `/nick`, `/topic`, `/invite`, `/kick`, `/ban`, `/unban`, `/leave`.
 - Custom animated emotes and stickers via MSC2545 image packs (interoperable with Element/cinny/
   FluffyChat) — per-channel or space-wide, managed from a permission-gated picker.
+- A **global emote library**: anyone can add their own emotes and stickers for everyone on the
+  server to use in any channel, DM or post. Its moderators can hide an image, remove someone's
+  whole set, or mute them from adding more (Manage Emotes & Stickers → Moderate the global
+  library). The installer sets it up; on an older install, run `sudo purrlor emotes setup` once.
 - Rich link/URL previews (server-side OpenGraph unfurling, no client-side scraping).
 - Drag-and-drop and paste-to-upload for attachments.
 - Discord-style channel categories (collapsible, reorderable) inside a Space.
@@ -324,6 +328,7 @@ The installer adds a `purrlor` command:
 | `purrlor backup` | Saves your settings and the homeserver's data to a file |
 | `purrlor new-invite-code` | Replaces the sign-up code |
 | `purrlor open-signups` / `close-signups` | Allows or stops new sign-ups |
+| `purrlor emotes setup` | Creates the global emote library, owned by the admin (once; the installer already does it) |
 
 ### Other setups
 

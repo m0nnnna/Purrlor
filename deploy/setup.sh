@@ -1693,6 +1693,14 @@ if [ "$PROVISION_MATRIX" = true ]; then
   fi
 fi
 
+if [ "$PROVISION_MATRIX" = true ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
+  log "Global emote library"
+  # Owned by the admin account, so moderating it is the admin's to hand out (deploy/purrlor).
+  PURRLOR_ADMIN_USER="$ADMIN_LOCALPART" PURRLOR_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    bash "$REPO_ROOT/deploy/purrlor" emotes setup \
+    || warn "Couldn't set up the global emote library — run 'sudo purrlor emotes setup' later to try again."
+fi
+
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------

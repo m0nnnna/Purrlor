@@ -11,6 +11,7 @@ import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { MentionInboxCollector } from '../features/notifications/MentionInboxCollector';
 import { MentionInviteAcceptor } from '../features/notifications/MentionInviteAcceptor';
 import { SpaceAutoJoiner } from '../features/servers/SpaceAutoJoiner';
+import { EmoteLibraryWatcher } from '../features/messaging/EmoteLibraryWatcher';
 import { IncomingVerificationListener } from '../features/security/IncomingVerificationListener';
 import { RecoveryKeyPrompt } from '../features/security/RecoveryKeyPrompt';
 import { VoiceCallSession } from '../features/voice/VoiceCallSession';
@@ -76,6 +77,8 @@ export function AppShell() {
       <ActivityWatcher />
       <MentionInviteAcceptor />
       <SpaceAutoJoiner />
+      {/* Joins a server-wide room; the demo's sample world has none. */}
+      {!isDemoMode() && <EmoteLibraryWatcher />}
       <IncomingVerificationListener />
       {recoveryStatus === 'needed' && !recoveryResolved && (
         <RecoveryKeyPrompt onResolved={() => setRecoveryResolved(true)} />

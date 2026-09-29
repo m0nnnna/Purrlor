@@ -124,6 +124,9 @@ Accounts (bundled homeserver only; asks for the admin account's password):
   purrlor user email <name> [address]  change their email address, or remove it with none
   purrlor user find-email <address>    which account has that email address
   purrlor admin <command>              any other admin-room command ('purrlor admin help')
+
+Global emote library (asks for the admin account's password):
+  purrlor emotes setup                 create the library everyone can add emotes to (once)
 HELP
 }
 
@@ -828,12 +831,10 @@ async function call(method, path, body) {
 })();
 JS
 
-# admin_run COMMAND -> runs '!admin COMMAND' on the bundled homeserver as its admin and prints the
-# reply. Asks which account is the admin (offering the one setup.sh created) and its password.
-admin_run() {
-  local server default user pass
-  server="$(env_get MATRIX_SERVER_NAME)"
-  [ -n "$server" ] || die "MATRIX_SERVER_NAME isn't in .env — re-run setup.sh."
+# ask_admin_credentials -> sets PURRLOR_ADMIN_USER and PURRLOR_ADMIN_PASSWORD, asking for whichever
+# isn't already in the environment (setup.sh passes both, so the installer never asks twice).
+ask_admin_credentials() {
+  local default
   default="$(grep -o 'Log in as @[^ ]*' .install-summary 2>/dev/null | head -n1 | cut -c11- || true)"
   if [ -z "${PURRLOR_ADMIN_USER:-}" ]; then
     read -r -p "Admin account${default:+ [$default]}: " PURRLOR_ADMIN_USER
@@ -843,6 +844,15 @@ admin_run() {
   if [ -z "${PURRLOR_ADMIN_PASSWORD:-}" ]; then
     read -r -s -p "Password for $PURRLOR_ADMIN_USER: " PURRLOR_ADMIN_PASSWORD; echo
   fi
+}
+
+# admin_run COMMAND -> runs '!admin COMMAND' on the bundled homeserver as its admin and prints the
+# reply. Asks which account is the admin (offering the one setup.sh created) and its password.
+admin_run() {
+  local server
+  server="$(env_get MATRIX_SERVER_NAME)"
+  [ -n "$server" ] || die "MATRIX_SERVER_NAME isn't in .env — re-run setup.sh."
+  ask_admin_credentials
   say "Running in the admin room: !admin $1"
   # NODE_USE_ENV_PROXY emptied: the homeserver is on the local Docker network, never via the proxy.
   printf '%s\n%s\n%s\n%s\n' "$server" "$PURRLOR_ADMIN_USER" "$PURRLOR_ADMIN_PASSWORD" "$1" \
@@ -899,6 +909,107 @@ cmd_admin() {
   admin_run "$*"
 }
 
+# ---------------------------------------------------------------------------
+# Global emote library
+# ---------------------------------------------------------------------------
+
+# Creates the room behind the app's global emote library (apps/web/src/matrix/emoteLibrary.ts,
+# which explains the design; docs/api.md lists the room's settings). Made by the admin rather than
+# by the app on first use, so the admin — not whoever happened to open the picker first — owns its
+# moderation. Everyone can add a pack under their own user ID (level 0); moderators (50) can hide
+# images, take down packs and mute people. Does nothing if the library already exists.
+# Same runtime as ADMIN_JS, but plain client-server API, so it works on any homeserver.
+read -r -d '' EMOTES_JS <<'JS' || true
+const [base, user, password] = require('fs').readFileSync(0, 'utf8').split('\n');
+let token;
+async function call(method, path, body) {
+  const res = await fetch(base.replace(/\/+$/, '') + '/_matrix/client/v3' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { errcode: data.errcode });
+  return data;
+}
+(async () => {
+  let userId;
+  try {
+    ({ access_token: token, user_id: userId } = await call('POST', '/login', {
+      type: 'm.login.password',
+      identifier: { type: 'm.id.user', user },
+      password,
+      initial_device_display_name: 'purrlor command line',
+    }));
+  } catch (err) {
+    console.error(`Couldn't log in as ${user}: ${err.message}`);
+    process.exit(1);
+  }
+  const alias = `#purrlor-emotes:${userId.slice(userId.indexOf(':') + 1)}`;
+  try {
+    try {
+      const { room_id: existing } = await call('GET', '/directory/room/' + encodeURIComponent(alias));
+      console.log(`The emote library is already set up: ${alias} (${existing}).`);
+      return;
+    } catch (err) {
+      if (err.errcode !== 'M_NOT_FOUND') throw err;
+    }
+    const { room_id: roomId } = await call('POST', '/createRoom', {
+      name: 'Emote library',
+      topic: 'Emotes and stickers everyone on this server can use.',
+      room_alias_name: 'purrlor-emotes',
+      visibility: 'private',
+      creation_content: { type: 'xyz.nekous.emote_library' },
+      power_level_content_override: {
+        users_default: 0,
+        events_default: 50,
+        state_default: 50,
+        invite: 50,
+        kick: 50,
+        ban: 50,
+        redact: 50,
+        events: {
+          'im.ponies.room_emotes': 0,
+          'xyz.nekous.emote_moderation': 50,
+          'm.room.power_levels': 50,
+        },
+      },
+      initial_state: [
+        { type: 'm.room.join_rules', state_key: '', content: { join_rule: 'public' } },
+        { type: 'm.room.history_visibility', state_key: '', content: { history_visibility: 'shared' } },
+        { type: 'm.room.guest_access', state_key: '', content: { guest_access: 'forbidden' } },
+      ],
+    });
+    console.log(`Created the emote library: ${alias} (${roomId}). ${userId} owns it.`);
+  } catch (err) {
+    console.error(`Couldn't set up the emote library: ${err.message}`);
+    process.exitCode = 1;
+  } finally {
+    await call('POST', '/logout', {}).catch(() => {});
+  }
+})();
+JS
+
+cmd_emotes() {
+  local usage="Usage: purrlor emotes setup"
+  case "${1:-}" in
+    setup)
+      need_root emotes setup
+      local base proxy=()
+      base="$(env_get MATRIX_HOMESERVER_URL)"
+      [ -n "$base" ] || die "MATRIX_HOMESERVER_URL isn't in .env — re-run setup.sh."
+      # The bundled homeserver is on the local Docker network, never via the outbound proxy.
+      if has_matrix; then proxy=(-e NODE_USE_ENV_PROXY=); fi
+      ask_admin_credentials
+      say "Setting up the global emote library as $PURRLOR_ADMIN_USER"
+      printf '%s\n%s\n%s\n' "$base" "$PURRLOR_ADMIN_USER" "$PURRLOR_ADMIN_PASSWORD" \
+        | compose exec -T "${proxy[@]}" token-server node -e "$EMOTES_JS" \
+        || die "That didn't go through (above says why). If the token server isn't running, 'purrlor status' shows it."
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
 # The dispatcher and the `exit` after it are one command (same line as `esac`), so bash has read
 # all of it before running any of it — a script updated underneath it can't be half-read.
 case "${1:-help}" in
@@ -919,6 +1030,7 @@ case "${1:-help}" in
   media) shift; cmd_media "$@" ;;
   user) shift; cmd_user "$@" ;;
   admin) shift; cmd_admin "$@" ;;
+  emotes) shift; cmd_emotes "$@" ;;
   matrix-dns) write_matrix_resolv ;;
   *) warn "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac; exit $?
