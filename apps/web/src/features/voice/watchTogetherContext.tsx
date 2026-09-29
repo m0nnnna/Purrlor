@@ -1,21 +1,12 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import { useLocalParticipant, useRoomContext } from '@livekit/components-react';
-import { useWatchTogether, type WatchTogetherControls } from './useWatchTogether';
+import { createContext, useContext } from 'react';
+import type { WatchTogetherControls } from './useWatchTogether';
 
-const WatchTogetherContext = createContext<WatchTogetherControls | null>(null);
+// Deliberately livekit-free: NowPlayingCard reads useSharedWatchTogether() from the sidebar
+// (ChannelList), which is mounted whether or not a call is active — pulling @livekit/components-
+// react into that module graph would undo VoiceCallBody/ActiveVoiceCall's code-splitting. The
+// provider that actually needs LiveKit's room context lives in WatchTogetherProvider.tsx instead.
 
-/**
- * Holds the call's shared Watch/Listen together session for as long as the call lasts. Mounted
- * inside the LiveKit room in VoiceCallSession, above everything — so the call's pane and the
- * Now playing card beside the call bar read the same session, and it keeps going whichever
- * channel is on screen.
- */
-export function WatchTogetherProvider({ children }: { children: ReactNode }) {
-  const room = useRoomContext();
-  const { localParticipant } = useLocalParticipant();
-  const controls = useWatchTogether(room, localParticipant.identity);
-  return <WatchTogetherContext.Provider value={controls}>{children}</WatchTogetherContext.Provider>;
-}
+export const WatchTogetherContext = createContext<WatchTogetherControls | null>(null);
 
 /** The call's shared session and its controls; null outside a connected call. */
 export function useSharedWatchTogether(): WatchTogetherControls | null {
