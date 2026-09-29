@@ -33,6 +33,7 @@ import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
+import { VoiceMessage } from './VoiceMessage';
 import './MessageTimeline.css';
 
 const HISTORY_PAGE_SIZE = 30;
@@ -344,6 +345,15 @@ function MessageRow({
             mimetype={content.info?.mimetype}
             width={content.info?.w}
             height={content.info?.h}
+          />
+        ) : content.msgtype === 'm.audio' && content['org.matrix.msc3245.voice'] ? (
+          <VoiceMessage
+            body={String(content.body ?? '')}
+            url={content.url}
+            file={content.file}
+            mimetype={content.info?.mimetype}
+            durationMs={content.info?.duration ?? content['org.matrix.msc1767.audio']?.duration}
+            waveform={content['org.matrix.msc1767.audio']?.waveform}
           />
         ) : content.msgtype === 'm.video' || content.msgtype === 'm.audio' || content.msgtype === 'm.file' ? (
           <FileMessage

@@ -273,6 +273,31 @@
   cursor: default;
 }
 
+/* Stands in for .nu-composer__send whenever there's nothing to send yet (see showMicButton in
+   Composer.tsx) — same slot, same size, so nothing shifts when typing starts/stops. */
+.nu-composer__mic {
+  appearance: none;
+  border: none;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nu-radius-md);
+  background: transparent;
+  color: var(--nu-color-text-secondary);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.nu-composer__mic:hover {
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}
+
 .nu-composer__send-spinner {
   width: 14px;
   height: 14px;

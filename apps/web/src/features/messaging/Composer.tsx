@@ -20,9 +20,12 @@ import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canMentionRoom } from '../../matrix/permissions';
 import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
-import { sendFileMessage } from '../../matrix/upload';
+import { sendFileMessage, sendVoiceMessage } from '../../matrix/upload';
+import { computeWaveform } from '../../matrix/waveform';
 import { EmojiAndEmotePicker } from './EmojiAndEmotePicker';
 import { membersAsPeople, useMentionAutocomplete } from './useMentionAutocomplete';
+import { useVoiceRecorder } from './useVoiceRecorder';
+import { VoiceRecorderBar } from './VoiceRecorderBar';
 import './Composer.css';
 
 const TYPING_TIMEOUT_MS = 10000;
@@ -53,6 +56,9 @@ export function Composer({
   const [commandError, setCommandError] = useState<string>();
   const [commandIndex, setCommandIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const voiceRecorder = useVoiceRecorder();
+  const [sendingVoice, setSendingVoice] = useState(false);
+  const [voiceSendError, setVoiceSendError] = useState<string>();
   const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -178,6 +184,39 @@ export function Composer({
     void send();
   };
 
+  const handleStartRecording = () => {
+    setVoiceSendError(undefined);
+    void voiceRecorder.start();
+  };
+
+  const handleCancelRecording = () => {
+    voiceRecorder.cancel();
+  };
+
+  const handleSendRecording = async () => {
+    const recorded = await voiceRecorder.stop();
+    if (!recorded) {
+      // Nothing was captured (e.g. stopped almost instantly) — just drop back to the normal
+      // composer rather than uploading an empty/near-empty clip.
+      voiceRecorder.reset();
+      return;
+    }
+    setSendingVoice(true);
+    try {
+      // The waveform needs the recorded bytes decoded independently of the upload — computed
+      // up front so a slow/failed upload doesn't also block or repeat the decode.
+      const waveform = await computeWaveform(recorded.blob).catch(() => []);
+      await sendVoiceMessage(mx, roomId, threadId, recorded.blob, recorded.mimetype, recorded.durationMs, waveform);
+      voiceRecorder.reset();
+    } catch (err) {
+      console.error('Failed to send voice message', err);
+      voiceRecorder.reset();
+      setVoiceSendError('Failed to send voice message. Please try recording again.');
+    } finally {
+      setSendingVoice(false);
+    }
+  };
+
   const handleKeyDown = (evt: KeyboardEvent<HTMLTextAreaElement>) => {
     if (mention.handleKeyDown(evt)) return;
     if (commandMatches.length > 0) {
@@ -251,6 +290,11 @@ export function Composer({
     if (file) setAttachment(file);
   };
 
+  // Discord/Element convention: the mic button only stands in for send while there's nothing
+  // else to send — as soon as there's typed text or a picked attachment, send takes over.
+  const showMicButton = !text.trim() && !attachment;
+  const isRecordingUi = voiceRecorder.state.status === 'recording' || voiceRecorder.state.status === 'requesting';
+
   return (
     <div
       className={isDragOver ? 'nu-composer-wrapper nu-composer-wrapper--drag-over' : 'nu-composer-wrapper'}
@@ -322,58 +366,91 @@ export function Composer({
           {commandError}
         </p>
       )}
+      {voiceRecorder.state.status === 'error' && (
+        <p className="nu-composer__command-error" data-nu-role="composer-voice-error">
+          {voiceRecorder.state.message}
+        </p>
+      )}
+      {voiceSendError && (
+        <p className="nu-composer__command-error" data-nu-role="composer-voice-send-error">
+          {voiceSendError}
+        </p>
+      )}
       {mention.dropdown}
-      <form className="nu-composer" data-nu-role="composer" onSubmit={handleSubmit}>
-        <button
-          type="button"
-          className="nu-composer__attach"
-          data-nu-role="composer-attach"
-          title="Upload a file"
-          aria-label="Upload a file"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Icon name="plus" size={18} />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="nu-composer__file-input"
-          data-nu-role="composer-file-input"
-          onChange={handleFileChange}
+      {isRecordingUi ? (
+        <VoiceRecorderBar
+          elapsedMs={voiceRecorder.state.status === 'recording' ? voiceRecorder.state.elapsedMs : 0}
+          requesting={voiceRecorder.state.status === 'requesting'}
+          sending={sendingVoice}
+          onCancel={handleCancelRecording}
+          onSend={() => void handleSendRecording()}
         />
-        <textarea
-          ref={textareaRef}
-          className="nu-composer__input"
-          data-nu-role="composer-input"
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder={room ? `Message #${room.name}` : 'Message'}
-          rows={1}
-        />
-        <EmojiAndEmotePicker
-          room={room ?? undefined}
-          onPickEmoji={(emoji) => setText((t) => `${t}${emoji}`)}
-          onPickEmote={(shortcode) => setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}:${shortcode}: `)}
-          onPickSticker={(sticker) => {
-            // Sent immediately as its own m.sticker event — a sticker isn't text to compose
-            // further, unlike an emote (which inserts a :shortcode: for the rest of the message
-            // to build around).
-            void mx.sendStickerMessage(roomId, threadId, sticker.mxcUrl, undefined, sticker.body);
-          }}
-        />
-        <button
-          className="nu-composer__send"
-          data-nu-role="composer-send"
-          type="submit"
-          title={uploading ? 'Uploading…' : 'Send'}
-          aria-label={uploading ? 'Uploading' : 'Send'}
-          disabled={(!text.trim() && !attachment) || sending}
-        >
-          {uploading ? <span className="nu-composer__send-spinner" aria-hidden="true" /> : <Icon name="arrowUp" size={18} />}
-        </button>
-      </form>
+      ) : (
+        <form className="nu-composer" data-nu-role="composer" onSubmit={handleSubmit}>
+          <button
+            type="button"
+            className="nu-composer__attach"
+            data-nu-role="composer-attach"
+            title="Upload a file"
+            aria-label="Upload a file"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Icon name="plus" size={18} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="nu-composer__file-input"
+            data-nu-role="composer-file-input"
+            onChange={handleFileChange}
+          />
+          <textarea
+            ref={textareaRef}
+            className="nu-composer__input"
+            data-nu-role="composer-input"
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={room ? `Message #${room.name}` : 'Message'}
+            rows={1}
+          />
+          <EmojiAndEmotePicker
+            room={room ?? undefined}
+            onPickEmoji={(emoji) => setText((t) => `${t}${emoji}`)}
+            onPickEmote={(shortcode) => setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}:${shortcode}: `)}
+            onPickSticker={(sticker) => {
+              // Sent immediately as its own m.sticker event — a sticker isn't text to compose
+              // further, unlike an emote (which inserts a :shortcode: for the rest of the message
+              // to build around).
+              void mx.sendStickerMessage(roomId, threadId, sticker.mxcUrl, undefined, sticker.body);
+            }}
+          />
+          {showMicButton ? (
+            <button
+              type="button"
+              className="nu-composer__mic"
+              data-nu-role="composer-mic"
+              title="Record a voice message"
+              aria-label="Record a voice message"
+              onClick={handleStartRecording}
+            >
+              <Icon name="mic" size={18} />
+            </button>
+          ) : (
+            <button
+              className="nu-composer__send"
+              data-nu-role="composer-send"
+              type="submit"
+              title={uploading ? 'Uploading…' : 'Send'}
+              aria-label={uploading ? 'Uploading' : 'Send'}
+              disabled={(!text.trim() && !attachment) || sending}
+            >
+              {uploading ? <span className="nu-composer__send-spinner" aria-hidden="true" /> : <Icon name="arrowUp" size={18} />}
+            </button>
+          )}
+        </form>
+      )}
     </div>
   );
 }
