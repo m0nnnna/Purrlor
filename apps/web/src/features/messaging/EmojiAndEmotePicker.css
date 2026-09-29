@@ -73,6 +73,26 @@
   gap: var(--nu-space-2);
 }
 
+.nu-emoji-emote-picker__search {
+  flex: none;
+  background: var(--nu-color-bg-tertiary);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+  padding: var(--nu-space-2) var(--nu-space-3);
+  color: var(--nu-color-text-primary);
+  font-family: inherit;
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-emoji-emote-picker__section-label {
+  margin: 0 0 var(--nu-space-1);
+  font-size: var(--nu-font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--nu-color-text-muted);
+}
+
 .nu-emoji-emote-picker__empty {
   margin: 0;
   color: var(--nu-color-text-muted);

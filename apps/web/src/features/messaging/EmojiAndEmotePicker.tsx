@@ -1,20 +1,65 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import type { Room } from 'matrix-js-sdk';
 import { EmojiPicker } from '../../components/EmojiPicker';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import type { Sticker } from '../../matrix/emotes';
+import type { EmoteSource, Sticker, SourcedEmote } from '../../matrix/emotes';
 import { canContributeToLibrary, canModerateLibrary } from '../../matrix/emoteLibrary';
 import { useEmoteLibraryRoom } from '../../matrix/hooks/useEmoteLibrary';
-import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
+import { useGroupedRoomEmotes } from '../../matrix/hooks/useGroupedRoomEmotes';
+import { useRecentEmotes } from '../../matrix/hooks/useRecentEmotes';
 import { useRoomStickers } from '../../matrix/hooks/useRoomStickers';
 import { canSendStateEvent } from '../../matrix/permissions';
+import { noteRecentEmote } from '../../matrix/recentEmotes';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { EmoteImage } from './EmoteImage';
 import { EmoteManagerModal } from './EmoteManagerModal';
 import './EmojiAndEmotePicker.css';
 
 type Tab = 'emoji' | 'emotes' | 'stickers';
+
+const SOURCE_LABELS: Record<EmoteSource, string> = { global: 'Global', space: 'This server', channel: 'Channel' };
+/** Display order for the grouped sections — deliberately widest-to-narrowest, independent of
+ *  groupEmotesBySource's dedup precedence (which goes the other way: the *narrowest* scope wins a
+ *  shared shortcode). */
+const SOURCE_ORDER: EmoteSource[] = ['global', 'space', 'channel'];
+
+function matchesQuery(shortcode: string, query: string): boolean {
+  return shortcode.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+/** One labeled grid of emote buttons — Recents, and each of the Global/This server/Channel
+ *  sections, are all the same shape. */
+function EmoteSection({
+  label,
+  emotes,
+  onPick,
+}: {
+  label: string;
+  emotes: { shortcode: string; mxcUrl: string }[];
+  onPick: (emote: { shortcode: string; mxcUrl: string }) => void;
+}) {
+  if (emotes.length === 0) return null;
+  return (
+    <section className="nu-emoji-emote-picker__section">
+      <h3 className="nu-emoji-emote-picker__section-label">{label}</h3>
+      <div className="nu-emoji-emote-picker__grid">
+        {emotes.map((emote) => (
+          <button
+            key={emote.shortcode}
+            type="button"
+            className="nu-emoji-emote-picker__item"
+            data-nu-role="emoji-emote-picker-item"
+            title={`:${emote.shortcode}:`}
+            onClick={() => onPick(emote)}
+          >
+            <EmoteImage shortcode={emote.shortcode} mxcUrl={emote.mxcUrl} />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /**
  * The composer's single 😀 button. Unicode emoji and this room's custom emotes used to be two
@@ -24,6 +69,11 @@ type Tab = 'emoji' | 'emotes' | 'stickers';
  * to an existing message, rather than composing one) is its own smaller component: reactions can
  * use custom emotes too, but a reaction's `key` sends as the emote's `mxc://` URL rather than
  * `:shortcode:` text, so it isn't just this component reused — see ReactionPicker.tsx.
+ *
+ * The Emotes tab has a search box, a Recents section (recentEmotes.ts — only emotes still usable
+ * here, so picking one never sends a shortcode this room can't actually resolve), and the rest
+ * grouped by where each one comes from (groupEmotesBySource: Global library / this Space / this
+ * channel specifically), widest scope first.
  */
 export function EmojiAndEmotePicker({
   room,
@@ -37,10 +87,12 @@ export function EmojiAndEmotePicker({
   onPickSticker: (sticker: Sticker) => void;
 }) {
   const mx = useMatrixClient();
-  const emotes = useRoomEmotes(room);
+  const groupedEmotes = useGroupedRoomEmotes(room);
+  const recentEmotes = useRecentEmotes();
   const stickers = useRoomStickers(room);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('emoji');
+  const [query, setQuery] = useState('');
   const [showManager, setShowManager] = useState(false);
   const library = useEmoteLibraryRoom();
   const myUserId = mx.getUserId() ?? '';
@@ -52,6 +104,24 @@ export function EmojiAndEmotePicker({
       (!!space && canSendStateEvent(space, myUserId, 'im.ponies.room_emotes')) ||
       (!!library && (canContributeToLibrary(library, myUserId) || canModerateLibrary(library, myUserId)))
     : false;
+
+  const filteredEmotes = useMemo(
+    () => (query.trim() ? groupedEmotes.filter((e) => matchesQuery(e.shortcode, query)) : groupedEmotes),
+    [groupedEmotes, query]
+  );
+  const bySource = (source: EmoteSource): SourcedEmote[] => filteredEmotes.filter((e) => e.source === source);
+  // Recents only while not searching (search results already cover them, same as Discord's own
+  // picker), and only ones still actually available here — a shortcode this room can't resolve
+  // would just send as literal `:text:` (see messageFormatting.ts).
+  const availableRecents = query.trim()
+    ? []
+    : recentEmotes.filter((recent) => groupedEmotes.some((e) => e.shortcode === recent.shortcode && e.mxcUrl === recent.mxcUrl));
+
+  const pickEmote = (emote: { shortcode: string; mxcUrl: string }) => {
+    setOpen(false);
+    onPickEmote(emote.shortcode);
+    void noteRecentEmote(mx, emote).catch(() => undefined);
+  };
 
   return (
     <div className="nu-emoji-emote-picker">
@@ -115,25 +185,26 @@ export function EmojiAndEmotePicker({
           )}
           {tab === 'emotes' && (
             <div className="nu-emoji-emote-picker__emotes" data-nu-role="emoji-emote-picker-emotes">
-              {emotes.length === 0 ? (
+              <input
+                type="text"
+                className="nu-emoji-emote-picker__search"
+                data-nu-role="emoji-emote-picker-search"
+                placeholder="Search emotes…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+              />
+              {groupedEmotes.length === 0 ? (
                 <p className="nu-emoji-emote-picker__empty">No custom emotes available here yet.</p>
+              ) : filteredEmotes.length === 0 ? (
+                <p className="nu-emoji-emote-picker__empty">No emotes match "{query.trim()}".</p>
               ) : (
-                <div className="nu-emoji-emote-picker__grid">
-                  {emotes.map((emote) => (
-                    <button
-                      key={emote.shortcode}
-                      type="button"
-                      className="nu-emoji-emote-picker__item"
-                      title={`:${emote.shortcode}:`}
-                      onClick={() => {
-                        setOpen(false);
-                        onPickEmote(emote.shortcode);
-                      }}
-                    >
-                      <EmoteImage shortcode={emote.shortcode} mxcUrl={emote.mxcUrl} />
-                    </button>
+                <>
+                  <EmoteSection label="Recents" emotes={availableRecents} onPick={pickEmote} />
+                  {SOURCE_ORDER.map((source) => (
+                    <EmoteSection key={source} label={SOURCE_LABELS[source]} emotes={bySource(source)} onPick={pickEmote} />
                   ))}
-                </div>
+                </>
               )}
               {canManage && (
                 <button

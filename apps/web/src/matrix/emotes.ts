@@ -54,6 +54,33 @@ export function mergeByShortcode<T extends { shortcode: string }>(...lists: T[][
   return [...merged.values()];
 }
 
+export type EmoteSource = 'global' | 'space' | 'channel';
+export type SourcedEmote = Emote & { source: EmoteSource };
+
+/**
+ * Same collision rule as `mergeByShortcode` (most specific scope wins a shared shortcode), but
+ * keeping each surviving emote's scope on it instead of flattening it away — for
+ * EmojiAndEmotePicker's grouped "Global / This server / Channel" sections, where which group an
+ * emote lands in *is* the point, not just whether it shows up at all.
+ */
+export function groupEmotesBySource(global: Emote[], space: Emote[], channel: Emote[]): SourcedEmote[] {
+  const seen = new Set<string>();
+  const scoped: [Emote[], EmoteSource][] = [
+    [channel, 'channel'],
+    [space, 'space'],
+    [global, 'global'],
+  ];
+  const result: SourcedEmote[] = [];
+  for (const [emotes, source] of scoped) {
+    for (const emote of emotes) {
+      if (seen.has(emote.shortcode)) continue;
+      seen.add(emote.shortcode);
+      result.push({ ...emote, source });
+    }
+  }
+  return result;
+}
+
 export async function addRoomImage(
   mx: MatrixClient,
   room: Room,
