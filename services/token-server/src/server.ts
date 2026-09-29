@@ -1,10 +1,12 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import { validateOpenIdToken } from './openid.js';
 import { checkMembership, getBotUserId, mayViewParticipants } from './membership.js';
 import { grantsForPowerLevel } from './grants.js';
 import { livekitRoomName } from './livekitRoomName.js';
+import { fetchKlipySearch, fetchKlipyTrending, isGifsEnabled, type GifSearchResult } from './gifs.js';
+import { consumeGifRateLimit } from './gifRateLimit.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -188,6 +190,69 @@ app.post('/api/livekit/rooms/participants', async (req, res) => {
   );
 
   res.json(result);
+});
+
+/**
+ * Self-description for the client, same spirit as `/api/livekit/config`: whether this deployment
+ * has a Klipy key configured at all, so the composer can hide its GIF button entirely instead of
+ * showing one that 404s on every open. Unauthenticated — it reveals nothing beyond a boolean.
+ */
+app.get('/api/gifs/config', (_req, res) => {
+  res.json({ enabled: isGifsEnabled() });
+});
+
+/**
+ * Shared by both GIF endpoints below: without a Klipy key, disabled; otherwise the caller's
+ * identity is proven the same way every other authenticated endpoint here proves it (a Matrix
+ * OpenID token), then rate-limited per user before it ever reaches Klipy.
+ */
+async function handleGifRequest(
+  req: Request,
+  res: Response,
+  fetchResult: (body: Record<string, unknown>, userId: string) => Promise<GifSearchResult>
+): Promise<void> {
+  if (!isGifsEnabled()) {
+    res.status(404).json({ error: 'GIF search is not enabled on this server', code: 'gifs_disabled' });
+    return;
+  }
+
+  const openIdToken = req.body?.openid_token;
+  if (!openIdToken) {
+    res.status(400).json({ error: 'openid_token is required' });
+    return;
+  }
+
+  let userId: string;
+  try {
+    userId = await validateOpenIdToken(openIdToken);
+  } catch {
+    res.status(401).json({ error: 'Authentication failed' });
+    return;
+  }
+
+  if (!consumeGifRateLimit(userId)) {
+    res.status(429).json({ error: 'Too many GIF requests — try again shortly', code: 'gifs_rate_limited' });
+    return;
+  }
+
+  try {
+    res.json(await fetchResult(req.body ?? {}, userId));
+  } catch (err) {
+    console.error('GIF provider request failed', err);
+    res.status(502).json({ error: 'GIF provider request failed' });
+  }
+}
+
+app.post('/api/gifs/search', (req, res) => {
+  void handleGifRequest(req, res, (body, userId) =>
+    fetchKlipySearch({ query: body.query, cursor: body.cursor, limit: body.limit, locale: body.locale, userId })
+  );
+});
+
+app.post('/api/gifs/trending', (req, res) => {
+  void handleGifRequest(req, res, (body, userId) =>
+    fetchKlipyTrending({ cursor: body.cursor, limit: body.limit, locale: body.locale, userId })
+  );
 });
 
 app.listen(PORT, () => {
