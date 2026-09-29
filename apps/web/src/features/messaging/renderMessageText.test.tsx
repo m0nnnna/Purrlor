@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 
@@ -70,11 +70,14 @@ describe('renderMessageText', () => {
     expect(spoiler).toHaveClass('nu-spoiler--revealed');
   });
 
-  it('renders a fenced code block with a recognized language as highlighted markup', () => {
+  it('renders a fenced code block with a recognized language as highlighted markup', async () => {
+    // Prism loads asynchronously (dynamic import, see CodeBlock.tsx) — the block renders plain
+    // first, then re-renders highlighted once it's loaded.
     const { container } = renderText('```js\nconst x = 1;\n```');
-    const code = container.querySelector('[data-nu-role="code-block"] code');
-    expect(code).toHaveClass('language-javascript');
-    expect(code).toHaveTextContent('const x = 1;');
+    await waitFor(() => {
+      expect(container.querySelector('[data-nu-role="code-block"] code')).toHaveClass('language-javascript');
+    });
+    expect(container.querySelector('[data-nu-role="code-block"] code')).toHaveTextContent('const x = 1;');
   });
 
   it('renders a fenced code block with no/unrecognized language as plain, unescaped text', () => {
