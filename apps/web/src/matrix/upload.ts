@@ -7,8 +7,31 @@ import type {
   MediaEventContent,
   VideoContent,
 } from 'matrix-js-sdk/lib/@types/media';
+import { buildVoiceMessageContent, type VoiceMessageLocation } from './voiceMessage';
 
 type MediaLocation = { url: string } | { file: EncryptedAttachmentInfo & { url: string } };
+
+/**
+ * Uploads raw bytes (a `File` or an in-memory `Blob`, e.g. a MediaRecorder recording) the same
+ * way for every attachment kind: encrypted client-side and uploaded without its real filename in
+ * an E2EE room (matching Element's convention — the filename is only safe inside the
+ * already-encrypted event body), or uploaded as-is otherwise. Shared by sendFileMessage (composer
+ * file/image/video attachments) and sendVoiceMessage (recorded voice messages) so the two don't
+ * duplicate the encrypt-or-not branching.
+ */
+async function uploadAttachmentBytes(mx: MatrixClient, roomId: string, bytes: File | Blob): Promise<MediaLocation> {
+  if (mx.isRoomEncrypted(roomId)) {
+    const { data, info: encryptInfo } = await encryptAttachment(await bytes.arrayBuffer());
+    const { content_uri: mxcUrl } = await mx.uploadContent(new Blob([data]), {
+      type: 'application/octet-stream',
+      includeFilename: false,
+    });
+    return { file: { ...encryptInfo, url: mxcUrl } };
+  }
+
+  const { content_uri: mxcUrl } = await mx.uploadContent(bytes);
+  return { url: mxcUrl };
+}
 
 function buildMediaContent(
   mimetype: string,
@@ -56,19 +79,33 @@ export async function sendFileMessage(
   const mimetype = file.type || 'application/octet-stream';
   const dimensions = await readImageDimensions(file);
   const info = { mimetype, size: file.size, ...dimensions };
-
-  if (mx.isRoomEncrypted(roomId)) {
-    const { data, info: encryptInfo } = await encryptAttachment(await file.arrayBuffer());
-    const { content_uri: mxcUrl } = await mx.uploadContent(new Blob([data]), {
-      type: 'application/octet-stream',
-      includeFilename: false,
-    });
-    const content = buildMediaContent(mimetype, file.name, { file: { ...encryptInfo, url: mxcUrl } }, info);
-    await mx.sendMessage(roomId, threadId, content);
-    return;
-  }
-
-  const { content_uri: mxcUrl } = await mx.uploadContent(file);
-  const content = buildMediaContent(mimetype, file.name, { url: mxcUrl }, info);
+  const location = await uploadAttachmentBytes(mx, roomId, file);
+  const content = buildMediaContent(mimetype, file.name, location, info);
   await mx.sendMessage(roomId, threadId, content);
+}
+
+/**
+ * Uploads a recorded voice message and sends it as an `m.audio` event carrying the MSC3245
+ * voice-message extensions — the composer's voice-recorder counterpart to sendFileMessage above,
+ * sharing the same upload/encryption path (see uploadAttachmentBytes) but building its event
+ * content via buildVoiceMessageContent instead of buildMediaContent, since a voice message needs
+ * the extra org.matrix.msc1767.audio/org.matrix.msc3245.voice blocks a generic audio attachment
+ * doesn't.
+ */
+export async function sendVoiceMessage(
+  mx: MatrixClient,
+  roomId: string,
+  threadId: string | null,
+  blob: Blob,
+  mimetype: string,
+  durationMs: number,
+  waveform: number[]
+): Promise<void> {
+  const location: VoiceMessageLocation = await uploadAttachmentBytes(mx, roomId, blob);
+  const content = buildVoiceMessageContent({ location, mimetype, size: blob.size, durationMs, waveform });
+  // matrix-js-sdk's RoomMessageEventContent union has no slot for the MSC1767/MSC3245 voice
+  // fields (same reason every other custom-namespaced event in this codebase needs a cast — see
+  // eslint.config.js's note on @typescript-eslint/no-explicit-any). The content is still a
+  // perfectly valid m.audio event; the SDK's types just don't know about its extra keys.
+  await mx.sendMessage(roomId, threadId, content as unknown as AudioContent);
 }

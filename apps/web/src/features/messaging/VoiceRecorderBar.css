@@ -1,0 +1,119 @@
+/* Fills the same slot as .nu-composer's form (same margin/padding/border/radius), so swapping
+   between "typing" and "recording" doesn't shift the composer's height or position. */
+.nu-voice-recorder {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  margin: 0 var(--nu-space-4) var(--nu-space-4);
+  padding: var(--nu-space-1) var(--nu-space-1) var(--nu-space-1) var(--nu-space-3);
+  background: var(--nu-color-bg-tertiary);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg);
+}
+
+.nu-voice-recorder__cancel {
+  appearance: none;
+  border: none;
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-secondary);
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nu-radius-md);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.nu-voice-recorder__cancel:hover:not(:disabled) {
+  background: var(--nu-color-danger);
+  color: var(--nu-color-on-accent);
+}
+
+.nu-voice-recorder__cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.nu-voice-recorder__status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: 7px var(--nu-space-2);
+}
+
+.nu-voice-recorder__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-danger);
+  animation: nu-voice-recorder-pulse 1.4s ease-in-out infinite;
+}
+
+.nu-voice-recorder__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--nu-color-text-primary);
+}
+
+.nu-voice-recorder__label {
+  color: var(--nu-color-text-secondary);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-voice-recorder__capped {
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-xs);
+}
+
+.nu-voice-recorder__send {
+  appearance: none;
+  border: none;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nu-voice-recorder__send:hover:not(:disabled) {
+  background: var(--nu-color-accent-hover);
+}
+
+.nu-voice-recorder__send:disabled {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-muted);
+  cursor: default;
+}
+
+.nu-voice-recorder__send-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--nu-radius-full);
+  animation: nu-spin 0.7s linear infinite;
+}
+
+@keyframes nu-voice-recorder-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
