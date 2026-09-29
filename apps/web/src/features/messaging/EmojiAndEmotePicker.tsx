@@ -7,6 +7,7 @@ import type { EmoteSource, Sticker, SourcedEmote } from '../../matrix/emotes';
 import { canContributeToLibrary, canModerateLibrary } from '../../matrix/emoteLibrary';
 import { useEmoteLibraryRoom } from '../../matrix/hooks/useEmoteLibrary';
 import { useGroupedRoomEmotes } from '../../matrix/hooks/useGroupedRoomEmotes';
+import { usePersonalEmotePacks } from '../../matrix/hooks/usePersonalEmotePacks';
 import { useRecentEmotes } from '../../matrix/hooks/useRecentEmotes';
 import { useRoomStickers } from '../../matrix/hooks/useRoomStickers';
 import { canSendStateEvent } from '../../matrix/permissions';
@@ -71,9 +72,11 @@ function EmoteSection({
  * `:shortcode:` text, so it isn't just this component reused — see ReactionPicker.tsx.
  *
  * The Emotes tab has a search box, a Recents section (recentEmotes.ts — only emotes still usable
- * here, so picking one never sends a shortcode this room can't actually resolve), and the rest
- * grouped by where each one comes from (groupEmotesBySource: Global library / this Space / this
- * channel specifically), widest scope first.
+ * here, so picking one never sends a shortcode this room can't actually resolve), your own
+ * MSC2545 personal packs if you have any (personalEmotePacks.ts — Element/Cinny's "these emotes
+ * follow me" packs, one section per pack, your own labeled "Personal"), and the rest grouped by
+ * where each one comes from (groupEmotesBySource: Global library / this Space / this channel
+ * specifically), widest scope first.
  */
 export function EmojiAndEmotePicker({
   room,
@@ -88,6 +91,7 @@ export function EmojiAndEmotePicker({
 }) {
   const mx = useMatrixClient();
   const groupedEmotes = useGroupedRoomEmotes(room);
+  const personalPacks = usePersonalEmotePacks();
   const recentEmotes = useRecentEmotes();
   const stickers = useRoomStickers(room);
   const [open, setOpen] = useState(false);
@@ -116,6 +120,15 @@ export function EmojiAndEmotePicker({
   const availableRecents = query.trim()
     ? []
     : recentEmotes.filter((recent) => groupedEmotes.some((e) => e.shortcode === recent.shortcode && e.mxcUrl === recent.mxcUrl));
+  const filteredPersonalPacks = useMemo(
+    () =>
+      personalPacks
+        .map((pack) => ({ ...pack, emotes: query.trim() ? pack.emotes.filter((e) => matchesQuery(e.shortcode, query)) : pack.emotes }))
+        .filter((pack) => pack.emotes.length > 0),
+    [personalPacks, query]
+  );
+  const hasAnyEmotes = groupedEmotes.length > 0 || personalPacks.some((pack) => pack.emotes.length > 0);
+  const hasAnyMatch = filteredEmotes.length > 0 || filteredPersonalPacks.length > 0;
 
   const pickEmote = (emote: { shortcode: string; mxcUrl: string }) => {
     setOpen(false);
@@ -194,13 +207,16 @@ export function EmojiAndEmotePicker({
                 onChange={(e) => setQuery(e.target.value)}
                 autoFocus
               />
-              {groupedEmotes.length === 0 ? (
+              {!hasAnyEmotes ? (
                 <p className="nu-emoji-emote-picker__empty">No custom emotes available here yet.</p>
-              ) : filteredEmotes.length === 0 ? (
+              ) : !hasAnyMatch ? (
                 <p className="nu-emoji-emote-picker__empty">No emotes match "{query.trim()}".</p>
               ) : (
                 <>
                   <EmoteSection label="Recents" emotes={availableRecents} onPick={pickEmote} />
+                  {filteredPersonalPacks.map((pack, i) => (
+                    <EmoteSection key={`${pack.name}-${i}`} label={pack.name} emotes={pack.emotes} onPick={pickEmote} />
+                  ))}
                   {SOURCE_ORDER.map((source) => (
                     <EmoteSection key={source} label={SOURCE_LABELS[source]} emotes={bySource(source)} onPick={pickEmote} />
                   ))}

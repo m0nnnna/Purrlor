@@ -24,19 +24,37 @@ export type RoomEmotesContent = {
   images?: Record<string, PackImage>;
 };
 
-function readContent(room: Room): RoomEmotesContent {
-  return room.currentState.getStateEvents(EMOTE_EVENT_TYPE, '')?.getContent<RoomEmotesContent>() ?? {};
+function readContent(room: Room, stateKey = ''): RoomEmotesContent {
+  return room.currentState.getStateEvents(EMOTE_EVENT_TYPE, stateKey)?.getContent<RoomEmotesContent>() ?? {};
 }
 
 export function isUsableAs(image: PackImage, usage: PackUsage): boolean {
   return !image.usage ? usage === 'emoticon' : image.usage.includes(usage);
 }
 
-export function getRoomEmotes(room: Room): Emote[] {
-  const images = readContent(room).images ?? {};
+/**
+ * Emotes out of a raw MSC2545 pack `{ pack, images }` content — the exact same shape whether it
+ * came from a room/Space's state event or, as personalEmotePacks.ts reads it, a user's own
+ * `im.ponies.user_emotes` account data or a subscribed room's pack, so this one parser (not two
+ * copies of the same `Object.entries`/`isUsableAs` filter) covers all of it.
+ */
+export function emotesFromPackContent(content: RoomEmotesContent): Emote[] {
+  const images = content.images ?? {};
   return Object.entries(images)
     .filter((entry): entry is [string, PackImage] => typeof entry[1]?.url === 'string' && isUsableAs(entry[1], 'emoticon'))
     .map(([shortcode, image]) => ({ shortcode, mxcUrl: image.url }));
+}
+
+export function getRoomEmotes(room: Room): Emote[] {
+  return emotesFromPackContent(readContent(room));
+}
+
+/** Same as `getRoomEmotes`, but at an arbitrary state key rather than always `""` — MSC2545 lets
+ *  a room hold more than one pack this way, which `im.ponies.emote_rooms` subscriptions
+ *  (personalEmotePacks.ts) can name individually even though this app's own EmoteManagerModal
+ *  only ever writes to `""`. */
+export function getRoomEmotesAtStateKey(room: Room, stateKey: string): Emote[] {
+  return emotesFromPackContent(readContent(room, stateKey));
 }
 
 export function getRoomStickers(room: Room): Sticker[] {

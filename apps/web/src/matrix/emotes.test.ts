@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { groupEmotesBySource, mergeByShortcode } from './emotes';
+import type { Room } from 'matrix-js-sdk';
+import { emotesFromPackContent, getRoomEmotesAtStateKey, groupEmotesBySource, mergeByShortcode } from './emotes';
+
+describe('emotesFromPackContent', () => {
+  it('reads emoticon-usable images out of a raw MSC2545 pack, regardless of where it came from', () => {
+    const content = {
+      pack: { display_name: 'Test pack' },
+      images: {
+        cat: { url: 'mxc://x/cat' },
+        sticker_only: { url: 'mxc://x/sticker', usage: ['sticker'] },
+        no_url: {},
+      },
+    } as unknown as Parameters<typeof emotesFromPackContent>[0];
+    expect(emotesFromPackContent(content)).toEqual([{ shortcode: 'cat', mxcUrl: 'mxc://x/cat' }]);
+  });
+
+  it('returns nothing for an empty or missing pack', () => {
+    expect(emotesFromPackContent({})).toEqual([]);
+  });
+});
+
+describe('getRoomEmotesAtStateKey', () => {
+  it('reads a pack at an arbitrary state key, not only the default ""', () => {
+    const events = new Map([
+      ['secondary', { getContent: () => ({ images: { fox: { url: 'mxc://x/fox' } } }) }],
+    ]);
+    const room = {
+      currentState: { getStateEvents: (_type: string, stateKey: string) => events.get(stateKey) },
+    } as unknown as Room;
+    expect(getRoomEmotesAtStateKey(room, 'secondary')).toEqual([{ shortcode: 'fox', mxcUrl: 'mxc://x/fox' }]);
+    expect(getRoomEmotesAtStateKey(room, '')).toEqual([]);
+  });
+});
 
 describe('mergeByShortcode', () => {
   it('keeps the last list a shortcode appears in', () => {
