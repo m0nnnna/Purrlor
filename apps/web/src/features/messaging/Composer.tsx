@@ -23,6 +23,7 @@ import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/
 import { sendFileMessage } from '../../matrix/upload';
 import { EmojiAndEmotePicker } from './EmojiAndEmotePicker';
 import { membersAsPeople, useMentionAutocomplete } from './useMentionAutocomplete';
+import { useShortcodeAutocomplete } from './useShortcodeAutocomplete';
 import './Composer.css';
 
 const TYPING_TIMEOUT_MS = 10000;
@@ -59,6 +60,7 @@ export function Composer({
   const lastTypingSentAtRef = useRef(0);
   const people = useMemo(() => membersAsPeople(members), [members]);
   const mention = useMentionAutocomplete({ text, setText, textareaRef, people });
+  const shortcodeAutocomplete = useShortcodeAutocomplete({ text, setText, textareaRef, emotes });
 
   // Only while still typing the command name itself (no space yet) — once a space appears the
   // user's typing arguments, not choosing a command, so the dropdown gets out of the way.
@@ -86,6 +88,7 @@ export function Composer({
     setCommandIndex(0);
     setCommandError(undefined);
     mention.update(value, evt.target.selectionStart ?? value.length);
+    shortcodeAutocomplete.update(value, evt.target.selectionStart ?? value.length);
     if (!value.trim()) {
       stopTyping();
       return;
@@ -112,6 +115,7 @@ export function Composer({
     setSending(true);
     setText('');
     mention.close();
+    shortcodeAutocomplete.close();
     const fileToSend = attachment;
     setAttachment(undefined);
     stopTyping();
@@ -160,6 +164,7 @@ export function Composer({
         }
       }
       mention.reset();
+      shortcodeAutocomplete.reset();
       onCancelReply?.();
     } catch (err) {
       setText(body); // restore the draft so a failed send doesn't lose it
@@ -180,6 +185,7 @@ export function Composer({
 
   const handleKeyDown = (evt: KeyboardEvent<HTMLTextAreaElement>) => {
     if (mention.handleKeyDown(evt)) return;
+    if (shortcodeAutocomplete.handleKeyDown(evt)) return;
     if (commandMatches.length > 0) {
       if (evt.key === 'ArrowDown') {
         evt.preventDefault();
@@ -323,6 +329,7 @@ export function Composer({
         </p>
       )}
       {mention.dropdown}
+      {shortcodeAutocomplete.dropdown}
       <form className="nu-composer" data-nu-role="composer" onSubmit={handleSubmit}>
         <button
           type="button"
