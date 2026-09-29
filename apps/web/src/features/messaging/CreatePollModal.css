@@ -1,0 +1,59 @@
+.nu-poll-create__answers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-poll-create__answer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-poll-create__answer-row .nu-field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nu-poll-create__answer-remove {
+  appearance: none;
+  border: none;
+  background: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nu-color-text-muted);
+  border-radius: var(--nu-radius-sm);
+  cursor: pointer;
+}
+
+.nu-poll-create__answer-remove:hover:not(:disabled) {
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-danger);
+}
+
+.nu-poll-create__answer-remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nu-poll-create__radio-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-poll-create__max-selections {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-poll-create__max-selections .nu-field__input {
+  width: 56px;
+}
