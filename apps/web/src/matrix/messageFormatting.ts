@@ -137,3 +137,50 @@ export function buildMessageFormatting(
 
   return { formattedBody: html, mentionedUserIds, mentionsRoom };
 }
+
+// Matches only the exact shape this app's own `buildMessageFormatting` above writes, and the one
+// Element/cinny write compatibly (both MSC2545-adjacent): a self-closing <img> somewhere carrying
+// `data-mx-emoticon`. Attribute order isn't assumed, so `\b...\b` finds it anywhere in the tag.
+const EMOTICON_IMG_PATTERN = /<img\b[^>]*\bdata-mx-emoticon\b[^>]*>/gi;
+
+function readAttr(tag: string, name: string): string | undefined {
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i').exec(tag);
+  return match ? (match[1] ?? match[2]) : undefined;
+}
+
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+/**
+ * Shortcode -> mxc URL pairs straight out of a message's own `formatted_body`, so
+ * renderMessageText.tsx can render the emote the *sender* actually meant — their own room/Space
+ * pack, a personal MSC2545 pack (emotes.ts doesn't cover those; see readUserEmotePacks.ts), or an
+ * Element/cinny user's pack — rather than only ones that happen to also be in the reader's own
+ * list, which is all it used to draw from. (A personal MSC2545 pack the *reader* subscribes to —
+ * personalEmotePacks.ts — is merged into that reader-side list separately; this is only about
+ * what the message itself carries.) Reads exactly three attributes off a matching
+ * `<img data-mx-emoticon>` tag (`src`, plus `alt` or `title` for the shortcode) and nothing else
+ * in the HTML; renderMessageText.tsx's own comment explains why formatted_body is otherwise never
+ * rendered. Only an `mxc://` `src` is ever accepted, and `hiddenMxcUrls` (the global library's
+ * moderation list, emoteLibrary.ts) drops anything a moderator has hidden even though it isn't in
+ * any list this reader already filters. A duplicate shortcode in one message keeps its first
+ * pairing.
+ */
+export function parseFormattedBodyEmotes(formattedBody: string | undefined, hiddenMxcUrls: Set<string> = new Set()): Emote[] {
+  if (!formattedBody) return [];
+  const emotes: Emote[] = [];
+  const seen = new Set<string>();
+  for (const match of formattedBody.matchAll(EMOTICON_IMG_PATTERN)) {
+    const tag = match[0];
+    const src = readAttr(tag, 'src');
+    if (!src || !src.startsWith('mxc://') || hiddenMxcUrls.has(src)) continue;
+    const rawCode = readAttr(tag, 'alt') ?? readAttr(tag, 'title');
+    if (!rawCode) continue;
+    const shortcode = decodeEntities(rawCode).replace(/^:|:$/g, '').trim();
+    if (!shortcode || seen.has(shortcode)) continue;
+    seen.add(shortcode);
+    emotes.push({ shortcode, mxcUrl: src });
+  }
+  return emotes;
+}

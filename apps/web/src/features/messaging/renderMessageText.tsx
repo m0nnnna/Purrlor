@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
-import type { Emote } from '../../matrix/emotes';
+import { mergeByShortcode, type Emote } from '../../matrix/emotes';
 import { HASHTAG_PATTERN, normalizeTag } from '../../matrix/hashtags';
+import { parseFormattedBodyEmotes } from '../../matrix/messageFormatting';
 import { CodeBlock } from './CodeBlock';
 import { EmoteImage } from './EmoteImage';
 import { SpoilerText } from './SpoilerText';
@@ -63,17 +64,16 @@ function pushPatternMatches(
 }
 
 /**
- * Renders message text with purely text-pattern substitutions — never a sender's
- * `formatted_body` HTML (kept out of scope deliberately, same reasoning throughout this app:
- * safety, and rendering consistently regardless of which client sent the message):
- * `:shortcode:` emotes matching a known room emote (MSC2545), `@DisplayName` mentions matching a
- * current room member, a literal `@room` mass-mention (highlighted regardless of whether the
- * sender actually had permission to trigger it — this only reflects the text, not whether it
- * notified anyone), and basic Markdown (`**bold**`, `*italic*`/`_italic_`, `` `code` ``,
- * `~~strikethrough~~`, `||spoiler||`, and a `` ```lang\ncode\n``` `` fenced block, syntax-
- * highlighted client-side for a handful of common languages — see CodeBlock.tsx) — the same
- * plain-text convention Element's
- * own composer relies on (it puts the Markdown source in `body` and a rendered version in
+ * Renders message text with purely text-pattern substitutions on the plain `body` — never a
+ * sender's `formatted_body` HTML rendered as HTML (kept out of scope deliberately, same reasoning
+ * throughout this app: safety, and rendering consistently regardless of which client sent the
+ * message): `:shortcode:` emotes, `@DisplayName` mentions matching a current room member, a
+ * literal `@room` mass-mention (highlighted regardless of whether the sender actually had
+ * permission to trigger it — this only reflects the text, not whether it notified anyone), and
+ * basic Markdown (`**bold**`, `*italic*`/`_italic_`, `` `code` ``, `~~strikethrough~~`,
+ * `||spoiler||`, and a `` ```lang\ncode\n``` `` fenced block, syntax-highlighted client-side for a
+ * handful of common languages — see CodeBlock.tsx) — the same plain-text convention Element's own
+ * composer relies on (it puts the Markdown source in `body` and a rendered version in
  * `formatted_body`), so this renders consistently no matter which client sent it. All of these
  * are collected into one flat list of non-overlapping spans and sorted by *position* — that's
  * what makes `**bold**` win over the spurious `*bold*` an italic scan would otherwise also match
@@ -81,18 +81,33 @@ function pushPatternMatches(
  * an inline code span: whichever match starts first claims that stretch of text, so nothing
  * else is deliberately supported nested inside another (e.g. an emote inside bold text just
  * renders as literal characters) — a scope cut like several others in this app, not a bug.
+ *
+ * `:shortcode:` matching prefers the *message's own* shortcode -> mxc pairs (`options.formattedBody`,
+ * parsed by messageFormatting.ts's `parseFormattedBodyEmotes` — never rendered as HTML, only those
+ * three attributes are ever read off it) over the reader's own `emotes` list, so an emote from a
+ * Space you're not in, a forward, or an Element/cinny user's personal pack still shows as an image
+ * rather than falling back to literal `:text:` just because it isn't also in your own list.
  */
 export function renderMessageText(
   text: string,
   emotes: Emote[],
   members: RoomMember[] = [],
   myUserId?: string,
-  /** Posts only: `#tags` become buttons that open that tag's timeline (hashtags.ts). */
-  options: { onHashtag?: (tag: string) => void } = {}
+  options: {
+    /** Posts only: `#tags` become buttons that open that tag's timeline (hashtags.ts). */
+    onHashtag?: (tag: string) => void;
+    /** The message's own `content.formatted_body`, if any — see this function's own comment. */
+    formattedBody?: string;
+    /** The global library's hidden mxc URLs (useHiddenLibraryImages) — filters formattedBody's
+     *  own pairs the same way visibleLibraryImages already filters `emotes`. */
+    hiddenMxcUrls?: Set<string>;
+  } = {}
 ): ReactNode {
   const matches: Match[] = [];
   let key = 0;
-  const { onHashtag } = options;
+  const { onHashtag, formattedBody, hiddenMxcUrls } = options;
+  const messageEmotes = parseFormattedBodyEmotes(formattedBody, hiddenMxcUrls);
+  const effectiveEmotes = messageEmotes.length > 0 ? mergeByShortcode(emotes, messageEmotes) : emotes;
 
   if (onHashtag) {
     for (const match of text.matchAll(HASHTAG_PATTERN)) {
@@ -109,8 +124,8 @@ export function renderMessageText(
     }
   }
 
-  if (emotes.length > 0) {
-    const byShortcode = new Map(emotes.map((emote) => [emote.shortcode, emote]));
+  if (effectiveEmotes.length > 0) {
+    const byShortcode = new Map(effectiveEmotes.map((emote) => [emote.shortcode, emote]));
     for (const match of text.matchAll(SHORTCODE_PATTERN)) {
       const emote = byShortcode.get(match[1]);
       if (!emote) continue;

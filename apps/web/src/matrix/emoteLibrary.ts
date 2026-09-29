@@ -97,7 +97,11 @@ export type LibraryPack = { owner: string; event: MatrixEvent; images: LibraryIm
 
 type ModerationContent = { hidden?: unknown };
 
-function readHidden(room: Room): Set<string> {
+/** Every mxc URL a moderator has hidden (emoteLibrary.ts's class comment above) — exported so a
+ *  message's own embedded emotes (parsed straight out of its formatted_body, see
+ *  messageFormatting.ts's parseFormattedBodyEmotes) can be filtered against it too, not only the
+ *  emotes/stickers this module already leaves them out of. */
+export function readHidden(room: Room): Set<string> {
   const hidden = room.currentState.getStateEvents(EMOTE_MODERATION_EVENT, '')?.getContent<ModerationContent>().hidden;
   return new Set(Array.isArray(hidden) ? hidden.filter((url): url is string => typeof url === 'string') : []);
 }

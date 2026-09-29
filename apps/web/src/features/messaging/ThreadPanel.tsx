@@ -2,6 +2,7 @@ import type { MatrixEvent, Room, RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
 import { Modal } from '../../components/Modal';
 import type { Emote } from '../../matrix/emotes';
+import { useHiddenLibraryImages } from '../../matrix/hooks/useEmoteLibrary';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { useThreadEvents } from '../../matrix/hooks/useThreads';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -22,6 +23,8 @@ function ThreadEventRow({
 }) {
   const sender = event.sender;
   const senderName = sender?.name ?? event.getSender() ?? '?';
+  const content = event.getContent();
+  const hiddenMxcUrls = useHiddenLibraryImages();
   return (
     <div className="nu-thread-panel__message" data-nu-role="thread-message">
       <Avatar name={senderName} mxcUrl={sender?.getMxcAvatarUrl()} size={24} />
@@ -33,7 +36,10 @@ function ThreadEventRow({
           </span>
         </div>
         <div className="nu-thread-panel__message-text">
-          {renderMessageText(String(event.getContent().body ?? ''), emotes, members, myUserId)}
+          {renderMessageText(String(content.body ?? ''), emotes, members, myUserId, {
+            formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
+            hiddenMxcUrls,
+          })}
         </div>
       </div>
     </div>

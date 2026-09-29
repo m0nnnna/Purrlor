@@ -4,7 +4,7 @@ import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import type { Emote } from '../../matrix/emotes';
 import type { PostContent, PostOrigin, RepostOf } from '../../matrix/feed';
-import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
+import { useHiddenLibraryImages, useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useIgnoredUsers } from '../../matrix/hooks/useIgnoredUsers';
 import { useRepostStatus } from '../../matrix/hooks/useRepostStatus';
 import { LinkPreviewCard } from '../messaging/LinkPreviewCard';
@@ -195,6 +195,7 @@ export function PostCard({
   const time = new Date(ts);
   const openHashtag = useOpenHashtag();
   const emotes = useWithLibraryEmotes(placeEmotes);
+  const hiddenMxcUrls = useHiddenLibraryImages();
 
   const repost = content.repostOf;
   const openerFor = (target: PostOrigin) =>
@@ -238,7 +239,11 @@ export function PostCard({
             {content.body && (
               // No keyboard handler needed here: the time button is the keyboard route to the same page.
               <div className={onOpen ? 'nu-post__text nu-post__text--openable' : 'nu-post__text'} onClick={openFromText}>
-                {renderMessageText(content.body, emotes, members, myUserId, { onHashtag: openHashtag })}
+                {renderMessageText(content.body, emotes, members, myUserId, {
+                  onHashtag: openHashtag,
+                  formattedBody: content.formatted_body,
+                  hiddenMxcUrls,
+                })}
               </div>
             )}
             {content.attachments && <PostMedia attachments={content.attachments} sensitive={content.sensitive} />}

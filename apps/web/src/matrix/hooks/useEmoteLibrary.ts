@@ -19,3 +19,11 @@ export function useWithLibraryEmotes(emotes: Emote[]): Emote[] {
   const library = useAtomValue(emoteLibraryAtom).emotes;
   return useMemo(() => mergeByShortcode(library, emotes), [library, emotes]);
 }
+
+/** Every mxc URL a global-library moderator has hidden — for filtering a message's own embedded
+ *  emotes (renderMessageText.tsx's formatted_body parsing), which can reference an image outside
+ *  any list this app already leaves hidden ones out of. */
+export function useHiddenLibraryImages(): Set<string> {
+  const hiddenMxcUrls = useAtomValue(emoteLibraryAtom).hiddenMxcUrls;
+  return useMemo(() => new Set(hiddenMxcUrls), [hiddenMxcUrls]);
+}
