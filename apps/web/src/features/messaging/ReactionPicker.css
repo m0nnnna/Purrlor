@@ -12,10 +12,46 @@
   border-radius: var(--nu-radius-lg);
   padding: var(--nu-space-2);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  z-index: 50;
+}
+
+.nu-reaction-picker__panel--full {
+  width: auto;
+  display: block;
+}
+
+.nu-reaction-picker__grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: var(--nu-space-1);
-  z-index: 50;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.nu-reaction-picker__emotes-toggle {
+  appearance: none;
+  border: none;
+  border-top: 1px solid var(--nu-color-border);
+  background: none;
+  color: var(--nu-color-text-muted);
+  padding-top: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.nu-reaction-picker__emotes-toggle:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-reaction-picker__empty {
+  margin: 0;
+  width: 200px;
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
 }
 
 .nu-reaction-picker__item {
@@ -57,9 +93,4 @@
 .nu-reaction-picker__more:hover {
   background: var(--nu-color-bg-tertiary);
   color: var(--nu-color-text-primary);
-}
-
-.nu-reaction-picker__panel--full {
-  display: block;
-  padding: var(--nu-space-2);
 }

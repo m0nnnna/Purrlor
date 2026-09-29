@@ -217,7 +217,7 @@ function MessageRow({
     if (group.hasOwnReaction) {
       if (group.ownEventId) void removeReaction(mx, room.roomId, group.ownEventId);
     } else if (eventId) {
-      void sendReaction(mx, room.roomId, eventId, group.key);
+      void sendReaction(mx, room.roomId, eventId, group.key, group.shortcode);
     }
   };
 
@@ -402,7 +402,7 @@ function MessageRow({
       </div>
       {!event.isDecryptionFailure() && eventId && !isEditing && !isPending && (
         <div className="nu-timeline__message-actions" data-nu-role="timeline-message-actions">
-          <ReactionPicker onPick={(key) => void sendReaction(mx, room.roomId, eventId, key)} />
+          <ReactionPicker room={room} onPick={(key, shortcode) => void sendReaction(mx, room.roomId, eventId, key, shortcode)} />
           <button
             type="button"
             className="nu-timeline__message-pin-action"

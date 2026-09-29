@@ -20,9 +20,10 @@ type Tab = 'emoji' | 'emotes' | 'stickers';
  * The composer's single 😀 button. Unicode emoji and this room's custom emotes used to be two
  * separate buttons with two separate popovers; combined into one, tabbed, since both are just
  * "insert this into the message" — the same way Discord's own picker folds custom server emoji
- * in alongside the Unicode set rather than giving them their own button. ReactionPicker keeps
- * using the plain `EmojiPicker` on its own: reactions don't support custom emotes (yet), so
- * there's nothing to tab there.
+ * in alongside the Unicode set rather than giving them their own button. ReactionPicker (reacting
+ * to an existing message, rather than composing one) is its own smaller component: reactions can
+ * use custom emotes too, but a reaction's `key` sends as the emote's `mxc://` URL rather than
+ * `:shortcode:` text, so it isn't just this component reused — see ReactionPicker.tsx.
  */
 export function EmojiAndEmotePicker({
   room,
