@@ -22,7 +22,7 @@ ENV NODE_OPTIONS=--max_old_space_size=4096
 RUN npm run build
 
 
-FROM nginx:1.27-alpine
+FROM nginx:1.30-alpine
 COPY --from=builder /src/dist /usr/share/nginx/html
 COPY apps/web/deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=755 apps/web/deploy/40-purrlor-config.sh /docker-entrypoint.d/40-purrlor-config.sh

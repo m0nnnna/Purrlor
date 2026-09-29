@@ -1035,11 +1035,11 @@ else
   if [ -n "$HOST_PROXY" ]; then VAPID_PROXY="$CONTAINER_PROXY"; fi
   VAPID_JSON="$(docker run --rm --add-host host.docker.internal:host-gateway \
     -e HTTPS_PROXY="$VAPID_PROXY" -e HTTP_PROXY="$VAPID_PROXY" \
-    node:20-alpine npx --yes web-push generate-vapid-keys --json 2>/dev/null || true)"
+    node:22-alpine npx --yes web-push generate-vapid-keys --json 2>/dev/null || true)"
   VAPID_PUBLIC_KEY="$(printf '%s' "$VAPID_JSON" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4)"
   VAPID_PRIVATE_KEY="$(printf '%s' "$VAPID_JSON" | grep -o '"privateKey":"[^"]*"' | cut -d'"' -f4)"
   if [ -z "$VAPID_PUBLIC_KEY" ] || [ -z "$VAPID_PRIVATE_KEY" ]; then
-    die "Couldn't generate VAPID keys automatically (docker run node:20-alpine failed?). Run 'npx web-push generate-vapid-keys' yourself and fill VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY into .env manually, then re-run."
+    die "Couldn't generate VAPID keys automatically (docker run node:22-alpine failed?). Run 'npx web-push generate-vapid-keys' yourself and fill VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY into .env manually, then re-run."
   fi
   echo "  ok   VAPID key pair for push notifications"
 

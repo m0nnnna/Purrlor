@@ -223,7 +223,7 @@ openssl rand -hex 16   # -> LIVEKIT_API_KEY
 openssl rand -hex 16   # -> LIVEKIT_API_SECRET
 
 # Web Push's VAPID key pair — no host Node.js install needed, borrow a throwaway container:
-docker run --rm node:20-alpine npx --yes web-push generate-vapid-keys --json
+docker run --rm node:22-alpine npx --yes web-push generate-vapid-keys --json
 ```
 
 ## Step 6 — Write `.env`
