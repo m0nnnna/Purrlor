@@ -20,11 +20,16 @@ export type RuntimeConfig = {
   /** This deployment's push gateway: what background notifications use until someone picks
    *  another in Account Settings. */
   pushGateway?: string;
+  /** This deployment's GIF search proxy (services/token-server's `/api/gifs/*`) — base URL, no
+   *  trailing endpoint name. Unset means the composer's GIF button never appears, the same as a
+   *  deployment that answers `{enabled: false}` from `/api/gifs/config` (see gifApi.ts): no key
+   *  configured, or GIF search not wired up for this deployment at all. */
+  gifApiUrl?: string;
 };
 
 let config: RuntimeConfig = {};
 
-const FIELDS = ['homeserver', 'livekitUrl', 'tokenEndpoint', 'pushGateway'] as const;
+const FIELDS = ['homeserver', 'livekitUrl', 'tokenEndpoint', 'pushGateway', 'gifApiUrl'] as const;
 
 export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
   if (!raw || typeof raw !== 'object') return {};

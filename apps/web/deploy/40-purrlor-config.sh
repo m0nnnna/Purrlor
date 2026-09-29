@@ -8,6 +8,8 @@
 #   PURRLOR_LIVEKIT_URL       } this deployment's voice server, given to Spaces that don't have
 #   PURRLOR_TOKEN_ENDPOINT    } one yet (apps/web/src/matrix/deploymentDefaults.ts)
 #   PURRLOR_PUSH_GATEWAY_URL  this deployment's push gateway, the default for notifications
+#   PURRLOR_GIF_API_URL       this deployment's GIF search proxy (apps/web/src/matrix/gifApi.ts) —
+#                             unset hides the composer's GIF button, same as no KLIPY_API_KEY
 #
 # Any of them unset or empty is written as "", which the client reads as "not set": it then
 # behaves as a general-purpose client and asks for that setting instead.
@@ -17,12 +19,14 @@ set -eu
 # server name can contain is fine as-is.
 json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
-printf '{"homeserver":"%s","livekitUrl":"%s","tokenEndpoint":"%s","pushGateway":"%s"}\n' \
+printf '{"homeserver":"%s","livekitUrl":"%s","tokenEndpoint":"%s","pushGateway":"%s","gifApiUrl":"%s"}\n' \
   "$(json "${PURRLOR_HOMESERVER_URL:-}")" \
   "$(json "${PURRLOR_LIVEKIT_URL:-}")" \
   "$(json "${PURRLOR_TOKEN_ENDPOINT:-}")" \
   "$(json "${PURRLOR_PUSH_GATEWAY_URL:-}")" \
+  "$(json "${PURRLOR_GIF_API_URL:-}")" \
   > /usr/share/nginx/html/config.json
 
 echo "purrlor: wrote config.json (homeserver: ${PURRLOR_HOMESERVER_URL:-<not locked>}," \
-  "voice: ${PURRLOR_LIVEKIT_URL:-<per space>}, push: ${PURRLOR_PUSH_GATEWAY_URL:-<per account>})"
+  "voice: ${PURRLOR_LIVEKIT_URL:-<per space>}, push: ${PURRLOR_PUSH_GATEWAY_URL:-<per account>}," \
+  "gifs: ${PURRLOR_GIF_API_URL:-<disabled>})"

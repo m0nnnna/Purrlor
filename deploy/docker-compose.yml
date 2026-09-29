@@ -108,6 +108,10 @@ services:
       - MATRIX_BOT_PASSWORD=${MATRIX_BOT_PASSWORD}
       - VOICE_MODERATOR_POWER_LEVEL=${VOICE_MODERATOR_POWER_LEVEL:-50}
       - VOICE_ALLOWED_SPACES=${VOICE_ALLOWED_SPACES:-}
+      # GIF search/trending (services/token-server/src/gifs.ts), proxied to Klipy
+      # (https://klipy.com — get a key at https://partner.klipy.com/). Unset: /api/gifs/* answers
+      # 404 and the web client's GIF button never appears (/api/gifs/config reports it disabled).
+      - KLIPY_API_KEY=${KLIPY_API_KEY:-}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - NO_PROXY=${OUTBOUND_NO_PROXY:-}
@@ -170,6 +174,9 @@ services:
       - PURRLOR_LIVEKIT_URL=${PURRLOR_LIVEKIT_URL:-}
       - PURRLOR_TOKEN_ENDPOINT=${PURRLOR_TOKEN_ENDPOINT:-}
       - PURRLOR_PUSH_GATEWAY_URL=${PURRLOR_PUSH_GATEWAY_URL:-}
+      # This deployment's GIF search proxy, base URL (apps/web/src/matrix/gifApi.ts). Unset: the
+      # composer's GIF button never appears.
+      - PURRLOR_GIF_API_URL=${PURRLOR_GIF_API_URL:-}
     depends_on:
       - token-server
       - push-gateway

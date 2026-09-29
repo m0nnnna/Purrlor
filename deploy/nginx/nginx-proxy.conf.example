@@ -2,11 +2,12 @@
 # fronting the docker-compose.yml stack in this directory. Copy, replace YOUR_DOMAIN and the SSL
 # paths. It's what deploy/setup.sh writes, minus the bundled-homeserver blocks.
 #
-# The token server and push gateway are served under the app's own address (/api/livekit/ and
-# /api/push/), so the whole thing needs only two names: app. and livekit. — and those two paths
-# are what .env's PURRLOR_TOKEN_ENDPOINT and PURRLOR_PUSH_GATEWAY_URL point at. (Older installs
-# gave each its own subdomain; token.nginx.conf.example and push.nginx.conf.example still show
-# that layout, and it works just as well.)
+# The token server and push gateway are served under the app's own address (/api/livekit/,
+# /api/gifs/ and /api/push/), so the whole thing needs only two names: app. and livekit. — and
+# those paths are what .env's PURRLOR_TOKEN_ENDPOINT, PURRLOR_GIF_API_URL and
+# PURRLOR_PUSH_GATEWAY_URL point at. (Older installs gave each its own subdomain;
+# token.nginx.conf.example and push.nginx.conf.example still show that layout, and it works just
+# as well — /api/gifs/ rides along with the token server either way, same service.)
 #
 # app.YOUR_DOMAIN is Purrlor's own web client — deliberately not "chat." or "matrix.", so it
 # doesn't collide with wherever your *existing* Matrix homeserver already lives (see
@@ -29,6 +30,16 @@ server {
 
     location /api/livekit/ {
         proxy_pass http://127.0.0.1:3001/api/livekit/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # GIF search (optional — only answers once KLIPY_API_KEY is set), same app address as the
+    # token server above. What PURRLOR_GIF_API_URL points at.
+    location /api/gifs/ {
+        proxy_pass http://127.0.0.1:3001/api/gifs/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

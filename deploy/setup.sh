@@ -506,7 +506,21 @@ fi
 # names than giving each its own subdomain, and nothing for anyone to configure.
 TOKEN_ENDPOINT="https://$APP_DOMAIN/api/livekit/token"
 PUSH_GATEWAY_URL="https://$APP_DOMAIN/api/push"
+GIF_API_URL="https://$APP_DOMAIN/api/gifs"
 LIVEKIT_URL="wss://$LIVEKIT_DOMAIN"
+
+echo
+echo "Purrlor can let people search and send GIFs in the composer, via Klipy (https://klipy.com) —"
+echo "sign up for a free key at https://partner.klipy.com/. Leave blank to skip; the GIF button"
+echo "then stays hidden for everyone on this deployment (you can add a key later by re-running this)."
+EXISTING_KLIPY_KEY=""
+if [ -f .env ]; then EXISTING_KLIPY_KEY="$(grep '^KLIPY_API_KEY=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)"; fi
+if [ -n "$EXISTING_KLIPY_KEY" ]; then
+  ask "Klipy API key" "$EXISTING_KLIPY_KEY"
+  KLIPY_API_KEY="$REPLY_VALUE"
+else
+  read -r -p "Klipy API key (blank to skip GIF search): " KLIPY_API_KEY || true
+fi
 
 # Never through the proxy: this is the address people and other servers reach THIS host on, which
 # with a proxy configured is exactly what ifconfig.me would otherwise not report. Comes back empty
@@ -987,6 +1001,8 @@ if [ "$KEEP_ENV" = true ]; then
   env_set PURRLOR_LIVEKIT_URL "$LIVEKIT_URL"
   env_set PURRLOR_TOKEN_ENDPOINT "$TOKEN_ENDPOINT"
   env_set PURRLOR_PUSH_GATEWAY_URL "$PUSH_GATEWAY_URL"
+  env_set KLIPY_API_KEY "$KLIPY_API_KEY"
+  env_set PURRLOR_GIF_API_URL "$([ -n "$KLIPY_API_KEY" ] && echo "$GIF_API_URL" || echo '')"
   env_set ALLOWED_ORIGINS "https://$APP_DOMAIN"
   env_set HOST_IP "$HOST_IP_VALUE"
   env_set OUTBOUND_PROXY "$OUTBOUND_PROXY"
@@ -1060,6 +1076,10 @@ VOICE_MODERATOR_POWER_LEVEL=50
 # want on a private server. Set it to a comma-separated list of space room IDs to narrow that.
 # VOICE_ALLOWED_SPACES=
 
+# GIF search in the composer, via Klipy (https://klipy.com). Empty: the token server's
+# /api/gifs/* endpoints answer 404 and the web client hides the GIF button entirely.
+KLIPY_API_KEY=$KLIPY_API_KEY
+
 VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY
 VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY
 VAPID_SUBJECT=mailto:$ADMIN_EMAIL
@@ -1072,6 +1092,7 @@ PURRLOR_HOMESERVER_URL=$PURRLOR_HOMESERVER_URL
 PURRLOR_LIVEKIT_URL=$LIVEKIT_URL
 PURRLOR_TOKEN_ENDPOINT=$TOKEN_ENDPOINT
 PURRLOR_PUSH_GATEWAY_URL=$PUSH_GATEWAY_URL
+PURRLOR_GIF_API_URL=$([ -n "$KLIPY_API_KEY" ] && echo "$GIF_API_URL" || echo '')
 
 # Outbound HTTP(S) proxy for the services that reach the internet (empty: direct). The containers'
 # own copy differs when the proxy is on this host's loopback (host.docker.internal instead).
@@ -1276,6 +1297,16 @@ server {
     # The token server, under the app's own address — what PURRLOR_TOKEN_ENDPOINT points at.
     location /api/livekit/ {
         proxy_pass http://$UPSTREAM:3001/api/livekit/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # GIF search (optional — only answers once KLIPY_API_KEY is set in .env), same token server.
+    # What PURRLOR_GIF_API_URL points at.
+    location /api/gifs/ {
+        proxy_pass http://$UPSTREAM:3001/api/gifs/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

@@ -250,6 +250,12 @@ Fill in every value `.env.example` calls out, using what you generated above:
 The last three are what let the app set up voice and notifications by itself (Step 10). Leave
 them out and people configure both by hand in the app instead.
 
+- `KLIPY_API_KEY` — optional: lets people search and send GIFs from the composer, via Klipy
+  (<https://klipy.com>). Sign up for a free key at <https://partner.klipy.com/>. Leave blank to
+  skip — the GIF button then stays hidden entirely.
+- `PURRLOR_GIF_API_URL` — `https://app.YOUR_DOMAIN/api/gifs`, only meaningful alongside
+  `KLIPY_API_KEY`.
+
 Leave `VOICE_MODERATOR_POWER_LEVEL` at its default unless you specifically want a different
 threshold.
 

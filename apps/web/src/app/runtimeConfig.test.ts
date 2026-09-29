@@ -27,6 +27,13 @@ describe('parseRuntimeConfig', () => {
     });
   });
 
+  it('reads the GIF API base URL alongside the rest, skipped when empty', () => {
+    expect(parseRuntimeConfig({ gifApiUrl: 'https://app.example.com/api/gifs' })).toEqual({
+      gifApiUrl: 'https://app.example.com/api/gifs',
+    });
+    expect(parseRuntimeConfig({ gifApiUrl: '' })).toEqual({});
+  });
+
   it('ignores anything that is not an object with a string homeserver', () => {
     expect(parseRuntimeConfig(null)).toEqual({});
     expect(parseRuntimeConfig('https://x')).toEqual({});

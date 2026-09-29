@@ -29,7 +29,7 @@ live servers, and renaming them would orphan that data. Treat the prefix as perm
 | Component | What it is | Public URL (typical) | Talks to |
 |---|---|---|---|
 | Web client (`apps/web`) | The Purrlor app, a static SPA | `https://app.DOMAIN` | The user's homeserver; the token server; the push gateway |
-| Token server (`services/token-server`) | Issues LiveKit tokens to Matrix users who are members of a voice channel | `https://token.DOMAIN` | LiveKit; the homeserver (as a bot account); users' homeservers (OpenID checks) |
+| Token server (`services/token-server`) | Issues LiveKit tokens to Matrix users who are members of a voice channel; also proxies GIF search/trending to Klipy | `https://token.DOMAIN` | LiveKit; the homeserver (as a bot account); users' homeservers (OpenID checks); Klipy (GIF search, optional) |
 | Push gateway (`services/push-gateway`) | Bridges the Matrix Push Gateway API to browser Web Push | `https://push.DOMAIN` | Browser push services (FCM, Mozilla, Apple) |
 | LiveKit | Stock media server for voice/video | `wss://livekit.DOMAIN` | Clients (WebRTC) |
 | Homeserver (optional, bundled) | Continuwuity, provisioned by `deploy/setup.sh` | `https://matrix.DOMAIN` | Other homeservers (federation) |
@@ -146,6 +146,76 @@ caller is a joined member of**.
 The former `GET /api/livekit/rooms/participants?roomIds=…` now answers `401` with
 `"code": "auth_required"`.
 
+### GIF search (Klipy proxy)
+
+Optional: present only when `KLIPY_API_KEY` is set (see section 7). Klipy
+(<https://klipy.com>, docs at <https://docs.klipy.com>) is a third-party GIF provider; its key
+never reaches the browser — every request is proxied here, authenticated the same way voice
+tokens are (a Matrix OpenID token), and rate-limited per user (30 requests/minute, in-memory
+token bucket). Responses are cached for 60s (per query, not per user) to absorb duplicate
+requests from a debounced search box.
+
+#### `GET /api/gifs/config`
+
+Unauthenticated. Tells the client whether GIF search is configured at all, so it can hide the
+composer's GIF button rather than show one that 404s.
+
+```json
+200 { "enabled": true }
+```
+
+#### `POST /api/gifs/search`
+
+```json
+{ "openid_token": { "access_token": "…", "matrix_server_name": "example.org", "expires_in": 3600 },
+  "query": "cats",
+  "cursor": "2",
+  "limit": 24,
+  "locale": "us" }
+```
+
+`query`, `cursor`, `limit` and `locale` are all optional. `cursor` is opaque to the client — under
+the hood it's Klipy's 1-based page number, but nothing outside `services/token-server/src/gifs.ts`
+should assume that. `limit` is clamped server-side to what Klipy's search endpoint accepts
+(8–50, default 24).
+
+```json
+200 {
+  "results": [
+    {
+      "id": "8041071659142944",
+      "title": "Hello",
+      "preview": { "url": "https://static.klipy.com/…", "width": 90, "height": 68 },
+      "full": {
+        "gif": { "url": "https://static.klipy.com/…", "width": 320, "height": 240, "size": 2200000 },
+        "mp4": { "url": "https://static.klipy.com/…", "width": 320, "height": 240, "size": 400000 },
+        "webp": { "url": "https://static.klipy.com/…", "width": 320, "height": 240, "size": 800000 }
+      }
+    }
+  ],
+  "nextCursor": "3"
+}
+```
+
+`preview` is the lightest tier Klipy has for the item (for the search grid's thumbnail); `full`
+is a middling tier (for what's actually downloaded and sent — see section 4). `mp4`/`webp` are
+present only when Klipy has them for that item; `gif` always is. `nextCursor` is `null` on the
+last page.
+
+| Status | Meaning |
+|---|---|
+| 400 | `openid_token` missing. |
+| 401 | OpenID token invalid or unverifiable. |
+| 404 `gifs_disabled` | `KLIPY_API_KEY` isn't set on this deployment. |
+| 429 `gifs_rate_limited` | This user's 30/minute bucket is empty; try again shortly. |
+| 502 | Klipy request failed or returned an unexpected shape. |
+
+#### `POST /api/gifs/trending`
+
+Same request/response shape as search, minus `query` (trending has no search term); `limit`
+clamps to 1–50 (default 24) instead of search's 8–50. Meant for what the GIF picker shows before
+anyone has typed anything.
+
 ---
 
 ## 3. Push gateway HTTP API
@@ -234,12 +304,16 @@ rule sets.
 ### `GET /config.json` (served by the web container)
 
 ```json
-{ "homeserver": "https://matrix.example.org" }
+{ "homeserver": "https://matrix.example.org", "gifApiUrl": "https://app.example.org/api/gifs" }
 ```
 
-Written at container start from `PURRLOR_HOMESERVER_URL`. A non-empty `homeserver` locks the
-login and register screens to that homeserver. Empty or missing means the client asks which
-homeserver to use. Served with `Cache-Control: no-store`.
+Written at container start from `PURRLOR_HOMESERVER_URL` (and `PURRLOR_LIVEKIT_URL` /
+`PURRLOR_TOKEN_ENDPOINT` / `PURRLOR_PUSH_GATEWAY_URL` / `PURRLOR_GIF_API_URL` — see
+`apps/web/src/app/runtimeConfig.ts`). A non-empty `homeserver` locks the login and register
+screens to that homeserver. Empty or missing means the client asks which homeserver to use.
+`gifApiUrl` is the base URL the client hits for `/config`, `/search` and `/trending` (section
+2's GIF search) — empty or missing hides the composer's GIF button entirely, the same as the
+proxy itself answering `{"enabled": false}`. Served with `Cache-Control: no-store`.
 
 ---
 
@@ -528,7 +602,9 @@ What was raised in review, and what was done:
 
 All deployment configuration is environment variables in `.env`, documented line by line in
 [`.env.example`](../.env.example): LiveKit keys, `HOST_IP`, `ALLOWED_ORIGINS`, the bot account,
-`VOICE_MODERATOR_POWER_LEVEL`, `VOICE_ALLOWED_SPACES`, VAPID keys, `PURRLOR_HOMESERVER_URL`,
-`OUTBOUND_PROXY` / `OUTBOUND_NO_PROXY`, and the bundled homeserver's `COMPOSE_PROFILES`,
-`MATRIX_SERVER_NAME`, `MATRIX_REGISTRATION_TOKEN` and `MATRIX_ALLOW_REGISTRATION`. See
+`VOICE_MODERATOR_POWER_LEVEL`, `VOICE_ALLOWED_SPACES`, `KLIPY_API_KEY` (GIF search, optional —
+see section 2), VAPID keys, `PURRLOR_HOMESERVER_URL`, `PURRLOR_GIF_API_URL`, `OUTBOUND_PROXY` /
+`OUTBOUND_NO_PROXY`, and the bundled homeserver's `COMPOSE_PROFILES`, `MATRIX_SERVER_NAME`,
+`MATRIX_REGISTRATION_TOKEN` and `MATRIX_ALLOW_REGISTRATION`. `deploy/setup.sh` prompts for a
+Klipy key the same way it prompts for the admin email — optional, blank to skip. See
 [`deployment.md`](deployment.md) for the guided installer that writes all of it.
