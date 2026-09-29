@@ -3,7 +3,7 @@ import { useSetAtom } from 'jotai';
 import { ClientEvent, EventType, RoomEvent, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { EMPTY_EMOTE_LIBRARY, emoteLibraryAtom } from '../../app/state/emoteLibrary';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { findEmoteLibrary, getLibraryEmotes, getLibraryStickers, joinEmoteLibrary } from '../../matrix/emoteLibrary';
+import { findEmoteLibrary, getLibraryEmotes, getLibraryStickers, joinEmoteLibrary, readHidden } from '../../matrix/emoteLibrary';
 
 /** Joining waits a little after start, out of the way of the first screen loading. */
 const JOIN_DELAY_MS = 5_000;
@@ -24,7 +24,12 @@ export function EmoteLibraryWatcher() {
     const publish = () => {
       setLibrary(
         library
-          ? { roomId: library.roomId, emotes: getLibraryEmotes(library), stickers: getLibraryStickers(library) }
+          ? {
+              roomId: library.roomId,
+              emotes: getLibraryEmotes(library),
+              stickers: getLibraryStickers(library),
+              hiddenMxcUrls: [...readHidden(library)],
+            }
           : EMPTY_EMOTE_LIBRARY
       );
     };

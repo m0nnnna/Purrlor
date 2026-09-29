@@ -4,7 +4,7 @@ import { Avatar } from '../../components/Avatar';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
+import { useHiddenLibraryImages, useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useUserProfile } from '../../matrix/hooks/useUserProfile';
 import type { Emote } from '../../matrix/emotes';
 import { buildPostContent, POST_MAX_LENGTH, postLength, type PostContent } from '../../matrix/feed';
@@ -58,6 +58,7 @@ function CommentItem({
   onOpenProfile?: (userId: string) => void;
 }) {
   const author = useUserProfile(comment.sender, members);
+  const hiddenMxcUrls = useHiddenLibraryImages();
   return (
     <li className="nu-comment" data-nu-role="post-comment">
       <Avatar name={author.name} mxcUrl={author.avatarUrl} size={28} />
@@ -118,7 +119,12 @@ function CommentItem({
         </header>
         {comment.replyTo && <ReplyingToLabel userId={comment.replyTo.sender} members={members} role="post-comment-reply-label" />}
         {comment.content.body && (
-          <div className="nu-post__text">{renderMessageText(comment.content.body, emotes, members, myUserId)}</div>
+          <div className="nu-post__text">
+            {renderMessageText(comment.content.body, emotes, members, myUserId, {
+              formattedBody: comment.content.formatted_body,
+              hiddenMxcUrls,
+            })}
+          </div>
         )}
         {comment.content.attachments && <PostMedia attachments={comment.content.attachments} />}
       </div>

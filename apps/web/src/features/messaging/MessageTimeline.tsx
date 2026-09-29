@@ -7,6 +7,7 @@ import { RoleBadge } from '../../components/RoleBadge';
 import { pendingJumpTargetAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import type { Emote } from '../../matrix/emotes';
+import { useHiddenLibraryImages } from '../../matrix/hooks/useEmoteLibrary';
 import { usePinnedEventIds } from '../../matrix/hooks/usePinnedEventIds';
 import { useReactions, type ReactionGroup } from '../../matrix/hooks/useReactions';
 import { useReadReceipts } from '../../matrix/hooks/useReadReceipts';
@@ -182,6 +183,7 @@ function MessageRow({
   // reactions/thread relations (see room.relations, useReactions.ts/useThreads.ts). We just
   // need to know an edit happened at all, for the "(edited)" tag.
   const content = event.getContent();
+  const hiddenMxcUrls = useHiddenLibraryImages();
   const replyEventId = getReplyEventId(event);
   const editedEvent = event.replacingEvent();
   const eventId = event.getId();
@@ -215,7 +217,7 @@ function MessageRow({
     if (group.hasOwnReaction) {
       if (group.ownEventId) void removeReaction(mx, room.roomId, group.ownEventId);
     } else if (eventId) {
-      void sendReaction(mx, room.roomId, eventId, group.key);
+      void sendReaction(mx, room.roomId, eventId, group.key, group.shortcode);
     }
   };
 
@@ -356,12 +358,19 @@ function MessageRow({
           />
         ) : content.msgtype === 'm.emote' ? (
           <div className="nu-timeline__message-text nu-timeline__message-text--emote">
-            * {senderName} {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined)}
+            * {senderName}{' '}
+            {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined, {
+              formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
+              hiddenMxcUrls,
+            })}
           </div>
         ) : (
           <>
             <div className="nu-timeline__message-text">
-              {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined)}
+              {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined, {
+                formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
+                hiddenMxcUrls,
+              })}
             </div>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
           </>
@@ -393,7 +402,7 @@ function MessageRow({
       </div>
       {!event.isDecryptionFailure() && eventId && !isEditing && !isPending && (
         <div className="nu-timeline__message-actions" data-nu-role="timeline-message-actions">
-          <ReactionPicker onPick={(key) => void sendReaction(mx, room.roomId, eventId, key)} />
+          <ReactionPicker room={room} onPick={(key, shortcode) => void sendReaction(mx, room.roomId, eventId, key, shortcode)} />
           <button
             type="button"
             className="nu-timeline__message-pin-action"

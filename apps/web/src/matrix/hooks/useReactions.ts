@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
 import { EventType, RelationType, RoomEvent, type MatrixEvent } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { REACTION_SHORTCODE_FIELD } from '../reactions';
 
 export type ReactionGroup = {
-  /** The emoji itself — Matrix's `m.reaction` "key". */
+  /** The emoji itself, or — for a custom emote reaction (ReactionPicker.tsx) — the emote's own
+   *  `mxc://` URL. Matrix's `m.reaction` "key" either way. */
   key: string;
   count: number;
   hasOwnReaction: boolean;
   /** This user's own reaction event ID for this key, if any — needed to redact it when toggling off. */
   ownEventId?: string;
+  /** Only set when `key` is an `mxc://` URL: the shortcode carried on `com.beeper.reaction.shortcode`
+   *  by whichever of this group's events set it first (reactions.ts) — for ReactionBar.tsx's
+   *  tooltip/alt text. Absent if every reactor's client sent the key with no shortcode at all. */
+  shortcode?: string;
 };
 
 /**
@@ -42,7 +48,10 @@ export function useReactions(roomId: string | null): Map<string, ReactionGroup[]
         .map(([key, events]) => {
           const live = [...events].filter((e) => !e.isRedacted());
           const own = live.find((e) => e.getSender() === myUserId);
-          return { key, count: live.length, hasOwnReaction: !!own, ownEventId: own?.getId() };
+          const shortcode = live
+            .map((e) => e.getContent()[REACTION_SHORTCODE_FIELD])
+            .find((s): s is string => typeof s === 'string');
+          return { key, count: live.length, hasOwnReaction: !!own, ownEventId: own?.getId(), shortcode };
         })
         .filter((group) => group.count > 0);
     };

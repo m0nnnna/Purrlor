@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMessageFormatting } from './messageFormatting';
+import { buildMessageFormatting, parseFormattedBodyEmotes } from './messageFormatting';
 import type { Emote } from './emotes';
 
 const EMOTES: Emote[] = [{ shortcode: 'blob', mxcUrl: 'mxc://example.org/blob' }];
@@ -122,5 +122,55 @@ describe('buildMessageFormatting', () => {
     const second = buildMessageFormatting('@room hello again', [], [], true);
     expect(first.mentionsRoom).toBe(true);
     expect(second.mentionsRoom).toBe(true);
+  });
+});
+
+describe('parseFormattedBodyEmotes', () => {
+  it('reads shortcode -> mxc pairs out of a formatted_body this app itself would have written', () => {
+    const html = '<img data-mx-emoticon src="mxc://example.org/blob" alt=":blob:" title=":blob:" height="32" />';
+    expect(parseFormattedBodyEmotes(html)).toEqual([{ shortcode: 'blob', mxcUrl: 'mxc://example.org/blob' }]);
+  });
+
+  it('falls back to title when there is no alt, and tolerates attribute order/quoting', () => {
+    const html = `<img height='32' title=':cat:' data-mx-emoticon src='mxc://example.org/cat'/>`;
+    expect(parseFormattedBodyEmotes(html)).toEqual([{ shortcode: 'cat', mxcUrl: 'mxc://example.org/cat' }]);
+  });
+
+  it('returns nothing for a plain body with no HTML at all', () => {
+    expect(parseFormattedBodyEmotes(undefined)).toEqual([]);
+    expect(parseFormattedBodyEmotes('just text, no img tags')).toEqual([]);
+  });
+
+  it('ignores an <img> without data-mx-emoticon, even one that looks similar', () => {
+    const html = '<img src="mxc://example.org/x" alt=":not-an-emote:" />';
+    expect(parseFormattedBodyEmotes(html)).toEqual([]);
+  });
+
+  it('only ever accepts an mxc:// src, never http(s) or anything else', () => {
+    const html = '<img data-mx-emoticon src="https://evil.example/x.png" alt=":evil:" />';
+    expect(parseFormattedBodyEmotes(html)).toEqual([]);
+  });
+
+  it('drops an image on the global library\'s hidden list', () => {
+    const html = '<img data-mx-emoticon src="mxc://example.org/hidden" alt=":hidden:" />';
+    expect(parseFormattedBodyEmotes(html, new Set(['mxc://example.org/hidden']))).toEqual([]);
+  });
+
+  it('reads several emoticon images out of the same message, keeping the first of a repeated shortcode', () => {
+    const html =
+      '<img data-mx-emoticon src="mxc://example.org/a" alt=":a:" /> hi ' +
+      '<img data-mx-emoticon src="mxc://example.org/b" alt=":b:" /> ' +
+      '<img data-mx-emoticon src="mxc://example.org/a2" alt=":a:" />';
+    expect(parseFormattedBodyEmotes(html)).toEqual([
+      { shortcode: 'a', mxcUrl: 'mxc://example.org/a' },
+      { shortcode: 'b', mxcUrl: 'mxc://example.org/b' },
+    ]);
+  });
+
+  it('decodes HTML entities in the shortcode attribute', () => {
+    const html = '<img data-mx-emoticon src="mxc://example.org/x" alt="&amp;cat&amp;" />';
+    // The shortcode charset this app allows never actually includes "&", but a foreign client's
+    // pack isn't bound by that — decoding still shouldn't crash, and the colons still get trimmed.
+    expect(parseFormattedBodyEmotes(html)).toEqual([{ shortcode: '&cat&', mxcUrl: 'mxc://example.org/x' }]);
   });
 });
