@@ -20,7 +20,7 @@ export function useChannelPermissions(room: Room | null): ChannelPermissions & {
     };
   }, [mx, room]);
 
-  if (!room) return { posting: 'everyone', visibility: 'space', slowmodeSeconds: 0, canPost: true };
+  if (!room) return { posting: 'everyone', visibility: 'space', slowmodeSeconds: 0, channelModerators: [], canPost: true };
   return { ...readChannelPermissions(room), canPost: canPostMessages(room, mx.getUserId() ?? '') };
 }
 

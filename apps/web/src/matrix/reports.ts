@@ -138,7 +138,9 @@ export async function reportToSpaceModerators(
   const eventId = event.getId();
   if (!roomId || !eventId || !readModerationConfig(space).reviewRoomId) return 0;
 
-  const moderators = Object.keys(spaceRoleLevels(space)).filter((userId) => userId !== mx.getUserId());
+  const levels = spaceRoleLevels(space);
+  // Moderators and admins: a custom role below moderator doesn't review reports.
+  const moderators = Object.keys(levels).filter((userId) => levels[userId] >= MODERATOR_LEVEL && userId !== mx.getUserId());
   if (moderators.length === 0) return 0;
 
   const content: ReportContent = {

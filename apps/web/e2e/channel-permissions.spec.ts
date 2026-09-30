@@ -137,3 +137,47 @@ test('slowmode holds a member’s next message until it passes', async ({ browse
   await send(alicePage, 'two');
   await expect(role(alicePage, 'composer-slowmode')).toHaveCount(0);
 });
+
+test('a custom role and what it can do reach the channels, and a channel gets a moderator of its own', async ({ page }) => {
+  const [alice, bob, carol] = await Promise.all([createUser('alice'), createUser('bob'), createUser('carol')]);
+  const { spaceId, channelId, spaceName } = await createSpaceWithChannel(alice, [bob, carol]);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+
+  // Space Settings → Roles: a Helper at 25 who can delete messages.
+  await page.locator('[aria-label="Space settings"]').first().click();
+  await role(page, 'space-settings-roles-tab').click();
+  await role(page, 'space-roles-name').fill('Helper');
+  await role(page, 'space-roles-level').fill('25');
+  await role(page, 'space-roles-create').click();
+  await expect(role(page, 'space-roles-row').filter({ hasText: 'Helper' })).toBeVisible();
+  await role(page, 'space-roles-capability-redact').selectOption('25');
+
+  // Members: Bob becomes a Helper.
+  await page.locator('.nu-modal-tab', { hasText: 'Members' }).click();
+  await role(page, 'space-members-row').filter({ hasText: bob.localpart }).locator('[data-nu-role="space-members-set-role"]', { hasText: 'Helper' }).click();
+  await eventually(
+    () => api<PowerLevels>(alice, 'GET', `/rooms/${enc(spaceId)}/state/m.room.power_levels/`),
+    (levels) => levels.users?.[bob.userId] === 25 && levels.redact === 25
+  );
+  await page.keyboard.press('Escape');
+
+  // The sync carries both into the channel.
+  await eventually(
+    () => api<PowerLevels>(alice, 'GET', `/rooms/${enc(channelId)}/state/m.room.power_levels/`),
+    (levels) => levels.users?.[bob.userId] === 25 && levels.redact === 25
+  );
+
+  // Carol moderates #general only.
+  await openPermissions(page, 'general');
+  await role(page, 'channel-permissions-moderator-add').selectOption(carol.userId);
+  await role(page, 'channel-permissions-save').click();
+  await expect(role(page, 'channel-permissions')).toBeHidden();
+  await eventually(
+    () => api<PowerLevels>(alice, 'GET', `/rooms/${enc(channelId)}/state/m.room.power_levels/`),
+    (levels) => levels.users?.[carol.userId] === 50
+  );
+  const spaceLevels = await api<PowerLevels>(alice, 'GET', `/rooms/${enc(spaceId)}/state/m.room.power_levels/`);
+  expect(spaceLevels.users?.[carol.userId]).toBeUndefined();
+});

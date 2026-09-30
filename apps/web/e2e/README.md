@@ -11,7 +11,7 @@ the same server.
 | `messaging.spec.ts` | Sign in, send a message another user receives, see their reply arrive, react; the composer keeping keyboard focus (on opening a channel, after an emoji, after attaching a file); a channel mention reaching Notifications and opening at the message |
 | `posts.spec.ts` | Publish a post to a Space, which also creates your feed room |
 | `notifications.spec.ts` | Space and channel notification levels become the right push rules and back |
-| `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode |
+| `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode, a custom role and its permissions reaching the channels, a channel-only moderator |
 | `moderation.spec.ts` | A report reaching the Space's moderators, who delete the message from the queue; automod refusing a blocked word in Purrlor and deleting one sent from elsewhere |
 | `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
 | `webhooks.spec.ts` | A webhook posting through a real token server under its own name (APP), wrong tokens refused, deleting it, and a person unable to pose as one |

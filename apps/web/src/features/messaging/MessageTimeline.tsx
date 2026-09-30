@@ -30,7 +30,8 @@ import { parsePollStart } from '../../matrix/polls';
 import { removeReaction, sendReaction } from '../../matrix/reactions';
 import { redactMessage } from '../../matrix/redaction';
 import { getReplyEventId, type ReplyTarget } from '../../matrix/replies';
-import { roleFor } from '../../matrix/roles';
+import { roleFor, type RoleLevel } from '../../matrix/roles';
+import { useSpaceRoles } from '../../matrix/hooks/useSpaceRoles';
 import { saveMessage, unsaveMessage } from '../../matrix/savedMessages';
 import { UserProfileModal } from '../profile/UserProfileModal';
 import { EditHistoryModal } from './EditHistoryModal';
@@ -173,6 +174,7 @@ function MessageRow({
   onReply,
   members,
   webhookBotId,
+  roles,
 }: {
   mx: MatrixClient;
   room: Room;
@@ -194,11 +196,14 @@ function MessageRow({
   members: RoomMember[];
   /** The Space's service bot, whose messages may carry a webhook's name (matrix/webhooks.ts). */
   webhookBotId: string | undefined;
+  /** The Space's roles, its own included (roles.ts). */
+  roles: RoleLevel[];
 }) {
   const sender = event.sender;
   const webhook = webhookProfile(event, webhookBotId);
   const senderName = webhook?.name ?? sender?.name ?? event.getSender() ?? '?';
-  const senderRole = webhook ? 'member' : roleFor(sender?.powerLevel ?? 0).id;
+  const role = roleFor(webhook ? 0 : (sender?.powerLevel ?? 0), roles);
+  const senderRole = role.custom ? 'custom' : role.id;
   // event.getContent() already returns the latest m.replace edit's content automatically —
   // matrix-js-sdk aggregates edits onto the original event the same way it aggregates
   // reactions/thread relations (see room.relations, useReactions.ts/useThreads.ts). We just
@@ -300,12 +305,18 @@ function MessageRow({
                   data-nu-role="timeline-message-sender"
                   // Staff take their role's color (CSS); everyone else gets a stable per-name
                   // hue matching their fallback avatar, so a busy channel is easy to scan.
-                  style={senderRole === 'member' ? { color: `hsl(${nameHue(senderName)}, 70%, 78%)` } : undefined}
+                  style={
+                    senderRole === 'member'
+                      ? { color: `hsl(${nameHue(senderName)}, 70%, 78%)` }
+                      : role.color
+                        ? { color: role.color }
+                        : undefined
+                  }
                   onClick={() => setShowProfile(true)}
                 >
                   {senderName}
                 </button>
-                <RoleBadge roleId={senderRole} />
+                <RoleBadge role={role} />
                 {webhook && (
                   <span className="nu-timeline__app-badge" data-nu-role="timeline-webhook-badge" title="Posted by a webhook">
                     APP
@@ -602,6 +613,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const savedMessages = useSavedMessages();
   const parentSpace = mx.getRoom(findParentSpaceId(mx, roomId) ?? '');
   const webhookBotId = parentSpace ? readVoiceServerConfig(mx, parentSpace)?.botUserId : undefined;
+  const roles = useSpaceRoles(parentSpace);
   const savedEventIds = new Set(savedMessages.filter((item) => item.roomId === roomId).map((item) => item.eventId));
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null);
   const [pendingJump, setPendingJump] = useAtom(pendingJumpTargetAtom);
@@ -908,6 +920,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
               onReply={onReply}
               members={members}
               webhookBotId={webhookBotId}
+              roles={roles}
             />
             </Fragment>
           );

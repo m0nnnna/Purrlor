@@ -45,8 +45,11 @@ admins' clients would each make it. So the pass (`governSpaces`) is paced:
   and folds the same change across a Space's channels into one line: "Alice applied the Space's
   roles: Bob is now a moderator · 12 channels".
 
-**Known limit:** there are no channel-only moderators. Promote someone in one channel and the next
-pass takes it back unless they're a moderator in the Space.
+Custom roles and channel-only moderators ride the same sync: see [roles.md](roles.md). Anyone a
+custom role puts at or above its level is copied in like a moderator, and a channel's own
+moderators (`moderators` in `xyz.nekous.channel_settings`) are raised to moderator in that channel
+and never demoted by the pass. Promote someone in a channel by hand, without listing them there,
+and the next pass still takes it back: roles come from the Space.
 
 ## Who can post
 

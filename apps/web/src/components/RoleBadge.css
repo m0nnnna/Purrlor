@@ -11,3 +11,8 @@
 .nu-role-badge--moderator {
   color: var(--nu-color-role-moderator);
 }
+
+/* A custom role without a colour of its own. */
+.nu-role-badge--custom {
+  color: var(--nu-color-text-secondary);
+}

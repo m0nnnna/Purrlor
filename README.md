@@ -11,7 +11,8 @@ hood, [`docs/posts.md`](docs/posts.md) for posts, comments and the global feed,
 [`docs/push-notifications.md`](docs/push-notifications.md) for background push,
 [`docs/notification-settings.md`](docs/notification-settings.md) for per-channel and per-Space
 notification levels, [`docs/channel-permissions.md`](docs/channel-permissions.md) for
-announcement and moderators-only channels and slowmode, [`docs/moderation.md`](docs/moderation.md)
+announcement and moderators-only channels and slowmode, [`docs/roles.md`](docs/roles.md) for custom
+roles and channel-only moderators, [`docs/moderation.md`](docs/moderation.md)
 for report review and automod, [`docs/calendar.md`](docs/calendar.md) for Space calendars and
 reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
@@ -239,6 +240,9 @@ set a nickname scoped to just that Space, independent of your global display nam
   channel (its "⋯" → Permissions): **announcement** channels only moderators post in (everyone
   can react), **moderators-only** channels nobody else sees, and **slowmode** — see
   [`docs/channel-permissions.md`](docs/channel-permissions.md).
+- **Custom roles** between Member and Admin (Space Settings → Roles: a name, a colour, a level),
+  the lowest role that can delete messages, pin, remove, ban or invite, and **channel-only
+  moderators** (a channel's Permissions) — see [`docs/roles.md`](docs/roles.md).
 - **Report review and automod**: reports about a Space's messages reach its moderators, who act
   on them in Space Settings → Reports; a list of blocked words is refused in Purrlor and deleted
   when sent from other apps — see [`docs/moderation.md`](docs/moderation.md).

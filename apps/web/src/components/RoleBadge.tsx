@@ -1,15 +1,21 @@
-import { ROLE_LEVELS, type RoleId } from '../matrix/roles';
+import type { RoleLevel } from '../matrix/roles';
 import { Icon } from './Icon';
 import './RoleBadge.css';
 
-/** Small crown (admin) or shield (moderator) after a name — in the member list and next to a
- *  message's sender. Renders nothing for ordinary members. */
-export function RoleBadge({ roleId }: { roleId: RoleId }) {
-  if (roleId === 'member') return null;
-  const label = ROLE_LEVELS.find((role) => role.id === roleId)?.label;
+/** After a name — in the member list and next to a message's sender: a crown for an admin, a
+ *  shield for a moderator, and a custom role's mark in its own colour. Nothing for a member. */
+export function RoleBadge({ role }: { role: RoleLevel }) {
+  if (role.id === 'member') return null;
+  const icon = role.id === 'admin' ? 'crown' : role.id === 'moderator' ? 'shield' : 'sparkle';
   return (
-    <span className={`nu-role-badge nu-role-badge--${roleId}`} data-nu-role="role-badge" title={label} aria-label={label}>
-      <Icon name={roleId === 'admin' ? 'crown' : 'shield'} size={12} />
+    <span
+      className={`nu-role-badge nu-role-badge--${role.custom ? 'custom' : role.id}`}
+      data-nu-role="role-badge"
+      title={role.label}
+      aria-label={role.label}
+      style={role.color ? { color: role.color } : undefined}
+    >
+      <Icon name={icon} size={12} />
     </span>
   );
 }

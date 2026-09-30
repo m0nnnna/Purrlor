@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MatrixClient, Room } from 'matrix-js-sdk';
-import { governSpaces, moderatorsOnlyChanges, powerLevelsForPosting, syncedChannelUsers, writerRank } from './channelPermissions';
+import { governSpaces, moderatorsOnlyChanges, powerLevelsForPosting, syncedChannelUsers, syncedThresholds, writerRank } from './channelPermissions';
 
 describe('powerLevelsForPosting', () => {
   it('raises posting to moderators but keeps reactions open', () => {
@@ -135,5 +135,33 @@ describe('governSpaces', () => {
     await governSpaces(mx, undefined, { wait });
     expect(wait).not.toHaveBeenCalled();
     expect(sendStateEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('custom roles and channel moderators in the sync', () => {
+  it('carries custom-role holders into channels and takes back a custom level the Space no longer gives', () => {
+    const users = syncedChannelUsers({ users: { '@me': 100, '@gone': 25 } }, { '@me': 100, '@helper': 25 }, 100, [], { roleFloor: 25 });
+    expect(users).toEqual({ '@me': 100, '@helper': 25 });
+  });
+
+  it('makes a channel’s own moderators moderators there, and never takes it back', () => {
+    const opts = { roleFloor: 50, channelModerators: ['@chanmod', '@senior'] };
+    expect(syncedChannelUsers({ users: { '@me': 100 } }, { '@me': 100, '@senior': 75 }, 100, [], opts)).toEqual({
+      '@me': 100,
+      '@chanmod': 50,
+      '@senior': 75,
+    });
+    expect(syncedChannelUsers({ users: { '@me': 100, '@chanmod': 50 } }, { '@me': 100 }, 100, [], { channelModerators: ['@chanmod'] })).toBeUndefined();
+  });
+
+  it('copies the Space’s thresholds into a channel, only those this user may change', () => {
+    const space = { redact: 25, kick: 50, events: { 'm.room.pinned_events': 25 } };
+    expect(syncedThresholds({ redact: 50, events: { 'm.room.name': 50 } }, space, 100)).toEqual({
+      redact: 25,
+      events: { 'm.room.name': 50, 'm.room.pinned_events': 25 },
+    });
+    expect(syncedThresholds({ redact: 25, events: { 'm.room.pinned_events': 25 } }, space, 100)).toBeUndefined();
+    // A moderator can't touch a threshold set above their own level.
+    expect(syncedThresholds({ ban: 100 }, { ban: 50 }, 50)).toBeUndefined();
   });
 });

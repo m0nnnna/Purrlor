@@ -8,13 +8,14 @@ import { Icon } from '../../components/Icon';
 import { RoleBadge } from '../../components/RoleBadge';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
-import { handleFor, roleFor, ROLE_LEVELS, type RoleId } from '../../matrix/roles';
+import { handleFor, roleFor, type RoleLevel } from '../../matrix/roles';
+import { useRoomRoles } from '../../matrix/hooks/useSpaceRoles';
 import { UserProfileModal } from '../profile/UserProfileModal';
 import './MemberList.css';
 
 type PresenceInfo = { presence: string | undefined; statusMsg: string | undefined };
 
-type MemberGroup = { id: string; label: string; roleId?: RoleId; members: RoomMember[] };
+type MemberGroup = { id: string; label: string; role?: RoleLevel; members: RoomMember[] };
 
 /**
  * A userId -> {presence, statusMsg} map for the given members, recomputed on any presence
@@ -53,16 +54,16 @@ function isHere(info: PresenceInfo | undefined): boolean {
  * then one Offline group for everyone who isn't — whatever their role. Staff keep their role
  * color in the Offline group, so you can still spot a moderator who's away.
  */
-function groupMembers(members: RoomMember[], presenceMap: Map<string, PresenceInfo>): MemberGroup[] {
+function groupMembers(members: RoomMember[], presenceMap: Map<string, PresenceInfo>, roles: RoleLevel[]): MemberGroup[] {
   const sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
   const here = sorted.filter((member) => isHere(presenceMap.get(member.userId)));
   const offline = sorted.filter((member) => !isHere(presenceMap.get(member.userId)));
 
-  const groups: MemberGroup[] = ROLE_LEVELS.map((role) => ({
+  const groups: MemberGroup[] = roles.map((role) => ({
     id: role.id,
     label: role.id === 'member' ? 'Online' : role.pluralLabel,
-    roleId: role.id,
-    members: here.filter((member) => roleFor(member.powerLevel).id === role.id),
+    role,
+    members: here.filter((member) => roleFor(member.powerLevel, roles).id === role.id),
   }));
   groups.push({ id: 'offline', label: 'Offline', members: offline });
   return groups.filter((group) => group.members.length > 0);
@@ -71,13 +72,16 @@ function groupMembers(members: RoomMember[], presenceMap: Map<string, PresenceIn
 function MemberRow({
   member,
   presenceInfo,
+  roles,
   onOpenProfile,
 }: {
   member: RoomMember;
   presenceInfo: PresenceInfo;
+  roles: RoleLevel[];
   onOpenProfile: () => void;
 }) {
-  const roleId = roleFor(member.powerLevel).id;
+  const role = roleFor(member.powerLevel, roles);
+  const roleId = role.custom ? 'custom' : role.id;
   const offline = !isHere(presenceInfo);
   return (
     <button
@@ -92,8 +96,10 @@ function MemberRow({
       <Avatar name={member.name} mxcUrl={member.getMxcAvatarUrl()} size={34} presence={presenceInfo.presence ?? 'offline'} />
       <span className="nu-member-list__item-text">
         <span className="nu-member-list__item-name-row">
-          <span className="nu-member-list__item-name">{member.name}</span>
-          <RoleBadge roleId={roleId} />
+          <span className="nu-member-list__item-name" style={role.color ? { color: role.color } : undefined}>
+            {member.name}
+          </span>
+          <RoleBadge role={role} />
         </span>
         <span className="nu-member-list__item-status">{presenceInfo.statusMsg || handleFor(member.userId)}</span>
       </span>
@@ -126,7 +132,8 @@ export function MemberList() {
   const visible = needle
     ? members.filter((m) => m.name.toLowerCase().includes(needle) || m.userId.toLowerCase().includes(needle))
     : members;
-  const groups = groupMembers(visible, presenceMap);
+  const roles = useRoomRoles(selectedRoomId);
+  const groups = groupMembers(visible, presenceMap, roles);
   const hereCount = members.filter((m) => isHere(presenceMap.get(m.userId))).length;
 
   const toggleGroup = (id: string) =>
@@ -207,8 +214,12 @@ export function MemberList() {
                 onClick={() => toggleGroup(group.id)}
               >
                 <Icon name="chevronDown" size={12} className="nu-member-list__group-arrow" />
-                {group.roleId && group.roleId !== 'member' && (
-                  <span className={`nu-member-list__group-swatch nu-member-list__group-swatch--${group.roleId}`} aria-hidden="true" />
+                {group.role && group.role.id !== 'member' && (
+                  <span
+                    className={`nu-member-list__group-swatch nu-member-list__group-swatch--${group.role.custom ? 'custom' : group.role.id}`}
+                    style={group.role.color ? { background: group.role.color } : undefined}
+                    aria-hidden="true"
+                  />
                 )}
                 <span className="nu-member-list__group-name">{group.label}</span>
                 <span className="nu-member-list__group-count">{group.members.length}</span>
@@ -219,6 +230,7 @@ export function MemberList() {
                     key={member.userId}
                     member={member}
                     presenceInfo={presenceMap.get(member.userId) ?? { presence: undefined, statusMsg: undefined }}
+                    roles={roles}
                     onOpenProfile={() => setProfileMember(member)}
                   />
                 ))}

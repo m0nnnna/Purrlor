@@ -12,10 +12,11 @@ import { SpaceLeaveSettings } from './SpaceLeaveSettings';
 import { SpaceMembersSettings } from './SpaceMembersSettings';
 import { SpaceNicknameSettings } from './SpaceNicknameSettings';
 import { SpaceReportsSettings } from './SpaceReportsSettings';
+import { SpaceRolesSettings } from './SpaceRolesSettings';
 import { isSpaceModerator } from '../../matrix/reports';
 import './SpaceSettingsModal.css';
 
-type SpaceSettingsTab = 'general' | 'members' | 'categories' | 'invite-link' | 'nickname' | 'audit-log' | 'reports' | 'leave';
+type SpaceSettingsTab = 'general' | 'members' | 'roles' | 'categories' | 'invite-link' | 'nickname' | 'audit-log' | 'reports' | 'leave';
 
 type SpaceSettingsModalProps = {
   space: Room;
@@ -54,6 +55,14 @@ export function SpaceSettingsModal({ space, onClose }: SpaceSettingsModalProps) 
               onClick={() => setTab('members')}
             >
               Members
+            </button>
+            <button
+              type="button"
+              className={tab === 'roles' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+              data-nu-role="space-settings-roles-tab"
+              onClick={() => setTab('roles')}
+            >
+              Roles
             </button>
             <button
               type="button"
@@ -108,6 +117,7 @@ export function SpaceSettingsModal({ space, onClose }: SpaceSettingsModalProps) 
       </div>
       {tab === 'general' && canManageSpace && <SpaceGeneralSettings space={space} onClose={onClose} />}
       {tab === 'members' && canManageSpace && <SpaceMembersSettings space={space} />}
+      {tab === 'roles' && canManageSpace && <SpaceRolesSettings space={space} />}
       {tab === 'categories' && canManageSpace && <SpaceCategoriesSettings space={space} />}
       {tab === 'invite-link' && canManageSpace && (
         <>

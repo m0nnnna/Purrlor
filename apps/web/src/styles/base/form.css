@@ -13,8 +13,15 @@
    shared visual layer. */
 .nu-modal-tabs {
   display: flex;
-  gap: var(--nu-space-4);
+  flex-wrap: wrap;
+  column-gap: var(--nu-space-4);
+  row-gap: 0;
   margin-bottom: var(--nu-space-4);
+}
+
+/* A tab's label stays on one line; a row too long for the dialog wraps onto a second. */
+.nu-modal-tab {
+  white-space: nowrap;
 }
 
 .nu-modal-tab {

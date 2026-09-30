@@ -1,5 +1,6 @@
 import { EventType, JoinRule, RestrictedAllowType, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { privilegedCreators, userPowerLevel } from './permissions';
+import { CAPABILITIES, capabilityLevel, lowestRoleLevel, readSpaceRoles, ROLES_EVENT, withCapability } from './roles';
 import { sleep, withRateLimitRetry } from './rateLimit';
 import { readVoiceServerConfig } from './voice';
 
@@ -48,7 +49,13 @@ export const MODERATOR_LEVEL = 50;
 export type PostingMode = 'everyone' | 'moderators';
 export type Visibility = 'space' | 'moderators';
 
-export type ChannelPermissions = { posting: PostingMode; visibility: Visibility; slowmodeSeconds: number };
+export type ChannelPermissions = {
+  posting: PostingMode;
+  visibility: Visibility;
+  slowmodeSeconds: number;
+  /** People who moderate this channel only (docs/roles.md): moderator level here, whatever their role in the Space. */
+  channelModerators: string[];
+};
 
 type PowerLevels = {
   users?: Record<string, number>;
@@ -59,7 +66,7 @@ type PowerLevels = {
   [key: string]: unknown;
 };
 
-type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown };
+type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown; moderators?: unknown };
 
 function powerLevels(room: Room): PowerLevels {
   return room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent<PowerLevels>() ?? {};
@@ -76,7 +83,18 @@ export function readChannelPermissions(room: Room): ChannelPermissions {
     posting: (powerLevels(room).events_default ?? 0) >= MODERATOR_LEVEL ? 'moderators' : 'everyone',
     visibility: settings.moderators_only === true ? 'moderators' : 'space',
     slowmodeSeconds: typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0,
+    channelModerators: Array.isArray(settings.moderators)
+      ? settings.moderators.filter((id): id is string => typeof id === 'string' && id.startsWith('@'))
+      : [],
   };
+}
+
+/** Sets who moderates this channel only; the role sync then gives them moderator level here. */
+export async function setChannelModerators(mx: MatrixClient, channel: Room, space: Room, userIds: string[]): Promise<void> {
+  const current = channel.currentState.getStateEvents(CHANNEL_SETTINGS_EVENT, '')?.getContent<Record<string, unknown>>() ?? {};
+  const moderators = [...new Set(userIds)];
+  await mx.sendStateEvent(channel.roomId, CHANNEL_SETTINGS_EVENT as any, { ...current, moderators: moderators.length ? moderators : undefined } as any, '');
+  await governChannel(mx, channel, space);
 }
 
 // --- Posting ---------------------------------------------------------------------------------
@@ -137,11 +155,15 @@ export function slowmodeWaitMs(room: Room, userId: string, now = Date.now()): nu
 
 // --- Roles from the Space --------------------------------------------------------------------
 
-/** Everyone at moderator or above in the Space, with their level; a v12 creator counts as 100. */
+/**
+ * Everyone who holds a role in the Space — moderator or above, or one of its custom roles
+ * (roles.ts) — with their level; a v12 creator counts as 100.
+ */
 export function spaceRoleLevels(space: Room): Record<string, number> {
   const levels: Record<string, number> = {};
+  const floor = lowestRoleLevel(readSpaceRoles(space));
   for (const [userId, level] of Object.entries(powerLevels(space).users ?? {})) {
-    if (typeof level === 'number' && level >= MODERATOR_LEVEL) levels[userId] = Math.min(level, 100);
+    if (typeof level === 'number' && level >= floor) levels[userId] = Math.min(level, 100);
   }
   for (const creator of privilegedCreators(space)) levels[creator] = 100;
   return levels;
@@ -160,14 +182,19 @@ export function syncedChannelUsers(
   channel: PowerLevels,
   spaceLevels: Record<string, number>,
   myLevel: number,
-  untouchable: string[] = []
+  untouchable: string[] = [],
+  { roleFloor = MODERATOR_LEVEL, channelModerators = [] }: { roleFloor?: number; channelModerators?: string[] } = {}
 ): Record<string, number> | undefined {
   const users = { ...channel.users };
   const defaultLevel = channel.users_default ?? 0;
   let changed = false;
   const canChange = (from: number, to: number) => from < myLevel && to < myLevel;
 
-  for (const [userId, level] of Object.entries(spaceLevels)) {
+  // What the Space says, raised to moderator for this channel's own moderators.
+  const targets: Record<string, number> = { ...spaceLevels };
+  for (const userId of channelModerators) targets[userId] = Math.max(targets[userId] ?? defaultLevel, MODERATOR_LEVEL);
+
+  for (const [userId, level] of Object.entries(targets)) {
     if (untouchable.includes(userId)) continue;
     const current = users[userId] ?? defaultLevel;
     if (current !== level && canChange(current, level)) {
@@ -176,13 +203,29 @@ export function syncedChannelUsers(
     }
   }
   for (const [userId, level] of Object.entries(users)) {
-    if (spaceLevels[userId] !== undefined || untouchable.includes(userId)) continue;
-    if (level >= MODERATOR_LEVEL && canChange(level, defaultLevel)) {
+    if (targets[userId] !== undefined || untouchable.includes(userId)) continue;
+    if (level >= roleFloor && canChange(level, defaultLevel)) {
       delete users[userId];
       changed = true;
     }
   }
   return changed ? users : undefined;
+}
+
+/**
+ * A channel's power levels with the Space's capability thresholds (roles.ts: who can delete
+ * messages, pin, remove, ban, invite) copied in, or undefined when they already match. Only the
+ * ones this user may change: the old and the new level both at or below their own, as the spec
+ * requires. Pure.
+ */
+export function syncedThresholds(channel: PowerLevels, space: PowerLevels, myLevel: number): PowerLevels | undefined {
+  let next = channel;
+  for (const { id } of CAPABILITIES) {
+    const want = capabilityLevel(space, id);
+    const have = capabilityLevel(next, id);
+    if (want !== have && want <= myLevel && have <= myLevel) next = withCapability(next, id, want);
+  }
+  return next === channel ? undefined : next;
 }
 
 // --- Moderators-only channels ----------------------------------------------------------------
@@ -241,7 +284,7 @@ function actionLevel(room: Room, action: 'invite' | 'kick'): number {
   return typeof value === 'number' ? value : action === 'invite' ? 0 : 50;
 }
 
-type ChannelPlan = { users?: Record<string, number>; invite: string[]; remove: string[] };
+type ChannelPlan = { powerLevels?: PowerLevels; invite: string[]; remove: string[] };
 
 /** What governChannel would change in a channel right now, as far as this user is allowed to. */
 function planChannel(mx: MatrixClient, channel: Room, space: Room): ChannelPlan | undefined {
@@ -251,11 +294,20 @@ function planChannel(mx: MatrixClient, channel: Room, space: Room): ChannelPlan 
   const spaceLevels = spaceRoleLevels(space);
   const botUserId = readVoiceServerConfig(mx, space)?.botUserId;
   const untouchable = [...privilegedCreators(channel), ...(botUserId ? [botUserId] : [])];
-  const users = canSendState(channel, myUserId, EventType.RoomPowerLevels)
-    ? syncedChannelUsers(powerLevels(channel), spaceLevels, myLevel, untouchable)
-    : undefined;
+  const { visibility, channelModerators } = readChannelPermissions(channel);
+  let next: PowerLevels | undefined;
+  if (canSendState(channel, myUserId, EventType.RoomPowerLevels)) {
+    const current = powerLevels(channel);
+    const roleFloor = lowestRoleLevel(readSpaceRoles(space));
+    const users = syncedChannelUsers(current, spaceLevels, myLevel, untouchable, { roleFloor, channelModerators });
+    const withUsers = users ? { ...current, users } : current;
+    // Thresholds only once the Space has set up its roles (Space Settings → Roles): an older Space's
+    // channels keep whatever they were made with rather than all changing on the next pass.
+    const thresholds = space.currentState.getStateEvents(ROLES_EVENT, '') ? syncedThresholds(withUsers, powerLevels(space), myLevel) : undefined;
+    next = thresholds ?? (users ? withUsers : undefined);
+  }
 
-  if (readChannelPermissions(channel).visibility !== 'moderators') return { users, invite: [], remove: [] };
+  if (visibility !== 'moderators') return { powerLevels: next, invite: [], remove: [] };
   const members = (channel.currentState.getStateEvents(EventType.RoomMember) as MatrixEvent[]).map((event) => ({
     userId: event.getStateKey() ?? '',
     membership: event.getContent<{ membership?: string }>().membership ?? 'leave',
@@ -263,16 +315,18 @@ function planChannel(mx: MatrixClient, channel: Room, space: Room): ChannelPlan 
   const spaceMembers = space.getJoinedMembers().map((member) => member.userId);
   // Never removed: yourself, the channel's creators, and the Space's service bot, which a voice
   // channel needs in the room to let anyone into the call (voiceBot.ts) and webhooks post as.
-  const { invite, remove } = moderatorsOnlyChanges(members, Object.keys(spaceLevels), spaceMembers, [myUserId, ...untouchable]);
+  // Moderators only: the Space's (a custom role below moderator doesn't count) and this channel's own.
+  const moderators = [...Object.keys(spaceLevels).filter((userId) => spaceLevels[userId] >= MODERATOR_LEVEL), ...channelModerators];
+  const { invite, remove } = moderatorsOnlyChanges(members, [...new Set(moderators)], spaceMembers, [myUserId, ...untouchable]);
   return {
-    users,
+    powerLevels: next,
     invite: myLevel >= actionLevel(channel, 'invite') ? invite : [],
     remove: myLevel >= actionLevel(channel, 'kick') ? remove.filter((userId) => userPowerLevel(channel, userId) < myLevel) : [],
   };
 }
 
 const hasChanges = (plan: ChannelPlan | undefined): plan is ChannelPlan =>
-  !!plan && (!!plan.users || plan.invite.length > 0 || plan.remove.length > 0);
+  !!plan && (!!plan.powerLevels || plan.invite.length > 0 || plan.remove.length > 0);
 
 /**
  * Your place in line among everyone able to change this channel's power levels: highest level
@@ -311,12 +365,9 @@ export async function governChannel(mx: MatrixClient, channel: Room, space: Room
     writes += 1;
   };
 
-  if (plan.users) {
-    const users = plan.users;
-    const current = powerLevels(channel);
-    await write(() =>
-      mx.sendStateEvent(channel.roomId, EventType.RoomPowerLevels, { ...current, users, [ROLE_SYNC_MARKER]: Date.now() } as any, '')
-    );
+  if (plan.powerLevels) {
+    const next = plan.powerLevels;
+    await write(() => mx.sendStateEvent(channel.roomId, EventType.RoomPowerLevels, { ...next, [ROLE_SYNC_MARKER]: Date.now() } as any, ''));
   }
   for (const userId of plan.invite) await write(() => mx.invite(channel.roomId, userId)).catch(() => undefined);
   for (const userId of plan.remove) {
