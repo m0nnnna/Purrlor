@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { logIn, message, openChannel, role } from './app';
-import { api, createSpaceWithChannel, createUser, eventually, type TestUser } from './matrix';
+import { api, createSpaceWithChannel, createUser, eventually, latestEvents, type TestUser } from './matrix';
 
 const enc = encodeURIComponent;
 const TOKEN_SERVER = process.env.E2E_TOKEN_SERVER ?? 'http://127.0.0.1:6168';
@@ -82,4 +82,41 @@ test('a person can’t pass themselves off as a webhook', async ({ page }) => {
   const fake = message(page, 'Official announcement');
   await expect(role(fake, 'timeline-message-sender')).not.toHaveText('GitHub');
   await expect(role(fake, 'timeline-webhook-badge')).toHaveCount(0);
+});
+
+// A 1x1 PNG.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+test('a webhook with an avatar posts under it, and the avatar can be changed later', async ({ page }) => {
+  const alice = await createUser('alice');
+  const { channelId, spaceName } = await spaceWithService(alice, []);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  const row = page.locator('.nu-channel-list__row').filter({ has: role(page, 'channel-list-item').filter({ hasText: 'general' }) });
+  await row.hover();
+  await role(row, 'channel-list-row-menu').click();
+  await role(row, 'channel-list-webhooks').click();
+  await role(page, 'webhook-name').fill('Deploys');
+  await role(page, 'webhook-create').click();
+  const url = await role(page, 'webhook-url').inputValue();
+
+  // No avatar yet: add one to the webhook that exists.
+  await role(page, 'webhook-avatar').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+  await expect(role(page, 'webhook-avatar-remove')).toBeVisible();
+
+  const hasAvatar = (evs: Awaited<ReturnType<typeof latestEvents>>) =>
+    evs.some((e) => e.content.body === 'with a face' && String(e.content['com.beeper.per_message_profile']?.avatar_url ?? '').startsWith('mxc://'));
+  await eventually(
+    async () => {
+      await post(url, { content: 'with a face' });
+      return latestEvents(alice, channelId);
+    },
+    hasAvatar
+  );
+
+  // Taking it off leaves the URL working, now without one.
+  await role(page, 'webhook-avatar-remove').click();
+  await expect(role(page, 'webhook-avatar-remove')).toHaveCount(0);
+  expect((await post(url, { content: 'plain again' })).status).toBe(204);
 });

@@ -50,15 +50,34 @@ RSVPs are read from the member **state events** rather than the SDK's `RoomMembe
 member event changes, the SDK emits the state change before updating those objects, so anything
 reacting to the change would see the RSVP from before (the end-to-end test caught this).
 
+## Month view, exporting, and announcing
+
+- **Month view.** Events has a List / Month switch. The month is a grid of whole weeks (starting on
+  your locale's first day); an event sits on the day it starts, and a day you pick shows its events'
+  cards beneath. It reads every event, past ones included (`matrix/calendarMonth.ts`).
+- **.ics.** Each event has **Add to calendar**, and the header **Export** downloads every upcoming
+  event, as an iCalendar file (`matrix/calendarExport.ts`) for Google Calendar, Apple Calendar,
+  Outlook and the like. It's a file to import, not a subscription: a subscription would need a
+  public URL serving events that are private to the Space. An event held in a channel gets the
+  channel as its location; one with no end is an hour, as the calendar counts it.
+- **Announcing.** Creating an event can post a notice in a channel (`matrix/calendarNotice.ts`): the
+  event's channel by default, any channel, or none. It's an `m.notice`, like a bot's, so nobody is
+  pinged. If the notice fails the event is still made. Editing an event announces nothing.
+
 ## Reminders
 
-Matrix has no scheduling a client can use, so reminders come up in whichever Purrlor tab is open
-when they're due, or the next time one opens. That's late rather than never.
+Reminders come up in whichever Purrlor tab is open when they're due. With background push set up,
+the push gateway also fires them as Web Push, so they arrive with no tab open
+(docs/push-notifications.md, "Reminders"). Without it, a reminder waits for the next tab that
+opens: late rather than never.
 
 - **Message reminders**: a message's bell → In 20 minutes / 1 hour / 3 hours / Tomorrow at 9:00.
   They're kept in account data (`xyz.nekous.reminders`: `{ items: [{ id, roomId, eventId,
   remindAt, preview }] }`), so every device knows about them. The first device to show one removes
-  it for all.
+  it for all. A message in an encrypted room is saved with no preview: account data isn't
+  encrypted.
+- **Managing them**: Account Settings → Reminders lists both kinds. A message reminder has Open and
+  Cancel; an event you're going to has Not going, since its reminder comes from your RSVP.
 - **Event reminders**: 15 minutes before an event you're going to. Nothing is stored for these;
   they're worked out from your RSVPs. Each device remembers which it has shown
   (`nekous_event_reminders_shown` in local storage). None is shown for an event more than 10

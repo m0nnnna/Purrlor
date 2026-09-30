@@ -148,7 +148,7 @@
   color: var(--nu-color-on-accent);
 }
 
-.nu-server-rail__item--mentions,
+.nu-server-rail__item--notifications,
 .nu-server-rail__item--invites,
 .nu-server-rail__item--discover,
 .nu-server-rail__item--add {
@@ -157,7 +157,7 @@
   box-shadow: inset 0 0 0 1px var(--nu-color-border);
 }
 
-.nu-server-rail__item--mentions:hover,
+.nu-server-rail__item--notifications:hover,
 .nu-server-rail__item--invites:hover,
 .nu-server-rail__item--discover:hover {
   background: var(--nu-color-bg-tertiary);
@@ -170,8 +170,15 @@
   box-shadow: inset 0 0 0 1px var(--nu-color-accent);
 }
 
-/* The utility tiles never show a selected state, so they don't need the indicator pill. */
-.nu-server-rail__item--mentions::before,
+/* Notifications is a page, not a dialog, so it shows where you are like the tiles above. */
+.nu-server-rail__item--notifications.nu-server-rail__item--active {
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-accent);
+  box-shadow: inset 0 0 0 1px var(--nu-color-accent);
+}
+
+/* The other utility tiles never show a selected state, so they don't need the indicator pill. */
+.nu-server-rail__item--notifications::before,
 .nu-server-rail__item--invites::before,
 .nu-server-rail__item--discover::before,
 .nu-server-rail__item--add::before {
@@ -206,15 +213,3 @@
   display: none;
 }
 
-/* A plain dot where there's no count to show — new Activity on the global feed. */
-.nu-server-rail__item-dot {
-  position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 12px;
-  height: 12px;
-  border: 3px solid var(--nu-color-bg-app);
-  border-radius: var(--nu-radius-full);
-  background: var(--nu-color-danger);
-  box-sizing: content-box;
-}

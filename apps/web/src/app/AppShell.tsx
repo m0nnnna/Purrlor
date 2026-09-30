@@ -34,7 +34,8 @@ export function AppShell() {
   const selectedRoomId = useAtomValue(selectedRoomIdAtom);
   const [mobileMembersOpen, setMobileMembersOpen] = useAtom(mobileMemberListOpenAtom);
   const membersHidden = useAtomValue(desktopMemberListHiddenAtom);
-  // The global feed spans every public Space, so there's no one member list that belongs beside it.
+  // The social side (the global feed, a profile, a post) and a Space's Posts and Events span many
+  // rooms, so there's no one member list that belongs beside them.
   const globalFeedOpen = useAtomValue(globalFeedOpenAtom);
   const spaceView = useAtomValue(selectedSpaceViewAtom);
   const profileOpen = !!useAtomValue(profileUserIdAtom);
@@ -56,7 +57,7 @@ export function AppShell() {
       // media query switches on. They're no-ops above the breakpoint.
       data-nu-mobile-pane={mainPaneHasContent ? 'chat' : 'sidebar'}
       data-nu-mobile-members-open={mobileMembersOpen}
-      data-nu-members-hidden={membersHidden || globalFeedOpen || profileOpen || postOpen}
+      data-nu-members-hidden={membersHidden || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
       <VoiceCallSession>
         <ServerRail />

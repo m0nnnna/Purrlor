@@ -1,3 +1,12 @@
+/* All / Mentions, above the list — the header's tabs' look, left-aligned in the column. */
+.nu-activity__filters {
+  display: flex;
+}
+
+.nu-activity__filters .nu-feed__tabs {
+  margin-right: 0;
+}
+
 .nu-activity {
   list-style: none;
   margin-block: 0;
@@ -36,12 +45,25 @@
   background: color-mix(in srgb, var(--nu-color-accent) 9%, transparent);
 }
 
-.nu-activity__icon {
+.nu-activity__avatar {
+  position: relative;
   flex: none;
-  width: 28px;
   display: flex;
+}
+
+/* What kind of notification it is, as a badge on the avatar's corner. */
+.nu-activity__icon {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  padding-top: 6px;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-bg-tertiary);
+  box-shadow: 0 0 0 2px var(--nu-color-bg-secondary);
   color: var(--nu-color-accent-2);
 }
 
@@ -49,22 +71,30 @@
   color: var(--nu-color-danger);
 }
 
+.nu-activity__icon--mention,
+.nu-activity__icon--reply {
+  color: var(--nu-color-accent);
+}
+
 .nu-activity__body {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--nu-space-1);
+  gap: 2px;
 }
 
+/* Who did what, then when — the line a chat message's name and time sit on. */
 .nu-activity__head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--nu-space-2);
+  min-height: 20px;
 }
 
 .nu-activity__time {
+  flex: none;
   color: var(--nu-color-text-muted);
   font-size: var(--nu-font-size-xs);
 }
@@ -90,4 +120,8 @@
 
 .nu-activity__text--quiet {
   color: var(--nu-color-text-muted);
+}
+
+.nu-activity__row:disabled {
+  cursor: default;
 }

@@ -1,4 +1,4 @@
-import { EventType, type MatrixClient, type Room } from 'matrix-js-sdk';
+import { ClientEvent, EventType, RoomEvent, RoomStateEvent, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { readChannelType, SPACE_CHILD_CHANNEL_TYPE_KEY } from './channelType';
 
 function via(mx: MatrixClient): string {
@@ -49,13 +49,54 @@ export async function removeRoomFromSpace(mx: MatrixClient, spaceId: string, roo
  *  server-rail icon when jumping to a room from outside the channel list (e.g. a desktop
  *  notification), since selecting a room alone doesn't imply which Space view should be showing. */
 export function findParentSpaceId(mx: MatrixClient, roomId: string): string | null {
-  const space = mx
-    .getRooms()
-    .find(
-      (room) =>
-        room.isSpaceRoom() && (room.currentState.getStateEvents(EventType.SpaceChild, roomId)?.getContent().via?.length ?? 0) > 0
-    );
-  return space?.roomId ?? null;
+  return parentIndex(mx).get(roomId) ?? null;
+}
+
+/**
+ * Child room -> the first Space listing it, for findParentSpaceId, which runs on every new message
+ * in several places (moderation, notifications, mentions) and used to scan every room each time.
+ * Built on first use and thrown away when a Space's children change or rooms come and go, so
+ * it's rebuilt at most once per such change.
+ */
+const parentIndexes = new WeakMap<MatrixClient, { index?: Map<string, string> }>();
+
+function buildParentIndex(mx: MatrixClient): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const space of mx.getRooms()) {
+    if (!space.isSpaceRoom()) continue;
+    for (const event of space.currentState.getStateEvents(EventType.SpaceChild) as MatrixEvent[]) {
+      const childId = event.getStateKey();
+      if (childId && !index.has(childId) && (event.getContent().via?.length ?? 0) > 0) index.set(childId, space.roomId);
+    }
+  }
+  return index;
+}
+
+function parentIndex(mx: MatrixClient): Map<string, string> {
+  // A stand-in client in a test, with nothing to listen to: no cache, always fresh.
+  if (typeof mx.on !== 'function') return buildParentIndex(mx);
+  let entry = parentIndexes.get(mx);
+  if (!entry) {
+    const cache: { index?: Map<string, string> } = {};
+    const invalidate = () => {
+      cache.index = undefined;
+      // Once more after the other listeners: one that looked a parent up while the change was
+      // still arriving would otherwise have cached the list from before it.
+      queueMicrotask(() => {
+        cache.index = undefined;
+      });
+    };
+    mx.on(RoomStateEvent.Events, (event: MatrixEvent) => {
+      if (event.getType() === EventType.SpaceChild || event.getType() === EventType.RoomCreate) invalidate();
+    });
+    mx.on(ClientEvent.Room, invalidate);
+    mx.on(ClientEvent.DeleteRoom, invalidate);
+    mx.on(RoomEvent.MyMembership, invalidate);
+    parentIndexes.set(mx, cache);
+    entry = cache;
+  }
+  entry.index ??= buildParentIndex(mx);
+  return entry.index;
 }
 
 export async function reorderSpaceChildren(mx: MatrixClient, space: Room, orderedRoomIds: string[]): Promise<void> {

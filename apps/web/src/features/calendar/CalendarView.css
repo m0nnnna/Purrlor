@@ -104,3 +104,155 @@
     gap: var(--nu-space-2);
   }
 }
+
+/* List / Month switch in the header. */
+.nu-calendar__modes {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-app);
+}
+
+.nu-calendar__mode {
+  appearance: none;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--nu-color-text-muted);
+  font: inherit;
+  font-size: var(--nu-font-size-sm);
+  padding: var(--nu-space-1) var(--nu-space-3);
+  border-radius: var(--nu-radius-full);
+  cursor: pointer;
+}
+
+.nu-calendar__mode:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-calendar__mode--active {
+  color: var(--nu-color-on-accent);
+  background: var(--nu-gradient-accent);
+}
+
+/* Month view */
+.nu-calendar__month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-calendar__month-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-calendar__month-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--nu-font-size-lg, 1.1rem);
+  text-align: center;
+}
+
+.nu-calendar__month-step {
+  appearance: none;
+  display: flex;
+  padding: var(--nu-space-2);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  background: none;
+  color: var(--nu-color-text-secondary);
+  cursor: pointer;
+}
+
+.nu-calendar__month-step:hover {
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.nu-calendar__weekday {
+  padding: var(--nu-space-1);
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-xs);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nu-calendar__cell {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-height: 72px;
+  padding: var(--nu-space-1);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+  background: var(--nu-color-bg-primary);
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.nu-calendar__cell:hover {
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-calendar__cell--outside {
+  opacity: 0.45;
+}
+
+.nu-calendar__cell--today .nu-calendar__cell-day {
+  color: var(--nu-color-on-accent);
+  background: var(--nu-color-accent);
+  border-radius: var(--nu-radius-full);
+}
+
+.nu-calendar__cell--selected {
+  border-color: var(--nu-color-accent);
+  box-shadow: inset 0 0 0 1px var(--nu-color-accent);
+}
+
+.nu-calendar__cell-day {
+  align-self: flex-start;
+  min-width: 1.4em;
+  padding: 0 4px;
+  text-align: center;
+  font-size: var(--nu-font-size-xs);
+  font-weight: 700;
+}
+
+.nu-calendar__cell-event {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: var(--nu-radius-sm);
+  background: color-mix(in srgb, var(--nu-color-accent) 22%, transparent);
+  font-size: var(--nu-font-size-xs);
+}
+
+.nu-calendar__cell-more {
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-xs);
+}
+
+@media (max-width: 600px) {
+  .nu-calendar__cell {
+    min-height: 52px;
+  }
+
+  .nu-calendar__cell-event {
+    display: none;
+  }
+}

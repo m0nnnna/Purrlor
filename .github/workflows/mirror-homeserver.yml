@@ -1,0 +1,37 @@
+name: Mirror homeserver image
+
+# Copies the Continuwuity image the end-to-end tests run against (apps/web/e2e/docker-compose.yml)
+# into GitHub's container registry, for places that can reach ghcr.io but not forgejo.ellis.link,
+# such as a cloud coding session with a restricted network. Run it by hand when you want a newer
+# one; nothing depends on it. Then set E2E_HOMESERVER_IMAGE to the image it prints (see
+# apps/web/e2e/README.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: The image to copy
+        default: forgejo.ellis.link/continuwuation/continuwuity:latest
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy
+        env:
+          SOURCE: ${{ inputs.source }}
+          TARGET: ghcr.io/${{ github.repository_owner }}/purrlor-e2e-homeserver:latest
+        run: |
+          docker pull "$SOURCE"
+          docker tag "$SOURCE" "$TARGET"
+          docker push "$TARGET"
+          echo "Mirrored to $TARGET" >> "$GITHUB_STEP_SUMMARY"

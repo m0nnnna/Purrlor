@@ -153,6 +153,13 @@
   color: var(--nu-color-text-primary);
 }
 
+/* A wide screen has the sidebar (SocialNav) for these; a phone, where it's off screen, has the tabs. */
+@media (min-width: 901px) {
+  .nu-global-feed__tabs {
+    display: none;
+  }
+}
+
 /* On a phone the three tabs need the header's width more than the title does; the globe icon
    still says where you are. */
 @media (max-width: 480px) {

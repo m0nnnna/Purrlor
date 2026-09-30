@@ -121,4 +121,30 @@ describe('buildAuditLog', () => {
     const room = fakeRoom('general', [fakeEvent({ type: EventType.RoomAvatar, sender: '@ghost:example.org' })]);
     expect(buildAuditLog([room])[0].description).toBe('@ghost:example.org changed the room icon');
   });
+
+  it('folds the channel-role sync across channels into one line, apart from edits by hand', () => {
+    const names = { '@alice:example.org': 'Alice', '@bob:example.org': 'Bob' };
+    const sync = (ts: number) =>
+      fakeEvent({
+        type: EventType.RoomPowerLevels,
+        sender: '@alice:example.org',
+        content: { users: { '@bob:example.org': 50 }, 'xyz.nekous.role_sync': ts },
+        prevContent: { users: {} },
+        ts,
+      });
+    const byHand = fakeEvent({
+      type: EventType.RoomPowerLevels,
+      sender: '@alice:example.org',
+      // Starts from the synced content, so the marker comes along unchanged.
+      content: { users: { '@bob:example.org': 50, '@carol:example.org': 10 }, 'xyz.nekous.role_sync': 1000 },
+      prevContent: { users: { '@bob:example.org': 50 }, 'xyz.nekous.role_sync': 1000 },
+      ts: 5000,
+    });
+    const rooms = [fakeRoom('general', [sync(1000), byHand], names), fakeRoom('random', [sync(2000)], names), fakeRoom('art', [sync(3000)], names)];
+
+    expect(buildAuditLog(rooms).map((e) => [e.roomName, e.description])).toEqual([
+      ['general', "Alice set @carol:example.org's power level to 10"],
+      ['3 channels', "Alice applied the Space's roles: Bob is now a moderator"],
+    ]);
+  });
 });

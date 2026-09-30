@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ClientEvent, RoomStateEvent, type Room } from 'matrix-js-sdk';
+import { EventType, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { useRoomList } from './useRoomList';
 import { readMentionInvite } from '../mentionInvites';
 
 function listInvites(mx: ReturnType<typeof useMatrixClient>): Room[] {
@@ -24,20 +24,9 @@ function listInvites(mx: ReturnType<typeof useMatrixClient>): Room[] {
  */
 export function useInvites(): Room[] {
   const mx = useMatrixClient();
-  const [invites, setInvites] = useState<Room[]>(() => listInvites(mx));
-
-  useEffect(() => {
-    const update = () => setInvites(listInvites(mx));
-    update();
-    mx.on(ClientEvent.Room, update);
-    mx.on(ClientEvent.DeleteRoom, update);
-    mx.on(RoomStateEvent.Events, update);
-    return () => {
-      mx.removeListener(ClientEvent.Room, update);
-      mx.removeListener(ClientEvent.DeleteRoom, update);
-      mx.removeListener(RoomStateEvent.Events, update);
-    };
-  }, [mx]);
-
-  return invites;
+  return useRoomList(() => listInvites(mx), [], {
+    // Your own invite (and its reason), and what kind of room it is: what tells a mention's invite apart.
+    isRelevant: (event) =>
+      (event.getType() === EventType.RoomMember && event.getStateKey() === mx.getUserId()) || event.getType() === EventType.RoomCreate,
+  });
 }

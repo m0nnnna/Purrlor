@@ -11,10 +11,10 @@ import { userPowerLevel } from './permissions';
  *
  * 1. The reporter's client sends the report to each of the Space's moderators as a **to-device
  *    message** (`xyz.nekous.report`) to all their devices: it waits for devices that are offline,
- *    and no other member sees it. It isn't end-to-end encrypted — the crypto API can only encrypt
- *    to people you share an encrypted room with — so the servers carrying it can read it, which
- *    tells them no more than the homeserver report (still sent to the server's admins) does: the
- *    quoted text is only ever included for unencrypted rooms.
+ *    and no other member sees it. It's **Olm-encrypted** to each of their devices
+ *    (sendEncryptedToDevice), so the servers carrying it can't read it; only where that can't be
+ *    done (no encryption in this client, or a moderator with no device that has keys) does it go
+ *    plain, as before. The quoted text is only ever included for unencrypted rooms.
  * 2. Whichever moderator's client receives it **files it** into the Space's **review room**: a
  *    room only its moderators are in (a moderators-only room, kept in line by ChannelGovernance
  *    like any other), so they all share one queue.
@@ -47,7 +47,14 @@ export type ReportContent = {
   reported_at: number;
   /** Set on reports filed by automod.ts rather than a person. */
   automod?: { word: string; deleted: boolean };
+  /** Set when what's reported is a post or a comment in a feed room rather than a chat message:
+   *  which, and the post it is or sits under (to open it). */
+  content_kind?: 'post' | 'comment';
+  post_id?: string;
 };
+
+/** What a reported post or comment adds to a report so the queue can show and open it. */
+export type ReportedPost = { kind: 'post' | 'comment'; postId: string };
 
 export type Resolution = 'deleted' | 'removed' | 'banned' | 'dismissed';
 
@@ -132,13 +139,16 @@ export async function reportToSpaceModerators(
   mx: MatrixClient,
   space: Room,
   event: MatrixEvent,
-  reason: string
+  reason: string,
+  about?: ReportedPost
 ): Promise<number> {
   const roomId = event.getRoomId();
   const eventId = event.getId();
   if (!roomId || !eventId || !readModerationConfig(space).reviewRoomId) return 0;
 
-  const moderators = Object.keys(spaceRoleLevels(space)).filter((userId) => userId !== mx.getUserId());
+  const levels = spaceRoleLevels(space);
+  // Moderators and admins: a custom role below moderator doesn't review reports.
+  const moderators = Object.keys(levels).filter((userId) => levels[userId] >= MODERATOR_LEVEL && userId !== mx.getUserId());
   if (moderators.length === 0) return 0;
 
   const content: ReportContent = {
@@ -150,9 +160,73 @@ export async function reportToSpaceModerators(
     reason,
     ...(!event.isEncrypted() && { excerpt: excerptOf(event.getContent()) }),
     reported_at: Date.now(),
+    ...(about && { content_kind: about.kind, post_id: about.postId }),
   };
-  await mx.sendToDevice(REPORT_EVENT, new Map(moderators.map((userId) => [userId, new Map([['*', content as any]])])));
+  await sendEncryptedToDevice(mx, moderators, REPORT_EVENT, content);
   return moderators.length;
+}
+
+// --- Encrypting a report to the moderators' devices -----------------------------------------
+
+/**
+ * The parts of the SDK's Rust crypto this needs beyond its public API. The SDK encrypts to-device
+ * messages only for users whose devices it tracks, which it does for the members of encrypted rooms
+ * you're in — and a reporter usually shares none with the Space's moderators. So they're added to
+ * the tracked users first, and their device keys fetched, the same two calls the SDK makes itself
+ * when someone joins an encrypted room. Checked for rather than assumed: an SDK that renames them
+ * makes reports go plain again, not fail.
+ */
+type RustCryptoInternals = {
+  getOlmMachineOrThrow?: () => { updateTrackedUsers(users: unknown[]): Promise<void> };
+  outgoingRequestsManager?: { doProcessOutgoingRequests(): Promise<void> };
+};
+
+/** Starts tracking these users' devices, and fetches their keys. False when this client can't. */
+async function trackDevices(mx: MatrixClient, userIds: string[]): Promise<boolean> {
+  const internals = mx.getCrypto() as unknown as RustCryptoInternals | undefined;
+  if (!internals?.getOlmMachineOrThrow || !internals.outgoingRequestsManager) return false;
+  // The same module instance the SDK's crypto runs on, so its UserId objects are ones it accepts.
+  const { UserId } = await import('@matrix-org/matrix-sdk-crypto-wasm');
+  await internals.getOlmMachineOrThrow().updateTrackedUsers(userIds.map((userId) => new UserId(userId)));
+  await internals.outgoingRequestsManager.doProcessOutgoingRequests();
+  return true;
+}
+
+/**
+ * Sends `content` as a to-device message to every device of each of `userIds`, Olm-encrypted to
+ * each device where it can be. Anyone it couldn't be encrypted for — no crypto in this client, or
+ * none of their devices has keys — gets it plain, so a report still arrives. Resolves to who got
+ * it encrypted and who plain.
+ */
+export async function sendEncryptedToDevice(
+  mx: MatrixClient,
+  userIds: string[],
+  type: string,
+  content: Record<string, unknown>
+): Promise<{ encrypted: string[]; plain: string[] }> {
+  const crypto = mx.getCrypto();
+  const encrypted = new Set<string>();
+  if (crypto && (await trackDevices(mx, userIds).catch(() => false))) {
+    try {
+      const deviceMap = await crypto.getUserDeviceInfo(userIds);
+      const devices = [...deviceMap].flatMap(([userId, byId]) => [...byId.keys()].map((deviceId) => ({ userId, deviceId })));
+      if (devices.length > 0) {
+        const batch = await crypto.encryptToDeviceMessages(type, devices, content);
+        if (batch.batch.length > 0) {
+          await mx.queueToDevice(batch);
+          for (const { userId } of batch.batch) encrypted.add(userId);
+        }
+      }
+    } catch (err) {
+      console.warn('Couldn’t encrypt a to-device message; sending it plain', err);
+      encrypted.clear();
+    }
+  }
+  const plain = userIds.filter((userId) => !encrypted.has(userId));
+  if (plain.length > 0) {
+    await mx.sendToDevice(type, new Map(plain.map((userId) => [userId, new Map([['*', content as any]])])));
+  }
+  return { encrypted: [...encrypted], plain };
 }
 
 // --- Filing and reading the queue ----------------------------------------------------------

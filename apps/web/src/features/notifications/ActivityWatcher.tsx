@@ -5,7 +5,8 @@ import { activityAtom } from '../../app/state/feed';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   ACTIVITY_SEEN_ACCOUNT_DATA,
-  fetchActivity,
+  createActivityReader,
+  markChannelReads,
   isActivityEventType,
   ownFeedRoomIds,
   readActivitySeen,
@@ -18,9 +19,10 @@ const RELOAD_DELAY_MS = 1500;
 const RELOAD_EVERY_MS = 5 * 60_000;
 
 /**
- * Keeps Activity (matrix/activity.ts) current for the global feed's tab and the unread dot on
- * the rail: read once at start, then again whenever someone else's like, comment, repost or follow
- * lands in one of your feed rooms, or the mention inbox gains an entry.
+ * Keeps Activity (matrix/activity.ts) current for the Notifications page and the unread counts on
+ * the rail's bell and the social sidebar: read once at start, then again whenever someone else's
+ * like, comment, repost or follow lands in one of your feed rooms, or the mention inbox gains an
+ * entry (a mention anywhere, chat included).
  *
  * Headless: mounted once in AppShell, renders nothing, runs for the app's lifetime.
  */
@@ -31,38 +33,66 @@ export function ActivityWatcher() {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const reader = createActivityReader(mx);
+    // Feed rooms something happened in since the last read; undefined = read them all.
+    let changedRooms: Set<string> | undefined = new Set();
 
-    const load = async () => {
-      const items = await fetchActivity(mx).catch(() => undefined);
+    const load = async (rooms?: Set<string>) => {
+      const items = await reader.read(rooms ? { rooms: [...rooms] } : {}).catch(() => undefined);
       if (!cancelled && items) setActivity((prev) => ({ ...prev, items, loaded: true }));
     };
-    const reloadSoon = () => {
+    const reloadSoon = (roomId?: string) => {
+      if (roomId && changedRooms) changedRooms.add(roomId);
       clearTimeout(timer);
-      timer = setTimeout(() => void load(), RELOAD_DELAY_MS);
+      timer = setTimeout(() => {
+        const rooms = changedRooms;
+        changedRooms = new Set();
+        void load(rooms);
+      }, RELOAD_DELAY_MS);
     };
 
     setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
     void load();
 
+    // Reading a mention in its channel clears it here: re-check the chat mentions when a read
+    // receipt of yours arrives, without fetching anything.
+    const onReceipt = (_event: MatrixEvent, room: Room) => {
+      setActivity((prev) => {
+        if (!prev.items.some((item) => item.roomId === room.roomId && item.kind === 'mention' && !item.postId)) return prev;
+        const items = markChannelReads(mx, prev.items);
+        return items === prev.items ? prev : { ...prev, items };
+      });
+    };
+
     const onTimeline = (event: MatrixEvent, room: Room | undefined, toStart: boolean | undefined) => {
       if (toStart || !room || event.getSender() === mx.getUserId()) return;
+      // A deleted mention, anywhere, leaves the list.
+      const redacts = event.getType() === 'm.room.redaction' ? event.event.redacts ?? event.getContent().redacts : undefined;
+      if (typeof redacts === 'string' && reader.forget(room.roomId, redacts)) reloadSoon();
       // A redaction can undo a like or a comment, so it's a change too.
       const relevant = isActivityEventType(event.getType()) || event.getType() === 'm.room.redaction';
-      if (relevant && ownFeedRoomIds(mx).includes(room.roomId)) reloadSoon();
+      if (relevant && ownFeedRoomIds(mx).includes(room.roomId)) reloadSoon(room.roomId);
     };
     const onAccountData = (event: MatrixEvent) => {
+      // A new mention is read by itself; the feed rooms are left as they were.
       if (event.getType() === MENTION_INBOX_EVENT) reloadSoon();
       if (event.getType() === ACTIVITY_SEEN_ACCOUNT_DATA) setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
     };
-    const interval = setInterval(() => void load(), RELOAD_EVERY_MS);
+    // The safety net reads every feed room again.
+    const interval = setInterval(() => {
+      changedRooms = undefined;
+      reloadSoon();
+    }, RELOAD_EVERY_MS);
 
     mx.on(RoomEvent.Timeline, onTimeline);
+    mx.on(RoomEvent.Receipt, onReceipt);
     mx.on(ClientEvent.AccountData, onAccountData);
     return () => {
       cancelled = true;
       clearTimeout(timer);
       clearInterval(interval);
       mx.removeListener(RoomEvent.Timeline, onTimeline);
+      mx.removeListener(RoomEvent.Receipt, onReceipt);
       mx.removeListener(ClientEvent.AccountData, onAccountData);
     };
   }, [mx, setActivity]);

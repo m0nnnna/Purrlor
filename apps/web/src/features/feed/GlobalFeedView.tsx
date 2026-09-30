@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activityAtom, composerFocusAtom, feedSearchAtom } from '../../app/state/feed';
-import { globalFeedOpenAtom } from '../../app/state/selection';
-import { Icon } from '../../components/Icon';
+import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
+import { globalFeedOpenAtom, socialViewAtom, type SocialView } from '../../app/state/selection';
+import { Icon, type IconName } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { setFollowing } from '../../matrix/follows';
 import { filterPosts, type GlobalPost } from '../../matrix/globalFeed';
@@ -17,20 +17,28 @@ import { PostComposer } from './PostComposer';
 import { useComposerTargets } from './useComposerTargets';
 import { useInfiniteScroll } from './useInfiniteScroll';
 import { useKeptScroll } from './useKeptScroll';
+import { useOpenSocial } from './useOpenSocial';
 import './FeedView.css';
 import './GlobalFeedView.css';
 
-type Tab = 'everyone' | 'following' | 'activity';
+/** What the header says for each page: where you are, since the sidebar is off screen on a phone. */
+const TITLES: Record<SocialView, { title: string; icon: IconName }> = {
+  everyone: { title: 'Global feed', icon: 'globe' },
+  following: { title: 'Following', icon: 'users' },
+  notifications: { title: 'Notifications', icon: 'bell' },
+};
 
 /** A search reads further back on its own this many times; past that, the reader asks for more.
  *  Without a cap, a search for something that isn't there would read every feed to its start. */
 const SEARCH_AUTO_PAGES = 4;
 
 /**
- * The global feed. **Everyone** is posts from public places only — people's Global posts and
- * public Spaces, including ones you haven't joined. **Following** is the people and whole Spaces
- * you follow, which may include Spaces you're a member of that aren't public (you can already
- * read those; nobody else sees them here). **Notifications** (Activity in the code) is what people did with your posts.
+ * The social side's main page. **Everyone** is posts from public places only — people's Global
+ * posts and public Spaces, including ones you haven't joined. **Following** is the people and whole
+ * Spaces you follow, which may include Spaces you're a member of that aren't public (you can already
+ * read those; nobody else sees them here). **Notifications** (Activity in the code) is what people
+ * did with your posts and profile, and every mention of you. Which one shows is `socialViewAtom`,
+ * picked in the sidebar (SocialNav), from the rail, or on a phone from the header's tabs.
  *
  * Search (words, or a `#tag`) runs over the posts the current tab has loaded, reading further
  * back a few pages at a time — there's no server-side index to ask (matrix/hashtags.ts).
@@ -39,31 +47,32 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
   const mx = useMatrixClient();
   const open = useAtomValue(globalFeedOpenAtom);
   const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
+  const tab = useAtomValue(socialViewAtom);
+  const openSocial = useOpenSocial();
   const follows = useFollows();
   // Whoever you follow is read directly, even past the directory caps.
   const feed = useGlobalFeed(open, follows);
   const joinedSpaces = useSpaces();
   const targets = useComposerTargets(feed.publicSpaceIds);
-  const [tab, setTab] = useState<Tab>('everyone');
   const [managing, setManaging] = useState(false);
   const [followError, setFollowError] = useState<string>();
   const [search, setSearch] = useAtom(feedSearchAtom);
-  const { items: activity, seenTs } = useAtomValue(activityAtom);
+  const unreadNotifications = useAtomValue(unreadActivityCountAtom);
   const scroll = useKeptScroll<HTMLDivElement>(hidden);
   const query = parsePostQuery(search);
   const searching = query.kind !== 'none';
-  const activityUnread = activity.some((item) => item.ts > seenTs);
 
-  // A tag tapped anywhere lands here with the search already set; Activity has no posts to search.
+  // A tag tapped anywhere lands here with the search already set; Notifications has no posts to search.
+  const setView = useSetAtom(socialViewAtom);
   useEffect(() => {
-    if (searching && tab === 'activity') setTab('everyone');
-  }, [searching, tab]);
+    if (searching && tab === 'notifications') setView('everyone');
+  }, [searching, tab, setView]);
 
-  // The N shortcut wants the composer, which Activity doesn't have.
+  // The N shortcut wants the composer, which Notifications doesn't have.
   const focusRequest = useAtomValue(composerFocusAtom);
   useEffect(() => {
-    if (focusRequest) setTab((current) => (current === 'activity' ? 'everyone' : current));
-  }, [focusRequest]);
+    if (focusRequest) setView((current) => (current === 'notifications' ? 'everyone' : current));
+  }, [focusRequest, setView]);
 
   const timeline = (posts: GlobalPost[]) =>
     tab === 'following'
@@ -76,7 +85,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
         return !!content && postMatchesQuery(content, query, post.source.ownerName);
       })
     : inTab;
-  const newCount = searching || tab === 'activity' ? 0 : timeline(feed.pending).length;
+  const newCount = searching || tab === 'notifications' ? 0 : timeline(feed.pending).length;
   const followsNothing = follows.users.length === 0 && follows.spaces.length === 0;
 
   // How many pages this search has read on its own; reset whenever the search changes.
@@ -97,7 +106,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
     feed.loadMore();
   };
   const sentinelRef = useInfiniteScroll({
-    hasMore: feed.hasMore && tab !== 'activity' && !searchPaused,
+    hasMore: feed.hasMore && tab !== 'notifications' && !searchPaused,
     loading: feed.loading || feed.loadingMore,
     onLoadMore: loadMore,
   });
@@ -125,7 +134,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
     scroll.ref.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const tabButton = (value: Tab, label: string, extra?: ReactNode) => (
+  const tabButton = (value: SocialView, label: string, extra?: ReactNode) => (
     <button
       type="button"
       role="tab"
@@ -133,8 +142,8 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
       className={tab === value ? 'nu-feed__tab nu-feed__tab--active' : 'nu-feed__tab'}
       data-nu-role={`global-feed-tab-${value}`}
       onClick={() => {
-        setTab(value);
-        if (value === 'activity') setSearch('');
+        openSocial(value);
+        if (value === 'notifications') setSearch('');
       }}
     >
       {label}
@@ -155,36 +164,39 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
         >
           <Icon name="arrowLeft" size={18} />
         </button>
-        <Icon name="globe" size={20} className="nu-main-pane__header-icon" />
-        <h1 className="nu-main-pane__header-name">Global feed</h1>
+        <Icon name={TITLES[tab].icon} size={20} className="nu-main-pane__header-icon" />
+        <h1 className="nu-main-pane__header-name">{TITLES[tab].title}</h1>
         <div className="nu-main-pane__header-actions">
-          <div className="nu-feed__tabs" role="tablist">
+          {/* The sidebar (SocialNav) does this on a wide screen; on a phone it's off screen. */}
+          <div className="nu-feed__tabs nu-global-feed__tabs" role="tablist">
             {tabButton('everyone', 'Everyone')}
             {tabButton('following', 'Following')}
             {tabButton(
-              'activity',
+              'notifications',
               'Notifications',
-              activityUnread && tab !== 'activity' && (
-                <span className="nu-feed__tab-dot" data-nu-role="global-feed-activity-dot" aria-label="New notifications" />
+              unreadNotifications > 0 && tab !== 'notifications' && (
+                <span className="nu-feed__tab-dot" data-nu-role="global-feed-notifications-dot" aria-label="New notifications" />
               )
             )}
           </div>
-          <button
-            type="button"
-            className="nu-main-pane__header-action"
-            data-nu-role="global-feed-refresh"
-            title="Refresh"
-            aria-label="Refresh"
-            disabled={feed.loading}
-            onClick={feed.refresh}
-          >
-            <Icon name="refresh" size={17} />
-          </button>
+          {tab !== 'notifications' && (
+            <button
+              type="button"
+              className="nu-main-pane__header-action"
+              data-nu-role="global-feed-refresh"
+              title="Refresh"
+              aria-label="Refresh"
+              disabled={feed.loading}
+              onClick={feed.refresh}
+            >
+              <Icon name="refresh" size={17} />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="nu-feed" data-nu-role="global-feed" ref={scroll.ref} onScroll={scroll.onScroll}>
-        {tab === 'activity' ? (
+        {tab === 'notifications' ? (
           <ActivityView />
         ) : (
           <>

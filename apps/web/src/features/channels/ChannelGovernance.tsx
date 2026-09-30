@@ -4,10 +4,11 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { readLeftChannels } from '../../matrix/autoJoin';
 import { CHANNEL_SETTINGS_EVENT, governChannel, governSpaces, inviteFromSpaceModerator } from '../../matrix/channelPermissions';
 import { MODERATION_EVENT, readModerationConfig, reviewRoomInviteFromModerator, spaceOfReviewRoom } from '../../matrix/reports';
+import { ROLES_EVENT } from '../../matrix/roles';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 
 /** State that changes what a Space's channels should look like. */
-const SPACE_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, EventType.SpaceChild, MODERATION_EVENT]);
+const SPACE_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, EventType.SpaceChild, MODERATION_EVENT, ROLES_EVENT]);
 const CHANNEL_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, CHANNEL_SETTINGS_EVENT]);
 
 /**

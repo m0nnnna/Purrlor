@@ -68,9 +68,13 @@ test('turning on encryption for an existing channel warns first, then encrypts i
   await role(row, 'channel-list-row-menu').click();
   await role(row, 'channel-list-permissions').click();
   await expect(role(page, 'channel-permissions-encrypt-warning')).toHaveCount(0);
+  await expect(role(page, 'main-pane-encrypted')).toHaveCount(0);
   await role(page, 'channel-permissions-encrypt').check();
   await expect(role(page, 'channel-permissions-encrypt-warning')).toContainText('can’t be undone');
   await role(page, 'channel-permissions-save').click();
+  // The lock shows up in the channel's header and its row, without a reload.
+  await expect(role(page, 'main-pane-encrypted')).toBeVisible();
+  await expect(role(row, 'channel-list-item-encrypted')).toBeVisible();
 
   await eventually(
     () => encryption(alice, channelId),

@@ -5,12 +5,9 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { isValidUserId } from '../../matrix/directMessages';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { banMember, inviteMember, kickMember, unbanMember } from '../../matrix/moderation';
-import { ROLE_LEVELS, roleFor } from '../../matrix/roles';
+import { roleFor, type RoleLevel } from '../../matrix/roles';
+import { useSpaceRoles } from '../../matrix/hooks/useSpaceRoles';
 import { canBanFromRoom, canInviteToRoom, canKickFromRoom, canManageBans, canSendStateEvent } from '../../matrix/permissions';
-
-function roleLabelFor(powerLevel: number): string {
-  return roleFor(powerLevel).label;
-}
 
 /** Banned members don't show up in `useRoomMembers` (joined members only) — a room's banned
  *  list is small and only needed here (the one place an Unban action makes sense), so this
@@ -32,6 +29,7 @@ function useBannedMembers(room: Room): RoomMember[] {
 
 function MemberRow({
   member,
+  roles,
   myPowerLevel,
   canManageRoles,
   canKick,
@@ -41,6 +39,7 @@ function MemberRow({
   onBan,
 }: {
   member: RoomMember;
+  roles: RoleLevel[];
   myPowerLevel: number;
   canManageRoles: boolean;
   canKick: boolean;
@@ -51,7 +50,7 @@ function MemberRow({
 }) {
   const [busy, setBusy] = useState(false);
   const rolesManageable = canManageRoles && member.powerLevel < myPowerLevel;
-  const availableLevels = ROLE_LEVELS.filter((role) => role.value <= myPowerLevel);
+  const availableLevels = roles.filter((role) => role.value <= myPowerLevel);
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
@@ -68,7 +67,7 @@ function MemberRow({
       <Avatar name={member.name} mxcUrl={member.getMxcAvatarUrl()} size={28} />
       <div className="nu-space-members__row-info">
         <span className="nu-space-members__row-name">{member.name}</span>
-        <span className="nu-space-members__row-role">{roleLabelFor(member.powerLevel)}</span>
+        <span className="nu-space-members__row-role">{roleFor(member.powerLevel, roles).label}</span>
       </div>
       {rolesManageable && (
         <div className="nu-space-members__row-actions">
@@ -149,6 +148,7 @@ function BannedRow({ member, onUnban }: { member: RoomMember; onUnban: (userId: 
 export function SpaceMembersSettings({ space }: { space: Room }) {
   const mx = useMatrixClient();
   const members = useRoomMembers(space.roomId);
+  const roles = useSpaceRoles(space);
   const bannedMembers = useBannedMembers(space);
   const [inviteUserId, setInviteUserId] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -221,8 +221,8 @@ export function SpaceMembersSettings({ space }: { space: Room }) {
   return (
     <div className="nu-space-members" data-nu-role="space-members">
       <p className="nu-space-members__note">
-        Roles here apply only to this Space itself — Matrix doesn't cascade permissions from a
-        Space down to its channels, so each channel's own permissions are separate.
+        A role given here reaches every channel of the Space: whichever admin or moderator has
+        Purrlor open copies it in. Make your own roles under Roles.
       </p>
       {!canManagePowerLevels && (
         <p className="nu-space-members__note">You don't have permission to change roles here.</p>
@@ -256,6 +256,7 @@ export function SpaceMembersSettings({ space }: { space: Room }) {
           <MemberRow
             key={member.userId}
             member={member}
+            roles={roles}
             myPowerLevel={myPowerLevel}
             canManageRoles={canManagePowerLevels}
             canKick={member.userId !== myUserId && canKickFromRoom(space, myUserId, member.powerLevel)}

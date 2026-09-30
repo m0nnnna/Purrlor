@@ -77,6 +77,30 @@ Two roles, both in `src/server.ts`:
 `content.body` on an encrypted room's notification is useless ciphertext, not a preview — the
 gateway falls back to a generic "Sent a message" body rather than showing garbage.
 
+## Reminders
+
+Matrix has no server-side scheduling a client can rely on (delayed events, MSC4140, aren't
+something every homeserver offers), and this gateway already holds each account's browsers, so it
+fires reminders too: message reminders and calendar events you're going to.
+
+- **Handing them over.** Whenever your reminders, events or RSVPs change, and at start, a client
+  sends the account's whole list: `PUT /reminders` with an OpenID token and
+  `reminders: [{ id, at, title, body, roomId?, eventId? }]` (`apps/web/src/matrix/reminderPush.ts`).
+  The list replaces the last one, so a reminder cancelled, or already shown in a tab (which removes
+  it from account data), drops out on the next send.
+- **Firing them.** Every 30 s the gateway sends each due reminder to every browser that account has
+  registered, then forgets it (`src/reminders.ts`). At most 100 per account, the soonest kept.
+- **No doubles.** A reminder's id is also the notification tag an open tab shows it under
+  (`message:<id>`, `event:<id>`), and `sw.js` uses it, so the browser replaces one with the other.
+- **Encrypted rooms.** Their words never reach the gateway (the reminder just says one is due), and
+  aren't saved in account data in the first place.
+- **Restarts.** `REMINDERS_FILE` (set to `/data/reminders.json` on the `push-gateway-data` volume
+  in `deploy/docker-compose.yml`) keeps them across a restart; any client that starts also sends
+  its list again.
+
+**Known limit:** a message reminder fired by the gateway is still in account data until a tab
+shows it, so the next tab to open shows it once more, as a card.
+
 ## Deployment
 
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` — generate a pair with

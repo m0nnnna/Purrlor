@@ -231,3 +231,8 @@
   color: var(--nu-color-text-muted);
   font-size: var(--nu-font-size-sm);
 }
+
+/* A custom role without a colour of its own (its colour, when it has one, is set inline). */
+.nu-member-list__group-swatch--custom {
+  background: var(--nu-color-text-secondary);
+}

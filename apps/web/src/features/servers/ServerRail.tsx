@@ -1,17 +1,16 @@
 import { useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { activityAtom } from '../../app/state/feed';
+import { unreadActivityCountAtom } from '../../app/state/feed';
 import type { Room } from 'matrix-js-sdk';
-import { globalFeedOpenAtom, profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
+import { globalFeedOpenAtom, profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialViewAtom } from '../../app/state/selection';
 import { Icon } from '../../components/Icon';
 import { UnreadBadge } from '../../components/UnreadBadge';
 import { DiscoverModal } from '../discover/DiscoverModal';
 import { InvitesModal } from '../invites/InvitesModal';
-import { MentionInboxModal } from '../mentions/MentionInboxModal';
+import { useOpenSocial } from '../feed/useOpenSocial';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { useInvites } from '../../matrix/hooks/useInvites';
-import { useMentionInbox } from '../../matrix/hooks/useMentionInbox';
 import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
@@ -70,17 +69,17 @@ export function ServerRail() {
   const mx = useMatrixClient();
   const spaces = useSpaces();
   const invites = useInvites();
-  const mentions = useMentionInbox();
   const [selectedSpaceId, setSelectedSpaceId] = useAtom(selectedSpaceIdAtom);
   const [, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const [globalFeedOpen, setGlobalFeedOpen] = useAtom(globalFeedOpenAtom);
-  const activity = useAtomValue(activityAtom);
-  const activityUnread = activity.items.some((item) => item.ts > activity.seenTs);
+  const socialView = useAtomValue(socialViewAtom);
+  const unreadNotifications = useAtomValue(unreadActivityCountAtom);
+  const openSocial = useOpenSocial();
+  const onNotifications = globalFeedOpen && socialView === 'notifications';
   const setProfileUserId = useSetAtom(profileUserIdAtom);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showDiscover, setShowDiscover] = useState(false);
   const [showInvites, setShowInvites] = useState(false);
-  const [showMentions, setShowMentions] = useState(false);
   const dmUnread = useUnreadSummary(useSpacelessRooms());
 
   const selectSpace = (id: string | null) => {
@@ -127,23 +126,18 @@ export function ServerRail() {
       <button
         type="button"
         className={
-          globalFeedOpen
+          globalFeedOpen && !onNotifications
             ? 'nu-server-rail__item nu-server-rail__item--global-feed nu-server-rail__item--active'
             : 'nu-server-rail__item nu-server-rail__item--global-feed'
         }
         data-nu-role="server-rail-global-feed"
         title="Global feed"
         aria-label="Global feed"
-        aria-current={globalFeedOpen ? 'page' : undefined}
-        onClick={() => {
-          setProfileUserId(null);
-          setGlobalFeedOpen(true);
-        }}
+        aria-current={globalFeedOpen && !onNotifications ? 'page' : undefined}
+        onClick={() => openSocial(socialView === 'notifications' ? 'everyone' : socialView)}
       >
         <CatEars />
         <Icon name="globe" size={22} />
-        {/* New likes, comments, reposts, follows or mentions waiting in Activity. */}
-        {activityUnread && <span className="nu-server-rail__item-dot" data-nu-role="server-rail-activity-dot" aria-label="New notifications" />}
       </button>
       <div className="nu-server-rail__divider" />
       <div className="nu-server-rail__list" data-nu-role="server-rail-list">
@@ -157,17 +151,24 @@ export function ServerRail() {
         ))}
       </div>
       <div className="nu-server-rail__divider" />
+      {/* Everything that's about you, in one place: mentions anywhere, and what people did with
+          your posts and profile (the social side's Notifications page). */}
       <button
         type="button"
-        className="nu-server-rail__item nu-server-rail__item--mentions"
-        data-nu-role="server-rail-mentions"
-        title="Mentions"
-        aria-label="Mentions"
-        onClick={() => setShowMentions(true)}
+        className={
+          onNotifications
+            ? 'nu-server-rail__item nu-server-rail__item--notifications nu-server-rail__item--active'
+            : 'nu-server-rail__item nu-server-rail__item--notifications'
+        }
+        data-nu-role="server-rail-notifications"
+        title="Notifications"
+        aria-label={unreadNotifications > 0 ? `Notifications, ${unreadNotifications} new` : 'Notifications'}
+        aria-current={onNotifications ? 'page' : undefined}
+        onClick={() => openSocial('notifications')}
       >
-        <Icon name="at" size={20} />
+        <Icon name="bell" size={20} />
         <span className="nu-server-rail__item-badge">
-          <UnreadBadge total={mentions.length} highlight={mentions.length} />
+          <UnreadBadge total={unreadNotifications} highlight={unreadNotifications} />
         </span>
       </button>
       <button
@@ -231,7 +232,6 @@ export function ServerRail() {
           }}
         />
       )}
-      {showMentions && <MentionInboxModal onClose={() => setShowMentions(false)} />}
     </nav>
   );
 }

@@ -19,6 +19,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
+import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
 import { useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
@@ -41,10 +42,12 @@ import { UserPanel } from '../account/UserPanel';
 import { AddExistingChannelModal } from './AddExistingChannelModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { SpaceCard } from './SpaceCard';
+import { SocialNav } from '../feed/SocialNav';
 import { StartDmModal } from './StartDmModal';
 import { SpaceSettingsModal } from '../servers/SpaceSettingsModal';
 import { ChannelPermissionsModal } from './ChannelPermissionsModal';
 import { WebhooksModal } from './WebhooksModal';
+import { canEditChannelSettings, ChannelSettingsModal } from './ChannelSettingsModal';
 import { canManageWebhooks } from '../../matrix/webhooks';
 import { CHANNEL_SETTINGS_EVENT } from '../../matrix/channelPermissions';
 import './ChannelList.css';
@@ -107,6 +110,7 @@ function ChannelListRow({
   onRemoveFromSpace,
   onOpenPermissions,
   onOpenWebhooks,
+  onOpenSettings,
 }: {
   room: Room;
   isDirectMessage: boolean;
@@ -123,10 +127,13 @@ function ChannelListRow({
   onOpenPermissions?: () => void;
   /** Same, for a channel's webhooks (matrix/webhooks.ts). */
   onOpenWebhooks?: () => void;
+  /** A channel's name, topic and avatar. */
+  onOpenSettings?: () => void;
 }) {
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
   const channelType = useChannelType(room);
+  const encrypted = useRoomEncrypted(room);
   const setActiveVoiceChannelId = useSetAtom(activeVoiceChannelIdAtom);
   const mx = useMatrixClient();
   const unread = useRoomUnreadCount(room);
@@ -137,6 +144,7 @@ function ChannelListRow({
   const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages);
   const myUserId = mx.getUserId() ?? '';
   const canEditWebhooks = !!onOpenWebhooks && canManageWebhooks(room, myUserId);
+  const canEditSettings = !!onOpenSettings && canEditChannelSettings(room, myUserId);
   const canEditPermissions =
     !!onOpenPermissions &&
     (canSendStateEvent(room, myUserId, 'm.room.power_levels') || canSendStateEvent(room, myUserId, CHANNEL_SETTINGS_EVENT));
@@ -179,6 +187,11 @@ function ChannelListRow({
         <span className={isUnread ? 'nu-channel-list__item-name nu-channel-list__item-name--unread' : 'nu-channel-list__item-name'}>
           {room.name}
         </span>
+        {encrypted && (
+          <span className="nu-channel-list__item-level" title="End-to-end encrypted" data-nu-role="channel-list-item-encrypted">
+            <Icon name="lock" size={12} />
+          </span>
+        )}
         {level !== 'all' && (
           <span
             className="nu-channel-list__item-level"
@@ -193,7 +206,7 @@ function ChannelListRow({
       <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
         {/* One "⋯" for everything else, so a hovered row keeps most of its name clickable. */}
-        {(canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace)) && (
+        {(canEditSettings || canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace)) && (
           <Menu
             label="Channel options"
             trigger={<Icon name="more" size={13} />}
@@ -201,6 +214,11 @@ function ChannelListRow({
             role="channel-list-row-menu"
             align="end"
           >
+            {canEditSettings && (
+              <MenuItem icon="settings" role="channel-list-settings" onSelect={() => onOpenSettings?.()}>
+                Settings
+              </MenuItem>
+            )}
             {canEditPermissions && (
               <MenuItem icon="shield" role="channel-list-permissions" onSelect={() => onOpenPermissions?.()}>
                 Permissions
@@ -445,14 +463,15 @@ const voiceDefaultedSpaces = new Set<string>();
 /**
  * Second column. Two modes, toggled by the server rail's pinned Home/DM icon
  * (selectedSpaceId === null): the Direct Messages list (1:1s and group chats alike — see
- * useSpacelessRooms), or the selected Space's channels.
+ * useSpacelessRooms), or the selected Space's channels. While the social side is open (the
+ * rail's globe or bell) it's the social side's own navigation instead (SocialNav).
  */
 export function ChannelList() {
   const mx = useMatrixClient();
   const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
   const [selectedRoomId, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const [spaceView, setSpaceView] = useAtom(selectedSpaceViewAtom);
-  const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
+  const [globalFeedOpen, setGlobalFeedOpen] = useAtom(globalFeedOpenAtom);
   const setProfileUserId = useSetAtom(profileUserIdAtom);
   const space = useRoom(selectedSpaceId);
   const newPosts = useHasNewPosts(space ?? null);
@@ -473,6 +492,7 @@ export function ChannelList() {
   const [showSpaceSettings, setShowSpaceSettings] = useState(false);
   const [permissionsRoom, setPermissionsRoom] = useState<Room | null>(null);
   const [webhooksRoom, setWebhooksRoom] = useState<Room | null>(null);
+  const [settingsRoom, setSettingsRoom] = useState<Room | null>(null);
   const [showStartDm, setShowStartDm] = useState(false);
   const [showAddExistingChannel, setShowAddExistingChannel] = useState(false);
 
@@ -543,6 +563,18 @@ export function ChannelList() {
     removeRoomFromSpace(mx, selectedSpaceId, roomId).catch(console.error);
     if (selectedRoomId === roomId) setSelectedRoomId(null);
   };
+
+  // The social side has its own places to go; a Space's channels or your DMs aren't among them.
+  if (globalFeedOpen) {
+    return (
+      <aside className="nu-channel-list" data-nu-role="channel-list">
+        <SocialNav />
+        <NowPlayingCard />
+        <ActiveCallBar />
+        <UserPanel />
+      </aside>
+    );
+  }
 
   return (
     <aside className="nu-channel-list" data-nu-role="channel-list">
@@ -647,6 +679,7 @@ export function ChannelList() {
                     onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
                     onOpenPermissions={() => setPermissionsRoom(room)}
                     onOpenWebhooks={() => setWebhooksRoom(room)}
+                    onOpenSettings={() => setSettingsRoom(room)}
                   />
                 ))}
                 {categoryRooms.map(({ category, rooms }) => (
@@ -674,6 +707,7 @@ export function ChannelList() {
                           onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
                           onOpenPermissions={() => setPermissionsRoom(room)}
                           onOpenWebhooks={() => setWebhooksRoom(room)}
+                          onOpenSettings={() => setSettingsRoom(room)}
                         />
                       ))}
                   </div>
@@ -722,6 +756,7 @@ export function ChannelList() {
       {showSpaceSettings && space && (
         <SpaceSettingsModal space={space} onClose={() => setShowSpaceSettings(false)} />
       )}
+      {settingsRoom && <ChannelSettingsModal channel={settingsRoom} onClose={() => setSettingsRoom(null)} />}
       {webhooksRoom && space && <WebhooksModal channel={webhooksRoom} space={space} onClose={() => setWebhooksRoom(null)} />}
       {permissionsRoom && space && (
         <ChannelPermissionsModal channel={permissionsRoom} space={space} onClose={() => setPermissionsRoom(null)} />

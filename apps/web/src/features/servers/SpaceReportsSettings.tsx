@@ -16,6 +16,7 @@ import {
   type Resolution,
 } from '../../matrix/reports';
 import { redactMessage } from '../../matrix/redaction';
+import { useOpenPost } from '../feed/useOpenPost';
 
 const RESOLUTION_LABELS: Record<Resolution, string> = {
   deleted: 'Message deleted',
@@ -57,6 +58,7 @@ function ReportCard({ report, space, reviewRoomId }: { report: Report; space: Ro
   const setSelectedSpaceId = useSetAtom(selectedSpaceIdAtom);
   const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
   const setPendingJump = useSetAtom(pendingJumpTargetAtom);
+  const openPost = useOpenPost();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -78,7 +80,15 @@ function ReportCard({ report, space, reviewRoomId }: { report: Report; space: Ro
     }
   };
 
+  // A post or comment lives in a member's feed room, which isn't a channel: it opens as a post.
+  const aboutPost = !!report.content_kind && !!report.post_id;
+  const what = report.content_kind ?? 'message';
+
   const open = () => {
+    if (aboutPost) {
+      void openPost(report.room_id, report.post_id!);
+      return;
+    }
     setSelectedSpaceId(space.roomId);
     setSelectedRoomId(report.room_id);
     setPendingJump({ roomId: report.room_id, eventId: report.event_id });
@@ -87,7 +97,8 @@ function ReportCard({ report, space, reviewRoomId }: { report: Report; space: Ro
   return (
     <li className="nu-reports__item" data-nu-role="space-report">
       <p className="nu-reports__summary">
-        <strong>{nameOf(report.reported_user)}</strong> in #{channel?.name ?? 'a channel you’re not in'} ·{' '}
+        <strong>{nameOf(report.reported_user)}</strong>{' '}
+        {aboutPost ? `wrote a ${what}` : `in #${channel?.name ?? 'a channel you’re not in'}`} ·{' '}
         {new Date(report.reported_at).toLocaleString()}
       </p>
       {report.excerpt && <blockquote className="nu-reports__excerpt">{report.excerpt}</blockquote>}
@@ -102,12 +113,12 @@ function ReportCard({ report, space, reviewRoomId }: { report: Report; space: Ro
         </p>
       ) : (
         <div className="nu-reports__actions">
-          <button type="button" className="nu-button nu-button--secondary" onClick={open} disabled={!channel}>
-            Go to message
+          <button type="button" className="nu-button nu-button--secondary" data-nu-role="space-report-open" onClick={open} disabled={!channel}>
+            {aboutPost ? 'Go to post' : 'Go to message'}
           </button>
           {!report.automod?.deleted && (
             <button type="button" className="nu-button nu-button--secondary" data-nu-role="space-report-delete" disabled={busy} onClick={() => void act('deleted')}>
-              Delete message
+              {aboutPost ? `Delete ${what}` : 'Delete message'}
             </button>
           )}
           <button type="button" className="nu-button nu-button--secondary" data-nu-role="space-report-remove" disabled={busy} onClick={() => void act('removed')}>

@@ -315,3 +315,96 @@
   flex-wrap: wrap;
   gap: var(--nu-space-2);
 }
+
+/* Roles (SpaceRolesSettings.tsx) */
+.nu-space-roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-space-roles__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nu-space-roles__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-2);
+  border-radius: var(--nu-radius-sm);
+}
+
+.nu-space-roles__row:hover {
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-space-roles__swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--nu-radius-full);
+}
+
+.nu-space-roles__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-space-roles__level {
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-space-roles__color {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.nu-space-roles__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nu-space-2);
+}
+
+.nu-space-roles__add > .nu-field:first-child {
+  flex: 1;
+  min-width: 140px;
+}
+
+.nu-space-roles__level-field {
+  width: 80px;
+}
+
+.nu-space-roles__add-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.nu-space-roles__heading {
+  margin: var(--nu-space-2) 0 0;
+  font-size: var(--nu-font-size-sm);
+  font-weight: 800;
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-space-roles__capabilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nu-space-2) var(--nu-space-3);
+}

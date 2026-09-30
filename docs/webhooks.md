@@ -74,6 +74,9 @@ the bot.
   messages, which it deliberately never does.
 - Avatars from the request (`avatar_url` in Discord's shape) are ignored: fetching arbitrary URLs
   from the server is a request-forgery risk. A webhook's avatar is an `mxc://` set on the webhook.
+  It's set in the channel's Webhooks dialog: an optional image when you make the webhook, or
+  Add / Change / Remove avatar on an existing one (`setWebhookAvatar` rewrites the webhook's state
+  with the token's hash untouched, so its URL keeps working).
 
 ## Also fixed here
 

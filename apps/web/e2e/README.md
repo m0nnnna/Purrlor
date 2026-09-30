@@ -8,14 +8,15 @@ the same server.
 
 | Spec | What it covers |
 |---|---|
-| `messaging.spec.ts` | Sign in, send a message another user receives, see their reply arrive, react |
+| `messaging.spec.ts` | Sign in, send a message another user receives, see their reply arrive, react; the composer keeping keyboard focus (on opening a channel, after an emoji, after attaching a file); a channel mention reaching Notifications and opening at the message |
 | `posts.spec.ts` | Publish a post to a Space, which also creates your feed room |
 | `notifications.spec.ts` | Space and channel notification levels become the right push rules and back |
-| `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode |
+| `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode, a custom role and its permissions reaching the channels, a channel-only moderator |
 | `moderation.spec.ts` | A report reaching the Space's moderators, who delete the message from the queue; automod refusing a blocked word in Purrlor and deleting one sent from elsewhere |
 | `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
 | `webhooks.spec.ts` | A webhook posting through a real token server under its own name (APP), wrong tokens refused, deleting it, and a person unable to pose as one |
 | `encryption-settings.spec.ts` | New private channels and DMs are created encrypted, public channels aren't, and turning encryption on for an existing channel warns first |
+| `chat-features.spec.ts` | A thread (replying from a message, another user's reply arriving in it), pinning and unpinning, finding a message by searching, and sending a file from the composer |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
 
 ## Running locally
@@ -36,6 +37,19 @@ serves. `E2E_HOMESERVER` and `E2E_REGISTRATION_TOKEN` point the tests at another
 
 On Windows with the repo on a network share, run from a local copy of `apps/web`, as for the unit
 tests (see the main README). `start-homeserver.sh` needs bash (Git Bash works) and curl.
+
+### Where the homeserver image comes from
+
+It's pulled from `forgejo.ellis.link`, which some networks (a locked-down cloud coding session, for
+one) can't reach. `E2E_HOMESERVER_IMAGE` points the tests at a copy instead:
+
+1. Run the **Mirror homeserver image** workflow (Actions → Mirror homeserver image → Run workflow).
+   It copies the image to `ghcr.io/<owner>/purrlor-e2e-homeserver:latest`; the run's summary prints it.
+2. Set `E2E_HOMESERVER_IMAGE` to that in the environment that can't reach `forgejo.ellis.link`
+   (and let it reach `ghcr.io`), then `npm run e2e:homeserver` as usual.
+
+The mirror is a snapshot: run the workflow again to pick up a newer Continuwuity. CI itself doesn't
+use it; it pulls from the source.
 
 When a test fails, `npx playwright show-trace test-results/<test>/trace.zip` replays it step by
 step. In CI the report and traces are uploaded as the `playwright-report` artifact, and the job

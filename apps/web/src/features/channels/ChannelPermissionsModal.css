@@ -1,0 +1,34 @@
+/* Channel moderators: one chip per person, with a remove button. */
+.nu-channel-moderators {
+  list-style: none;
+  margin: var(--nu-space-1) 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-1);
+}
+
+.nu-channel-moderators__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  padding: 2px var(--nu-space-1) 2px var(--nu-space-2);
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-channel-moderators__remove {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0 var(--nu-space-1);
+  color: var(--nu-color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-channel-moderators__remove:hover {
+  color: var(--nu-color-danger);
+}

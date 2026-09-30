@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Room } from 'matrix-js-sdk';
-import { excerptOf, readReports } from './reports';
+import type { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk';
+import { excerptOf, readReports, reportToSpaceModerators } from './reports';
 
 type Fake = { id: string; type: string; sender: string; content: Record<string, unknown>; ts?: number; redacted?: boolean };
 
@@ -87,5 +87,51 @@ describe('excerptOf', () => {
     expect(excerptOf({ body: 'x'.repeat(600) })).toHaveLength(501);
     expect(excerptOf({ body: '  ' })).toBeUndefined();
     expect(excerptOf({})).toBeUndefined();
+  });
+});
+
+describe('reportToSpaceModerators for a post or comment', () => {
+  const state: Record<string, Record<string, unknown>> = {
+    'xyz.nekous.moderation': { '': { review_room: '!review' } },
+    'm.room.power_levels': { '': { users: { '@mod:x': 50, '@me:x': 0, '@helper:x': 25 } } },
+  };
+  const space = {
+    roomId: '!space',
+    currentState: {
+      getStateEvents: (type: string, key?: string) => {
+        const byKey = state[type];
+        if (!byKey) return key === undefined ? [] : null;
+        return key === undefined ? Object.entries(byKey).map(([k, c]) => ({ getStateKey: () => k, getContent: () => c })) : byKey[key] ? { getContent: () => byKey[key], getSender: () => undefined } : null;
+      },
+    },
+  } as unknown as Room;
+  const sent: { type: string; content: Record<string, unknown>; to: string[] }[] = [];
+  const mx = {
+    getUserId: () => '@me:x',
+    getCrypto: () => undefined,
+    sendToDevice: async (type: string, map: Map<string, Map<string, Record<string, unknown>>>) => {
+      const [[, devices]] = [...map];
+      sent.push({ type, content: [...devices.values()][0], to: [...map.keys()] });
+      return {};
+    },
+  } as unknown as MatrixClient;
+  const post = {
+    getRoomId: () => '!feed',
+    getId: () => '$post',
+    getSender: () => '@bad:x',
+    isEncrypted: () => false,
+    getContent: () => ({ body: 'spam spam' }),
+  } as unknown as MatrixEvent;
+
+  it('marks the report as about a post, with the post to open, and reaches only real moderators', async () => {
+    const count = await reportToSpaceModerators(mx, space, post, 'spam', { kind: 'post', postId: '$post' });
+    expect(count).toBe(1);
+    expect(sent[0].to).toEqual(['@mod:x']); // a custom-role holder below moderator doesn't review reports
+    expect(sent[0].content).toMatchObject({ room_id: '!feed', event_id: '$post', content_kind: 'post', post_id: '$post', excerpt: 'spam spam' });
+  });
+
+  it('leaves a chat message’s report as it was', async () => {
+    await reportToSpaceModerators(mx, space, post, 'spam');
+    expect(sent[1].content.content_kind).toBeUndefined();
   });
 });

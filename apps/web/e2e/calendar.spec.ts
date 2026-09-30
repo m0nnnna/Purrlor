@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clickMessageAction, logIn, message, openChannel, role } from './app';
-import { api, createSpaceWithChannel, createUser, eventually, sendText, type TestUser } from './matrix';
+import { api, createSpaceWithChannel, createUser, eventually, latestEvents, sendText, type TestUser } from './matrix';
 
 const enc = encodeURIComponent;
 
@@ -91,4 +91,27 @@ test('“Remind me” on a message, and a due reminder opening it', async ({ pag
     () => api<{ items?: unknown[] }>(alice, 'GET', `/user/${enc(alice.userId)}/account_data/xyz.nekous.reminders`),
     (content) => (content.items ?? []).length === 0
   );
+});
+
+test('a new event is announced in its channel, and shows in the month view', async ({ page }) => {
+  const alice = await createUser('alice');
+  const { channelId, spaceName } = await createSpaceWithChannel(alice);
+
+  await logIn(page, alice);
+  await openEvents(page, spaceName);
+  await role(page, 'calendar-new-event').click();
+  await role(page, 'calendar-event-title').fill('Movie night');
+  await role(page, 'calendar-event-channel').selectOption({ label: '#general' });
+  // Announced where it happens, by default.
+  await expect(role(page, 'calendar-event-announce')).toHaveValue(channelId);
+  await role(page, 'calendar-event-save').click();
+
+  const notice = await eventually(
+    () => latestEvents(alice, channelId),
+    (evs) => evs.some((e) => e.type === 'm.room.message' && e.content.msgtype === 'm.notice' && String(e.content.body).includes('Movie night'))
+  );
+  expect(notice.find((e) => e.content.msgtype === 'm.notice')?.content.body).toContain('New event');
+
+  await role(page, 'calendar-mode-month').click();
+  await expect(role(page, 'calendar-cell').filter({ hasText: 'Movie night' })).toBeVisible();
 });

@@ -37,12 +37,16 @@ import './Composer.css';
 
 const TYPING_TIMEOUT_MS = 10000;
 const TYPING_REFRESH_MS = 4000;
+// Phone-sized layouts (matches MainPane's): there, focusing the box pops up the on-screen
+// keyboard over the channel just opened, so switching channels leaves focus alone.
+const MOBILE_QUERY = '(max-width: 900px)';
 
 export function Composer({
   roomId,
   threadId = null,
   replyingTo = null,
   onCancelReply,
+  autoFocus = false,
 }: {
   roomId: string;
   threadId?: string | null;
@@ -50,6 +54,10 @@ export function Composer({
    *  owned by MainPane since it's cleared by a successful send here but set from a sibling. */
   replyingTo?: ReplyTarget | null;
   onCancelReply?: () => void;
+  /** Focus the box whenever the room changes (and on mount), so opening a channel or a server
+   *  lets you type straight away. Only the main pane's composer asks for this — a thread's
+   *  composer opening alongside it shouldn't steal focus from it. */
+  autoFocus?: boolean;
 }) {
   const mx = useMatrixClient();
   const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
@@ -96,6 +104,28 @@ export function Composer({
       mx.sendTyping(roomId, false, 0).catch(() => {});
     };
   }, [mx, roomId]);
+
+  // Put the caret back in the box after something outside it (the attach menu, the emoji picker,
+  // a reply button) took focus, at the end of the text so a picked emote can be followed by Enter.
+  // Deferred a frame so it lands after the picker/menu has closed and React has applied the new text.
+  const focusInput = () => {
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  };
+
+  useEffect(() => {
+    if (!autoFocus || window.matchMedia(MOBILE_QUERY).matches) return;
+    focusInput();
+  }, [autoFocus, roomId]);
+
+  // Clicking "Reply" on a message means the next thing typed is that reply.
+  useEffect(() => {
+    if (replyingTo) focusInput();
+  }, [replyingTo]);
 
   const handleChange = (evt: ChangeEvent<HTMLTextAreaElement>) => {
     const value = evt.target.value;
@@ -204,6 +234,8 @@ export function Composer({
       console.error('Failed to send message', err);
     } finally {
       setSending(false);
+      // Sending with the button leaves focus on it; bring it back for the next message.
+      focusInput();
     }
   };
 
@@ -275,6 +307,7 @@ export function Composer({
     const file = evt.target.files?.[0];
     evt.target.value = ''; // allow re-picking the same file after removing it
     if (file) setAttachment(file);
+    focusInput();
   };
 
   const handlePaste = (evt: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -317,6 +350,7 @@ export function Composer({
     setIsDragOver(false);
     const file = evt.dataTransfer.files?.[0];
     if (file) setAttachment(file);
+    focusInput();
   };
 
   // Discord/Element convention: the mic button only stands in for send while there's nothing
@@ -376,7 +410,10 @@ export function Composer({
             data-nu-role="composer-attachment-remove"
             title="Remove attachment"
             aria-label="Remove attachment"
-            onClick={() => setAttachment(undefined)}
+            onClick={() => {
+              setAttachment(undefined);
+              focusInput();
+            }}
           >
             <Icon name="x" size={14} />
           </button>
@@ -474,13 +511,20 @@ export function Composer({
           />
           <EmojiAndEmotePicker
             room={room ?? undefined}
-            onPickEmoji={(emoji) => setText((t) => `${t}${emoji}`)}
-            onPickEmote={(shortcode) => setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}:${shortcode}: `)}
+            onPickEmoji={(emoji) => {
+              setText((t) => `${t}${emoji}`);
+              focusInput();
+            }}
+            onPickEmote={(shortcode) => {
+              setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}:${shortcode}: `);
+              focusInput();
+            }}
             onPickSticker={(sticker) => {
               // Sent immediately as its own m.sticker event — a sticker isn't text to compose
               // further, unlike an emote (which inserts a :shortcode: for the rest of the message
               // to build around).
               void mx.sendStickerMessage(roomId, threadId, sticker.mxcUrl, undefined, sticker.body);
+              focusInput();
             }}
           />
           {showMicButton ? (
@@ -509,7 +553,15 @@ export function Composer({
           )}
         </form>
       )}
-      {showPollModal && <CreatePollModal roomId={roomId} onClose={() => setShowPollModal(false)} />}
+      {showPollModal && (
+        <CreatePollModal
+          roomId={roomId}
+          onClose={() => {
+            setShowPollModal(false);
+            focusInput();
+          }}
+        />
+      )}
     </div>
   );
 }

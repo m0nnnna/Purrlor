@@ -13,6 +13,8 @@ import {
   removeReminder,
 } from '../../matrix/reminders';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
+import { PUSH_GATEWAY_ACCOUNT_DATA_EVENT } from '../../matrix/push';
+import { syncRemindersToGateway } from '../../matrix/reminderPush';
 import './ReminderWatcher.css';
 
 /** Event reminders already shown on this device, so a reload doesn't show them again. */
@@ -45,7 +47,8 @@ type Toast =
  * from account data, and calendar events you're going to, 15 minutes before they start. Each
  * comes up as a card in the corner, and as a desktop notification when the browser allows them.
  * A message reminder is removed from account data once shown, so other devices don't show it too.
- * Mounted once in AppShell.
+ * With a push gateway set up, the same reminders are handed to it (matrix/reminderPush.ts), so they
+ * also arrive as Web Push when no tab is open. Mounted once in AppShell.
  */
 export function ReminderWatcher() {
   const mx = useMatrixClient();
@@ -121,6 +124,32 @@ export function ReminderWatcher() {
       mx.removeListener(RoomStateEvent.Events, onState);
     };
   }, [mx, show]);
+
+  // Keeps the push gateway's copy current: at start, and whenever reminders, events or RSVPs change.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const syncSoon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        syncRemindersToGateway(mx).catch((err: unknown) => console.warn('Couldn’t hand reminders to the push gateway', err));
+      }, 2000);
+    };
+    const onAccountData = (event: MatrixEvent) => {
+      if (event.getType() === REMINDERS_ACCOUNT_DATA || event.getType() === PUSH_GATEWAY_ACCOUNT_DATA_EVENT) syncSoon();
+    };
+    const onState = (event: MatrixEvent) => {
+      const type = event.getType();
+      if (type === CALENDAR_EVENT || (type === 'm.room.member' && event.getStateKey() === mx.getUserId())) syncSoon();
+    };
+    syncSoon();
+    mx.on(ClientEvent.AccountData, onAccountData);
+    mx.on(RoomStateEvent.Events, onState);
+    return () => {
+      clearTimeout(timer);
+      mx.removeListener(ClientEvent.AccountData, onAccountData);
+      mx.removeListener(RoomStateEvent.Events, onState);
+    };
+  }, [mx]);
 
   const dismiss = (key: string) => setToasts((current) => current.filter((t) => t.key !== key));
 

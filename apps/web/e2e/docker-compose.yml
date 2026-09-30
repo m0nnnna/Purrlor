@@ -6,7 +6,8 @@ name: purrlor-e2e
 
 services:
   matrix:
-    image: forgejo.ellis.link/continuwuation/continuwuity:latest
+    # E2E_HOMESERVER_IMAGE points it at a mirror (e2e/README.md), for places that can't reach forgejo.ellis.link.
+    image: ${E2E_HOMESERVER_IMAGE:-forgejo.ellis.link/continuwuation/continuwuity:latest}
     ports:
       - '127.0.0.1:6167:8008'
     environment:

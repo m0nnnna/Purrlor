@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { clickMessageAction, logIn, message, openChannel, role, send } from './app';
-import { createSpaceWithChannel, createUser, eventually, latestEvents, sendText } from './matrix';
+import { api, createSpaceWithChannel, createUser, eventually, latestEvents, sendText, uniqueName } from './matrix';
 
 test('sign in, send a message, and see a reply arrive', async ({ page }) => {
   const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
@@ -40,4 +40,63 @@ test('react to a message', async ({ page }) => {
         (e) => e.type === 'm.reaction' && e.sender === alice.userId && e.content['m.relates_to']?.event_id === eventId && e.content['m.relates_to']?.key === '👍'
       )
   );
+});
+
+test('the composer keeps keyboard focus: on opening a channel, after an emoji, after attaching a file', async ({ page }) => {
+  const alice = await createUser('alice');
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, []);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  const input = role(page, 'composer-input');
+  await expect(input).toBeFocused();
+
+  // Typed straight away, no click into the box first.
+  await page.keyboard.type('typed on arrival');
+  await page.keyboard.press('Enter');
+  await expect(message(page, 'typed on arrival')).toBeVisible();
+
+  await page.keyboard.type('with emoji ');
+  await role(page, 'emoji-emote-picker-toggle').click();
+  await role(page, 'emoji-picker-item').first().click();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(message(page, 'with emoji')).toBeVisible();
+
+  await role(page, 'composer-file-input').setInputFiles({ name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('hi') });
+  await expect(role(page, 'composer-attachment')).toBeVisible();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Enter');
+  await eventually(
+    () => latestEvents(alice, channelId),
+    (evs) => evs.some((e) => e.type === 'm.room.message' && e.content.body === 'note.txt')
+  );
+});
+
+test('a mention in a channel shows in Notifications and opens at the message', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, [bob]);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  // Somewhere else, so the mention arrives while alice isn't looking at it.
+  await role(page, 'server-rail-global-feed').click();
+  await expect(role(page, 'social-nav')).toBeVisible();
+
+  await api(bob, 'PUT', `/rooms/${encodeURIComponent(channelId)}/send/m.room.message/${uniqueName('txn')}`, {
+    msgtype: 'm.text',
+    body: 'alice: can you look at this?',
+    'm.mentions': { user_ids: [alice.userId] },
+  });
+
+  const bell = role(page, 'server-rail-notifications');
+  await expect(role(bell, 'unread-badge-highlight')).toHaveText('1');
+  await bell.click();
+  const row = role(page, 'activity-row').filter({ hasText: 'mentioned you in #general' });
+  await expect(row).toContainText('alice: can you look at this?');
+  // Looking at it counts as seen.
+  await expect(role(bell, 'unread-badge-highlight')).toHaveCount(0);
+
+  await row.click();
+  await expect(message(page, 'alice: can you look at this?')).toHaveClass(/nu-timeline__message--highlighted/);
 });

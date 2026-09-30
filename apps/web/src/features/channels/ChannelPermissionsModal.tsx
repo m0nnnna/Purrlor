@@ -4,8 +4,11 @@ import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   CHANNEL_SETTINGS_EVENT,
+  MODERATOR_LEVEL,
   readChannelPermissions,
+  setChannelModerators,
   setPostingMode,
+  spaceRoleLevels,
   setSlowmode,
   setVisibility,
   type PostingMode,
@@ -14,6 +17,8 @@ import {
 import { canSendStateEvent } from '../../matrix/permissions';
 import { canEnableEncryption, enableEncryption, isEncryptedRoom } from '../../matrix/encryption';
 import { listWebhooks } from '../../matrix/webhooks';
+import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
+import './ChannelPermissionsModal.css';
 
 const SLOWMODE_CHOICES: { seconds: number; label: string }[] = [
   { seconds: 0, label: 'Off' },
@@ -28,8 +33,9 @@ const SLOWMODE_CHOICES: { seconds: number; label: string }[] = [
 
 /**
  * A channel's permissions (matrix/channelPermissions.ts): who can post, who can see it, slowmode,
- * and turning on end-to-end encryption (matrix/encryption.ts), which can't be undone. Each setting
- * is only offered to someone who can change it in that channel.
+ * who moderates this channel only (docs/roles.md), and turning on end-to-end encryption
+ * (matrix/encryption.ts), which can't be undone. Each setting is only offered to someone who can
+ * change it in that channel.
  */
 export function ChannelPermissionsModal({ channel, space, onClose }: { channel: Room; space: Room; onClose: () => void }) {
   const mx = useMatrixClient();
@@ -38,6 +44,14 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const [posting, setPosting] = useState<PostingMode>(initial.posting);
   const [visibility, setVisibilityChoice] = useState<Visibility>(initial.visibility);
   const [slowmode, setSlowmodeChoice] = useState(initial.slowmodeSeconds);
+  const [channelModerators, setChannelModeratorList] = useState<string[]>(initial.channelModerators);
+  const spaceMembers = useRoomMembers(space.roomId);
+  const spaceLevels = spaceRoleLevels(space);
+  // Who could be made one: Space members who aren't a moderator there already, or one here.
+  const candidates = spaceMembers
+    .filter((m) => (spaceLevels[m.userId] ?? 0) < MODERATOR_LEVEL && !channelModerators.includes(m.userId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const nameOf = (userId: string) => spaceMembers.find((m) => m.userId === userId)?.name ?? userId;
   const alreadyEncrypted = isEncryptedRoom(channel);
   const [encrypt, setEncrypt] = useState(false);
   const webhookCount = listWebhooks(channel).length;
@@ -48,6 +62,9 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const canChangeVisibility =
     canSendStateEvent(channel, myUserId, EventType.RoomJoinRules) && canSendStateEvent(channel, myUserId, CHANNEL_SETTINGS_EVENT);
   const canChangeSlowmode = canSendStateEvent(channel, myUserId, CHANNEL_SETTINGS_EVENT);
+  const canChangeModerators = canChangeSlowmode && canChangePosting;
+  const moderatorsChanged =
+    channelModerators.length !== initial.channelModerators.length || channelModerators.some((id) => !initial.channelModerators.includes(id));
   const canEncrypt = canEnableEncryption(channel, myUserId);
   // A value that isn't one of the choices (set elsewhere) still shows, rather than reading "Off".
   const slowmodeChoices = SLOWMODE_CHOICES.some((c) => c.seconds === slowmode)
@@ -62,6 +79,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
       if (posting !== initial.posting) await setPostingMode(mx, channel, posting);
       if (slowmode !== initial.slowmodeSeconds) await setSlowmode(mx, channel, slowmode);
       if (visibility !== initial.visibility) await setVisibility(mx, channel, space, visibility);
+      if (moderatorsChanged) await setChannelModerators(mx, channel, space, channelModerators);
       // Last, so a failure above doesn't leave the one change that can't be undone half-made.
       if (encrypt && !alreadyEncrypted) await enableEncryption(mx, channel);
       onClose();
@@ -126,6 +144,48 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
             apps don’t know about it.
           </span>
         </label>
+        <div className="nu-field" data-nu-role="channel-permissions-moderators">
+          Channel moderators
+          {channelModerators.length > 0 && (
+            <ul className="nu-channel-moderators">
+              {channelModerators.map((userId) => (
+                <li key={userId} className="nu-channel-moderators__item" data-nu-role="channel-permissions-moderator">
+                  <span>{nameOf(userId)}</span>
+                  {canChangeModerators && (
+                    <button
+                      type="button"
+                      className="nu-channel-moderators__remove"
+                      data-nu-role="channel-permissions-moderator-remove"
+                      aria-label={`Remove ${nameOf(userId)}`}
+                      onClick={() => setChannelModeratorList((list) => list.filter((id) => id !== userId))}
+                    >
+                      ×
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canChangeModerators && candidates.length > 0 && (
+            <select
+              className="nu-field__input"
+              data-nu-role="channel-permissions-moderator-add"
+              value=""
+              onChange={(e) => e.target.value && setChannelModeratorList((list) => [...list, e.target.value])}
+            >
+              <option value="">Add someone…</option>
+              {candidates.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="nu-field__hint">
+            Moderators of this channel only: they can delete messages and manage people here, and nowhere else in {space.name}. The
+            Space’s own moderators already can.
+          </span>
+        </div>
         <div className="nu-field" data-nu-role="channel-permissions-encryption">
           Encryption
           {alreadyEncrypted ? (

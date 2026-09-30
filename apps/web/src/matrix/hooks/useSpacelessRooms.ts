@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { ClientEvent, EventType, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import { EventType, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
-import { readChannelType } from '../channelType';
+import { CHANNEL_TYPE_EVENT, readChannelType } from '../channelType';
+import { useRoomList } from './useRoomList';
 import { isBackgroundRoom } from '../backgroundRooms';
 
 function getSpaceChildRoomIds(mx: ReturnType<typeof useMatrixClient>): Set<string> {
@@ -50,20 +50,9 @@ function listSpacelessRooms(mx: ReturnType<typeof useMatrixClient>): Room[] {
  */
 export function useSpacelessRooms(): Room[] {
   const mx = useMatrixClient();
-  const [rooms, setRooms] = useState<Room[]>(() => listSpacelessRooms(mx));
-
-  useEffect(() => {
-    const update = () => setRooms(listSpacelessRooms(mx));
-    update();
-    mx.on(ClientEvent.Room, update);
-    mx.on(ClientEvent.DeleteRoom, update);
-    mx.on(RoomStateEvent.Events, update);
-    return () => {
-      mx.removeListener(ClientEvent.Room, update);
-      mx.removeListener(ClientEvent.DeleteRoom, update);
-      mx.removeListener(RoomStateEvent.Events, update);
-    };
-  }, [mx]);
-
-  return rooms;
+  return useRoomList(() => listSpacelessRooms(mx), [], {
+    // A room moving into or out of a Space, or becoming a feed; and new messages, for the order.
+    isRelevant: (event) => event.getType() === EventType.SpaceChild || event.getType() === CHANNEL_TYPE_EVENT,
+    timeline: true,
+  });
 }

@@ -14,6 +14,7 @@ import {
   buildDemoRooms,
   DEMO_MEMBERS,
   DEMO_OUTSIDE_SPACE,
+  DEMO_ROOM_IDS,
   demoEvent,
   demoOutsideFeedEvents,
   demoOutsideSpaceState,
@@ -284,6 +285,24 @@ export function createDemoClient(): MatrixClient {
     // --- things with no offline meaning -------------------------------------------------------------
     searchRoomEvents: async () => ({ results: [], count: 0, next_batch: undefined, highlights: [] }),
     relations: async () => ({ events: [] }),
+    // `/messages`, read from the room in memory, is the one raw endpoint the demo answers: how
+    // Notifications reads likes, comments and follows from your feed rooms (matrix/activity.ts).
+    http: {
+      authedRequest: async (method: string, path: string, query: Record<string, string> = {}) => {
+        const match = method === 'GET' ? /^\/rooms\/([^/]+)\/messages$/.exec(path) : null;
+        const room = match ? getRoom(decodeURIComponent(match[1])) : null;
+        if (!room) throw Object.assign(new Error('M_UNRECOGNIZED'), { httpStatus: 404 });
+        const types = query.filter ? (JSON.parse(query.filter) as { types?: string[] }).types : undefined;
+        const chunk = room
+          .getLiveTimeline()
+          .getEvents()
+          .map((event) => event.event)
+          .filter((event) => !types || types.includes(event.type ?? ''))
+          .reverse()
+          .slice(0, Number(query.limit ?? 10));
+        return { chunk };
+      },
+    },
     // Reposts check their original against this (matrix/repostCheck.ts).
     fetchRoomEvent: async (roomId: string, eventId: string) => {
       const room = getRoom(roomId);
@@ -319,6 +338,23 @@ export function createDemoClient(): MatrixClient {
   });
 
   rooms = buildDemoRooms(client as MatrixClient);
+
+  // What MentionInboxCollector would have logged had you been online for the sample world's
+  // mentions of you, so Notifications has them too.
+  const mentions = rooms.flatMap((room) =>
+    room
+      .getLiveTimeline()
+      .getEvents()
+      .filter((event) => event.getSender() !== DEMO_USER_ID && event.getContent()['m.mentions']?.user_ids?.includes(DEMO_USER_ID))
+      .map((event) => ({ roomId: room.roomId, eventId: event.getId(), mentionedAt: event.getTs() }))
+  );
+  // Your feed room in Cat Café, as creating it would have recorded (matrix/feed.ts) — where
+  // Notifications looks for likes and comments on your posts.
+  accountData.set(
+    'xyz.nekous.feed_rooms',
+    new MatrixEvent({ type: 'xyz.nekous.feed_rooms', content: { [DEMO_ROOM_IDS.cafe]: DEMO_ROOM_IDS.feedYou } })
+  );
+  accountData.set('xyz.nekous.mention_inbox', new MatrixEvent({ type: 'xyz.nekous.mention_inbox', content: { items: mentions } }));
 
   return client as MatrixClient;
 }
