@@ -62,6 +62,8 @@ opens: late rather than never.
   remindAt, preview }] }`), so every device knows about them. The first device to show one removes
   it for all. A message in an encrypted room is saved with no preview: account data isn't
   encrypted.
+- **Managing them**: Account Settings → Reminders lists both kinds. A message reminder has Open and
+  Cancel; an event you're going to has Not going, since its reminder comes from your RSVP.
 - **Event reminders**: 15 minutes before an event you're going to. Nothing is stored for these;
   they're worked out from your RSVPs. Each device remembers which it has shown
   (`nekous_event_reminders_shown` in local storage). None is shown for an event more than 10
