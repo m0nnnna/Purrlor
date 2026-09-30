@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { EventType, RoomEvent, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { readLeftChannels } from '../../matrix/autoJoin';
-import { CHANNEL_SETTINGS_EVENT, governSpaces, inviteFromSpaceModerator } from '../../matrix/channelPermissions';
+import { CHANNEL_SETTINGS_EVENT, governChannel, governSpaces, inviteFromSpaceModerator } from '../../matrix/channelPermissions';
+import { MODERATION_EVENT, readModerationConfig, reviewRoomInviteFromModerator, spaceOfReviewRoom } from '../../matrix/reports';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 
 /** State that changes what a Space's channels should look like. */
-const SPACE_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, EventType.SpaceChild]);
+const SPACE_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, EventType.SpaceChild, MODERATION_EVENT]);
 const CHANNEL_STATE = new Set<string>([EventType.RoomPowerLevels, EventType.RoomMember, CHANNEL_SETTINGS_EVENT]);
 
 /**
@@ -32,6 +33,12 @@ export function ChannelGovernance() {
       queued = undefined;
       try {
         await governSpaces(mx, spaceIds);
+        // A Space's review room (reports.ts) is moderators-only too, though not one of its channels.
+        const spaces = spaceIds ? [...spaceIds].flatMap((id) => mx.getRoom(id) ?? []) : mx.getRooms().filter((r) => r.isSpaceRoom());
+        for (const space of spaces) {
+          const reviewRoom = mx.getRoom(readModerationConfig(space).reviewRoomId ?? '');
+          if (reviewRoom) await governChannel(mx, reviewRoom, space).catch((err: unknown) => console.warn('Couldn’t update the review room', err));
+        }
       } finally {
         running = false;
         if (queued) startTimer();
@@ -49,7 +56,7 @@ export function ChannelGovernance() {
 
     const acceptIfFromModerator = (room: Room) => {
       if (readLeftChannels(mx).has(room.roomId)) return;
-      if (inviteFromSpaceModerator(mx, room)) {
+      if (inviteFromSpaceModerator(mx, room) || reviewRoomInviteFromModerator(mx, room)) {
         mx.joinRoom(room.roomId).catch((err: unknown) => console.warn('Couldn’t accept a channel invite', err));
       }
     };
@@ -63,7 +70,7 @@ export function ChannelGovernance() {
         return;
       }
       if (!CHANNEL_STATE.has(event.getType())) return;
-      const spaceId = findParentSpaceId(mx, room.roomId);
+      const spaceId = findParentSpaceId(mx, room.roomId) ?? spaceOfReviewRoom(mx, room.roomId)?.roomId;
       if (spaceId) queue(spaceId);
     };
     const onMembership = (room: Room, membership: string) => {

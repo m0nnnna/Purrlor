@@ -3,6 +3,8 @@ import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room
 import { useAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
+import { ReportDialog } from '../feed/ReportDialog';
+import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { RoleBadge } from '../../components/RoleBadge';
 import { pendingJumpTargetAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -241,6 +243,7 @@ function MessageRow({
   const [showProfile, setShowProfile] = useState(false);
   const [showEditHistory, setShowEditHistory] = useState(false);
   const [showForward, setShowForward] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const senderId = event.getSender();
 
   return (
@@ -487,6 +490,18 @@ function MessageRow({
               <Icon name="pin" size={16} filled={isPinned} />
             </button>
           )}
+          {senderId && senderId !== mx.getUserId() && (
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action"
+              data-nu-role="timeline-report-action"
+              title="Report"
+              aria-label="Report"
+              onClick={() => setShowReport(true)}
+            >
+              <Icon name="flag" size={16} />
+            </button>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -500,6 +515,16 @@ function MessageRow({
             </button>
           )}
         </div>
+      )}
+      {showReport && eventId && (
+        <ReportDialog
+          roomId={room.roomId}
+          eventId={eventId}
+          what="message"
+          event={event}
+          space={mx.getRoom(findParentSpaceId(mx, room.roomId) ?? '') ?? undefined}
+          onClose={() => setShowReport(false)}
+        />
       )}
       {showProfile && senderId && (
         <UserProfileModal

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Room } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { looksLikeEmoteLibrary } from '../../matrix/emoteLibrary';
+import { isBackgroundRoom } from '../../matrix/backgroundRooms';
 import { addRoomToSpace } from '../../matrix/spaceChildren';
 import './AddExistingChannelModal.css';
 
@@ -28,7 +28,7 @@ export function AddExistingChannelModal({
     .getRooms()
     .filter(
       (room) =>
-        !room.isSpaceRoom() && !looksLikeEmoteLibrary(room) && room.roomId !== space.roomId && !existingRoomIds.has(room.roomId)
+        !room.isSpaceRoom() && !isBackgroundRoom(room) && room.roomId !== space.roomId && !existingRoomIds.has(room.roomId)
     );
 
   const handleAdd = async (room: Room) => {

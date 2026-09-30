@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { readChannelType } from '../../matrix/channelType';
-import { looksLikeEmoteLibrary } from '../../matrix/emoteLibrary';
+import { isBackgroundRoom } from '../../matrix/backgroundRooms';
 import { forwardMessage } from '../../matrix/forward';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import './ForwardMessageModal.css';
@@ -17,7 +17,7 @@ type TargetGroup = { label: string; rooms: Room[] };
 function useForwardTargets(): TargetGroup[] {
   const mx = useMatrixClient();
   return useMemo(() => {
-    const allRooms = mx.getRooms().filter((room) => room.getMyMembership() === 'join' && !looksLikeEmoteLibrary(room));
+    const allRooms = mx.getRooms().filter((room) => room.getMyMembership() === 'join' && !isBackgroundRoom(room));
     const spaces = allRooms.filter((room) => room.isSpaceRoom()).sort((a, b) => a.name.localeCompare(b.name));
     const spaceChildIds = new Set<string>();
     const groups: TargetGroup[] = [];

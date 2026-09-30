@@ -8,6 +8,7 @@ import { DesktopNotifications } from '../features/notifications/DesktopNotificat
 import { NotificationRules } from '../features/notifications/NotificationRules';
 import { FeedGovernance } from '../features/feed/FeedGovernance';
 import { ChannelGovernance } from '../features/channels/ChannelGovernance';
+import { ModerationWatcher } from '../features/moderation/ModerationWatcher';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { MentionInboxCollector } from '../features/notifications/MentionInboxCollector';
 import { MentionInviteAcceptor } from '../features/notifications/MentionInviteAcceptor';
@@ -75,6 +76,7 @@ export function AppShell() {
       {/* Writes power levels and kicks; the demo's sample world has nothing it should change. */}
       {!isDemoMode() && <FeedGovernance />}
       {!isDemoMode() && <ChannelGovernance />}
+      {!isDemoMode() && <ModerationWatcher />}
       <MentionInboxCollector />
       <ActivityWatcher />
       <MentionInviteAcceptor />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ClientEvent, EventType, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
 import { readChannelType } from '../channelType';
-import { looksLikeEmoteLibrary } from '../emoteLibrary';
+import { isBackgroundRoom } from '../backgroundRooms';
 
 function getSpaceChildRoomIds(mx: ReturnType<typeof useMatrixClient>): Set<string> {
   const childIds = new Set<string>();
@@ -35,7 +35,7 @@ function listSpacelessRooms(mx: ReturnType<typeof useMatrixClient>): Room[] {
         // land here as a "group chat" — one row per person in the hub.
         readChannelType(room) !== 'feed' &&
         // The global emote library (emoteLibrary.ts) is joined by everyone in the background.
-        !looksLikeEmoteLibrary(room)
+        !isBackgroundRoom(room)
     )
     .sort((a, b) => b.getLastActiveTimestamp() - a.getLastActiveTimestamp());
 }

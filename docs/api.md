@@ -259,6 +259,7 @@ else. It just isn't shown there.
 | `xyz.nekous.feed` | `""` | A feed room | `{ "owner": "@…", "spaceId": "!…" }`, or `{ "owner": "@…", "profile": true }` for a profile feed | Feed owner, at creation |
 | `im.ponies.room_emotes` | `"@user:server"` | The emote library | A standard MSC2545 pack: that person's own global emotes and stickers. Each image may carry `xyz.nekous.added_at` (ms), which decides who keeps a shortcode two people chose. Packs under any other state key are ignored. | That person only (Matrix rejects an `@`-prefixed state key that isn't the sender's own ID) |
 | `xyz.nekous.emote_moderation` | `""` | The emote library | `{ "hidden": ["mxc://…"] }`: images every Purrlor client leaves out | Library moderators |
+| `xyz.nekous.moderation` | `""` | A Space | `{ "review_room": "!…", "blocked_words": ["…"] }`: report review and automod. See [moderation.md](moderation.md). | Space moderators |
 | `xyz.nekous.channel_settings` | `""` | A channel | `{ "moderators_only": true, "slowmode_seconds": 30 }`, both optional. Moderators-only also means the room is invite-only; slowmode is honoured by Purrlor's composer only. See [channel-permissions.md](channel-permissions.md). | Channel moderators |
 
 A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its own. See

@@ -1,30 +1,39 @@
 import { useState, type FormEvent } from 'react';
+import type { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { feedJoinVia } from '../../matrix/feed';
 import { reportContent } from '../../matrix/moderation';
+import { readModerationConfig, reportToSpaceModerators } from '../../matrix/reports';
 import { serverNameOf } from '../../matrix/roomOrigin';
 
 /**
- * Reporting a post or comment to the homeserver's admins. It goes to whoever runs the server, not
- * to a Space's moderators — they can already delete it themselves (feedGovernance.ts).
+ * Reporting a message, post or comment. It always goes to the homeserver's admins; for a message
+ * in a channel of a Space with report review, it also goes to that Space's moderators
+ * (matrix/reports.ts), who are usually the ones who can do something about it.
  */
 export function ReportDialog({
   roomId,
   eventId,
   what,
   ownerId,
+  event,
+  space,
   onClose,
 }: {
   roomId: string;
   eventId: string;
-  /** The feed's owner, whose server is the way into the room when reporting needs joining it. */
-  ownerId: string;
-  what: 'post' | 'comment';
+  /** A feed's owner, whose server is the way into the room when reporting needs joining it. */
+  ownerId?: string;
+  what: 'post' | 'comment' | 'message';
+  /** The reported event and its Space, for reaching the Space's moderators. */
+  event?: MatrixEvent;
+  space?: Room;
   onClose: () => void;
 }) {
   const mx = useMatrixClient();
   const server = serverNameOf(mx.getUserId() ?? '') || 'your server';
+  const toModerators = !!(event && space && readModerationConfig(space).reviewRoomId);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -36,7 +45,8 @@ export function ReportDialog({
     setBusy(true);
     setError(undefined);
     try {
-      await reportContent(mx, roomId, eventId, reason.trim(), feedJoinVia(roomId, ownerId));
+      await reportContent(mx, roomId, eventId, reason.trim(), ownerId ? feedJoinVia(roomId, ownerId) : []);
+      if (toModerators) await reportToSpaceModerators(mx, space!, event!, reason.trim());
       setSent(true);
     } catch (err) {
       // A Space's feed only lets its members in, and so only they can report there.
@@ -57,7 +67,10 @@ export function ReportDialog({
     <Modal title={`Report ${what}`} onClose={onClose}>
       {sent ? (
         <div className="nu-modal-form" data-nu-role="report-sent">
-          <p>Thanks. The admins of {server} have been sent this {what}.</p>
+          <p>
+            Thanks. {toModerators ? `The moderators of ${space!.name} and the admins of ${server}` : `The admins of ${server}`} have
+            been sent this {what}.
+          </p>
           <div className="nu-form-actions">
             <button type="button" className="nu-button nu-button--primary" onClick={onClose}>
               Done
@@ -66,7 +79,10 @@ export function ReportDialog({
         </div>
       ) : (
         <form className="nu-modal-form" onSubmit={handleSubmit} data-nu-role="report-dialog">
-          <p>This sends the {what} to the admins of {server}. Its author isn’t told who reported it.</p>
+          <p>
+            This sends the {what} to {toModerators ? `the moderators of ${space!.name} and ` : ''}the admins of {server}. Its author isn’t
+            told who reported it.
+          </p>
           <label className="nu-field">
             What’s wrong with it? (optional)
             <textarea

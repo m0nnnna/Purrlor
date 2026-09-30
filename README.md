@@ -11,7 +11,8 @@ hood, [`docs/posts.md`](docs/posts.md) for posts, comments and the global feed,
 [`docs/push-notifications.md`](docs/push-notifications.md) for background push,
 [`docs/notification-settings.md`](docs/notification-settings.md) for per-channel and per-Space
 notification levels, [`docs/channel-permissions.md`](docs/channel-permissions.md) for
-announcement and moderators-only channels and slowmode, and
+announcement and moderators-only channels and slowmode, [`docs/moderation.md`](docs/moderation.md)
+for report review and automod, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old
@@ -232,6 +233,9 @@ set a nickname scoped to just that Space, independent of your global display nam
   channel (its "⋯" → Permissions): **announcement** channels only moderators post in (everyone
   can react), **moderators-only** channels nobody else sees, and **slowmode** — see
   [`docs/channel-permissions.md`](docs/channel-permissions.md).
+- **Report review and automod**: reports about a Space's messages reach its moderators, who act
+  on them in Space Settings → Reports; a list of blocked words is refused in Purrlor and deleted
+  when sent from other apps — see [`docs/moderation.md`](docs/moderation.md).
 - Per-server nicknames — a display-name override scoped to one Space, layered on top of Matrix's
   per-room `m.room.member` override.
 - Add an existing room as a channel, or discover and join public Spaces/rooms via a directory

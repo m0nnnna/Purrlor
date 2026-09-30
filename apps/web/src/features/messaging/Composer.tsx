@@ -20,6 +20,8 @@ import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canMentionRoom } from '../../matrix/permissions';
 import { slowmodeWaitMs } from '../../matrix/channelPermissions';
+import { blockedWordForOwnMessage } from '../../matrix/automod';
+import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { useChannelPermissions, useSlowmodeWait } from '../../matrix/hooks/useChannelPermissions';
 import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
@@ -129,6 +131,16 @@ export function Composer({
     // rather than from the countdown, which only ticks once a second.
     const isCommand = body.startsWith('/') && !body.startsWith('//');
     if (!isCommand && room && slowmodeWaitMs(room, mx.getUserId() ?? '') > 0) return;
+    // The Space's blocked words (matrix/automod.ts): say so here rather than send something a
+    // moderator's client would delete.
+    if (!isCommand && body) {
+      const space = mx.getRoom(findParentSpaceId(mx, roomId) ?? '') ?? undefined;
+      const blocked = blockedWordForOwnMessage(mx, space, body);
+      if (blocked) {
+        setCommandError(`“${blocked}” isn’t allowed in ${space?.name ?? 'this Space'}. Edit your message to send it.`);
+        return;
+      }
+    }
     setSending(true);
     setText('');
     mention.close();
