@@ -7,7 +7,7 @@ import type { MatrixClient, Room } from 'matrix-js-sdk';
  * consistent with how every other custom marker in this codebase works (emotes, pins, space
  * discovery) — read/write/hook via the same shape throughout.
  */
-const CHANNEL_TYPE_EVENT = 'xyz.nekous.channel_type';
+export const CHANNEL_TYPE_EVENT = 'xyz.nekous.channel_type';
 
 /**
  * `feed` is a member's own posts room (`feed.ts`) rather than a channel anyone selects from the

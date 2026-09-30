@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ClientEvent, EventType, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import { EventType, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { useRoomList } from './useRoomList';
 
 type SpaceChildContent = { via?: string[]; order?: string };
 
@@ -41,22 +41,8 @@ function listChildRooms(mx: ReturnType<typeof useMatrixClient>, spaceId: string)
 
 export function useSpaceRooms(spaceId: string | null): Room[] {
   const mx = useMatrixClient();
-  const [rooms, setRooms] = useState<Room[]>(() => (spaceId ? listChildRooms(mx, spaceId) : []));
-
-  useEffect(() => {
-    if (!spaceId) {
-      setRooms([]);
-      return undefined;
-    }
-    const update = () => setRooms(listChildRooms(mx, spaceId));
-    update();
-    mx.on(RoomStateEvent.Events, update);
-    mx.on(ClientEvent.Room, update);
-    return () => {
-      mx.removeListener(RoomStateEvent.Events, update);
-      mx.removeListener(ClientEvent.Room, update);
-    };
-  }, [mx, spaceId]);
-
-  return rooms;
+  return useRoomList(() => (spaceId ? listChildRooms(mx, spaceId) : []), [spaceId], {
+    // Only this Space's list of children changes which rooms are in it.
+    isRelevant: (event) => event.getType() === EventType.SpaceChild && event.getRoomId() === spaceId,
+  });
 }

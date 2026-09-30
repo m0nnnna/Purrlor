@@ -1,7 +1,7 @@
 import { Direction, EventType, Method, RelationType, type MatrixClient } from 'matrix-js-sdk';
 import { listOwnFeedRoomIds } from './feed';
 import { readFreshAccountData } from './freshAccountData';
-import { readMentionInbox } from './mentionInbox';
+import { readMentionInbox, type MentionRef } from './mentionInbox';
 import { COMMENT_EVENT_TYPE, LIKE_KEY, REPOST_RECEIPT_TYPE } from './postInteractions';
 import { FOLLOWED_EVENT, getOwnProfileRoomId } from './profileFeed';
 
@@ -152,34 +152,28 @@ async function recentEvents(mx: MatrixClient, roomId: string): Promise<RawActivi
 
 export type MentionEvent = { event: RawActivityEvent; postId?: string };
 
-/** Mentions from other people's rooms, via the mention inbox — in chat, posts and comments. Each is
- *  read back to know who and what it is: from memory when the room has it (already decrypted, in
- *  an encrypted channel), else from the server. */
-async function mentionEvents(mx: MatrixClient): Promise<MentionEvent[]> {
-  const read = await Promise.all(
-    readMentionInbox(mx).map(async (ref): Promise<MentionEvent | undefined> => {
-      const local = mx.getRoom(ref.roomId)?.findEventById(ref.eventId);
-      if (local) {
-        const event: RawActivityEvent = {
-          event_id: ref.eventId,
-          room_id: ref.roomId,
-          type: local.getType(),
-          sender: local.getSender() ?? '',
-          origin_server_ts: local.getTs(),
-          content: local.getContent(),
-          unsigned: local.isRedacted() ? { redacted_because: true } : undefined,
-        };
-        return { event, postId: ref.postId };
-      }
-      try {
-        const raw = (await mx.fetchRoomEvent(ref.roomId, ref.eventId)) as unknown as Omit<RawActivityEvent, 'room_id'>;
-        return { event: { ...raw, room_id: ref.roomId }, postId: ref.postId };
-      } catch {
-        return undefined;
-      }
-    })
-  );
-  return read.filter((item): item is MentionEvent => !!item);
+/** One mention inbox entry read back, to know who and what it is: from memory when the room has
+ *  it (already decrypted, in an encrypted channel), else from the server. */
+async function readMention(mx: MatrixClient, ref: MentionRef): Promise<MentionEvent | undefined> {
+  const local = mx.getRoom(ref.roomId)?.findEventById(ref.eventId);
+  if (local) {
+    const event: RawActivityEvent = {
+      event_id: ref.eventId,
+      room_id: ref.roomId,
+      type: local.getType(),
+      sender: local.getSender() ?? '',
+      origin_server_ts: local.getTs(),
+      content: local.getContent(),
+      unsigned: local.isRedacted() ? { redacted_because: true } : undefined,
+    };
+    return { event, postId: ref.postId };
+  }
+  try {
+    const raw = (await mx.fetchRoomEvent(ref.roomId, ref.eventId)) as unknown as Omit<RawActivityEvent, 'room_id'>;
+    return { event: { ...raw, room_id: ref.roomId }, postId: ref.postId };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -204,17 +198,58 @@ export function buildMentionActivity(mentions: MentionEvent[], alreadyShown: Set
     });
 }
 
-/** Everything above, read fresh. A room that can't be read right now is skipped, not fatal. */
-export async function fetchActivity(mx: MatrixClient): Promise<ActivityItem[]> {
-  const myUserId = mx.getUserId() ?? '';
-  const [perRoom, mentions] = await Promise.all([
-    Promise.all(ownFeedRoomIds(mx).map((roomId) => recentEvents(mx, roomId).catch(() => []))),
-    mentionEvents(mx).catch(() => []),
-  ]);
-  const own = buildActivity(perRoom.flat(), myUserId);
-  const elsewhere = buildMentionActivity(mentions, new Set(own.map((item) => item.eventId)), myUserId);
-  return [...own, ...elsewhere].sort((a, b) => b.ts - a.ts);
+/**
+ * Reads Activity, remembering what it read so the next read fetches only what changed. It used to
+ * read everything fresh each time — 100 events from each of your feed rooms and every mention in
+ * the inbox, one request each — every five minutes and after every burst of likes. Now:
+ *
+ * - `read()` with no rooms re-reads every feed room (the periodic safety net); with `rooms`, only
+ *   those (the one a like just landed in). A feed room never read yet is always read.
+ * - A mention is read back once and kept: its words don't change, and one deleted since is
+ *   dropped with `forget` when its redaction arrives. Entries that leave the inbox are dropped.
+ *
+ * A room that can't be read right now keeps what was last read from it, rather than emptying.
+ */
+export function createActivityReader(mx: MatrixClient) {
+  const perRoom = new Map<string, RawActivityEvent[]>();
+  const mentions = new Map<string, MentionEvent | undefined>();
+  const keyOf = (roomId: string, eventId: string) => `${roomId}|${eventId}`;
+
+  return {
+    async read({ rooms }: { rooms?: string[] } = {}): Promise<ActivityItem[]> {
+      const myUserId = mx.getUserId() ?? '';
+      const own = ownFeedRoomIds(mx);
+      const toRead = own.filter((roomId) => !rooms || rooms.includes(roomId) || !perRoom.has(roomId));
+      const refs = readMentionInbox(mx);
+      await Promise.all([
+        ...toRead.map(async (roomId) => {
+          const events = await recentEvents(mx, roomId).catch(() => undefined);
+          if (events) perRoom.set(roomId, events);
+        }),
+        ...refs
+          .filter((ref) => !mentions.has(keyOf(ref.roomId, ref.eventId)))
+          .map(async (ref) => mentions.set(keyOf(ref.roomId, ref.eventId), await readMention(mx, ref).catch(() => undefined))),
+      ]);
+      for (const roomId of [...perRoom.keys()]) if (!own.includes(roomId)) perRoom.delete(roomId);
+      const inInbox = new Set(refs.map((ref) => keyOf(ref.roomId, ref.eventId)));
+      for (const key of [...mentions.keys()]) if (!inInbox.has(key)) mentions.delete(key);
+
+      const fromOwn = buildActivity([...perRoom.values()].flat(), myUserId);
+      const elsewhere = buildMentionActivity(
+        [...mentions.values()].filter((m): m is MentionEvent => !!m),
+        new Set(fromOwn.map((item) => item.eventId)),
+        myUserId
+      );
+      return [...fromOwn, ...elsewhere].sort((a, b) => b.ts - a.ts);
+    },
+    /** Whether this event is a mention it holds; forgets it if so (it was deleted). */
+    forget(roomId: string, eventId: string): boolean {
+      return mentions.delete(keyOf(roomId, eventId));
+    },
+  };
 }
+
+export type ActivityReader = ReturnType<typeof createActivityReader>;
 
 export const ACTIVITY_SEEN_ACCOUNT_DATA = 'xyz.nekous.activity_seen';
 

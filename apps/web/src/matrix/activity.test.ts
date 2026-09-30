@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { buildActivity, buildMentionActivity, type RawActivityEvent } from './activity';
+import { describe, expect, it, vi } from 'vitest';
+import type { MatrixClient } from 'matrix-js-sdk';
+import { buildActivity, buildMentionActivity, createActivityReader, type RawActivityEvent } from './activity';
 
 const ME = '@me:x';
 const POST = '$post';
@@ -89,5 +90,59 @@ describe('buildMentionActivity', () => {
     const deleted = { ...ev('m.room.message', '@b:x', 3, { body: '@me' }), unsigned: { redacted_because: {} } };
     const rows = buildMentionActivity([{ event: shown, postId: POST }, { event: mine }, { event: deleted }], new Set([shown.event_id]), ME);
     expect(rows).toEqual([]);
+  });
+});
+
+describe('createActivityReader', () => {
+  function client() {
+    const accountData: Record<string, unknown> = {
+      'xyz.nekous.profile_room': { roomId: '!profile' },
+      'xyz.nekous.feed_rooms': { '!space': '!feed' },
+      'xyz.nekous.mention_inbox': { items: [{ roomId: '!chan', eventId: '$m1', mentionedAt: 1 }] },
+    };
+    const authedRequest = vi.fn(async (_method: string, path: string) => ({
+      chunk: path.includes('!feed') ? [{ ...like('@a:x', 5), room_id: undefined }] : [],
+    }));
+    const fetchRoomEvent = vi.fn(async (_roomId: string, eventId: string) => ({
+      event_id: eventId,
+      type: 'm.room.message',
+      sender: '@b:x',
+      origin_server_ts: 9,
+      content: { body: 'hi @me' },
+    }));
+    const mx = {
+      getUserId: () => ME,
+      getRoom: () => null,
+      getAccountData: (type: string) => (accountData[type] ? { getContent: () => accountData[type] } : undefined),
+      http: { authedRequest },
+      fetchRoomEvent,
+    } as unknown as MatrixClient;
+    return { mx, authedRequest, fetchRoomEvent, accountData };
+  }
+  const roomsRead = (calls: unknown[][]) => calls.map((call) => decodeURIComponent(String(call[1])).split('/')[2]);
+
+  it('reads everything once, then only the room that changed, and each mention once', async () => {
+    const c = client();
+    const reader = createActivityReader(c.mx);
+
+    const first = await reader.read();
+    expect(roomsRead(c.authedRequest.mock.calls).sort()).toEqual(['!feed', '!profile']);
+    expect(first.map((item) => item.kind)).toEqual(['mention', 'like']);
+
+    c.authedRequest.mockClear();
+    const second = await reader.read({ rooms: ['!feed'] });
+    expect(roomsRead(c.authedRequest.mock.calls)).toEqual(['!feed']);
+    expect(c.fetchRoomEvent).toHaveBeenCalledTimes(1);
+    expect(second).toHaveLength(2);
+  });
+
+  it('drops a mention once it’s deleted or leaves the inbox', async () => {
+    const c = client();
+    const reader = createActivityReader(c.mx);
+    await reader.read();
+    expect(reader.forget('!chan', '$m1')).toBe(true);
+    c.accountData['xyz.nekous.mention_inbox'] = { items: [] };
+    const items = await reader.read({ rooms: [] });
+    expect(items.map((item) => item.kind)).toEqual(['like']);
   });
 });

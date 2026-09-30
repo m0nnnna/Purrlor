@@ -5,7 +5,7 @@ import { activityAtom } from '../../app/state/feed';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   ACTIVITY_SEEN_ACCOUNT_DATA,
-  fetchActivity,
+  createActivityReader,
   isActivityEventType,
   ownFeedRoomIds,
   readActivitySeen,
@@ -32,14 +32,22 @@ export function ActivityWatcher() {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const reader = createActivityReader(mx);
+    // Feed rooms something happened in since the last read; undefined = read them all.
+    let changedRooms: Set<string> | undefined = new Set();
 
-    const load = async () => {
-      const items = await fetchActivity(mx).catch(() => undefined);
+    const load = async (rooms?: Set<string>) => {
+      const items = await reader.read(rooms ? { rooms: [...rooms] } : {}).catch(() => undefined);
       if (!cancelled && items) setActivity((prev) => ({ ...prev, items, loaded: true }));
     };
-    const reloadSoon = () => {
+    const reloadSoon = (roomId?: string) => {
+      if (roomId && changedRooms) changedRooms.add(roomId);
       clearTimeout(timer);
-      timer = setTimeout(() => void load(), RELOAD_DELAY_MS);
+      timer = setTimeout(() => {
+        const rooms = changedRooms;
+        changedRooms = new Set();
+        void load(rooms);
+      }, RELOAD_DELAY_MS);
     };
 
     setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
@@ -47,15 +55,23 @@ export function ActivityWatcher() {
 
     const onTimeline = (event: MatrixEvent, room: Room | undefined, toStart: boolean | undefined) => {
       if (toStart || !room || event.getSender() === mx.getUserId()) return;
+      // A deleted mention, anywhere, leaves the list.
+      const redacts = event.getType() === 'm.room.redaction' ? event.event.redacts ?? event.getContent().redacts : undefined;
+      if (typeof redacts === 'string' && reader.forget(room.roomId, redacts)) reloadSoon();
       // A redaction can undo a like or a comment, so it's a change too.
       const relevant = isActivityEventType(event.getType()) || event.getType() === 'm.room.redaction';
-      if (relevant && ownFeedRoomIds(mx).includes(room.roomId)) reloadSoon();
+      if (relevant && ownFeedRoomIds(mx).includes(room.roomId)) reloadSoon(room.roomId);
     };
     const onAccountData = (event: MatrixEvent) => {
+      // A new mention is read by itself; the feed rooms are left as they were.
       if (event.getType() === MENTION_INBOX_EVENT) reloadSoon();
       if (event.getType() === ACTIVITY_SEEN_ACCOUNT_DATA) setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
     };
-    const interval = setInterval(() => void load(), RELOAD_EVERY_MS);
+    // The safety net reads every feed room again.
+    const interval = setInterval(() => {
+      changedRooms = undefined;
+      reloadSoon();
+    }, RELOAD_EVERY_MS);
 
     mx.on(RoomEvent.Timeline, onTimeline);
     mx.on(ClientEvent.AccountData, onAccountData);
