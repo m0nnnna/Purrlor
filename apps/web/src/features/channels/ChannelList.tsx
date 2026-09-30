@@ -19,6 +19,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
+import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
 import { useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
@@ -128,6 +129,7 @@ function ChannelListRow({
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
   const channelType = useChannelType(room);
+  const encrypted = useRoomEncrypted(room);
   const setActiveVoiceChannelId = useSetAtom(activeVoiceChannelIdAtom);
   const mx = useMatrixClient();
   const unread = useRoomUnreadCount(room);
@@ -180,6 +182,11 @@ function ChannelListRow({
         <span className={isUnread ? 'nu-channel-list__item-name nu-channel-list__item-name--unread' : 'nu-channel-list__item-name'}>
           {room.name}
         </span>
+        {encrypted && (
+          <span className="nu-channel-list__item-level" title="End-to-end encrypted" data-nu-role="channel-list-item-encrypted">
+            <Icon name="lock" size={12} />
+          </span>
+        )}
         {level !== 'all' && (
           <span
             className="nu-channel-list__item-level"

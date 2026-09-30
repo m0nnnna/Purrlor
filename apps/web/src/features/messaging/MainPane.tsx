@@ -11,6 +11,7 @@ import {
 } from '../../app/state/selection';
 import { desktopMemberListHiddenAtom, mobileMemberListOpenAtom } from '../../app/state/mobile';
 import { Icon, type IconName } from '../../components/Icon';
+import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { usePinnedEventIds } from '../../matrix/hooks/usePinnedEventIds';
 import { useRoom } from '../../matrix/hooks/useRoom';
@@ -85,6 +86,7 @@ export function MainPane() {
   const [openPost, setOpenPost] = useAtom(openPostAtom);
   const room = useRoom(selectedRoomId);
   const channelType = useChannelType(room);
+  const encrypted = useRoomEncrypted(room);
   const pinnedIds = usePinnedEventIds(selectedRoomId);
   const [showPinned, setShowPinned] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -204,6 +206,11 @@ export function MainPane() {
         {backButton}
         <Icon name="hash" size={20} className="nu-main-pane__header-icon" />
         <h1 className="nu-main-pane__header-name">{room.name}</h1>
+        {encrypted && (
+          <span className="nu-main-pane__header-lock" title="End-to-end encrypted" data-nu-role="main-pane-encrypted">
+            <Icon name="lock" size={14} />
+          </span>
+        )}
         <div className="nu-main-pane__header-actions">
           <HeaderAction icon="pin" label="Pinned" role="main-pane-pins" onClick={() => setShowPinned(true)}>
             {pinnedIds.length > 0 && <span className="nu-main-pane__header-count">{pinnedIds.length}</span>}
