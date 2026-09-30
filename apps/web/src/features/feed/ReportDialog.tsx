@@ -19,6 +19,7 @@ export function ReportDialog({
   ownerId,
   event,
   space,
+  postId,
   onClose,
 }: {
   roomId: string;
@@ -29,6 +30,8 @@ export function ReportDialog({
   /** The reported event and its Space, for reaching the Space's moderators. */
   event?: MatrixEvent;
   space?: Room;
+  /** For a post or comment: the post it is or sits under, so a moderator can open it from the queue. */
+  postId?: string;
   onClose: () => void;
 }) {
   const mx = useMatrixClient();
@@ -46,7 +49,10 @@ export function ReportDialog({
     setError(undefined);
     try {
       await reportContent(mx, roomId, eventId, reason.trim(), ownerId ? feedJoinVia(roomId, ownerId) : []);
-      if (toModerators) await reportToSpaceModerators(mx, space!, event!, reason.trim());
+      if (toModerators) {
+        const about = what !== 'message' && postId ? { kind: what, postId } : undefined;
+        await reportToSpaceModerators(mx, space!, event!, reason.trim(), about);
+      }
       setSent(true);
     } catch (err) {
       // A Space's feed only lets its members in, and so only they can report there.
