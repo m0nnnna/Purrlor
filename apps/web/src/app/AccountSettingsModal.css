@@ -83,3 +83,46 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Keywords (KeywordNotificationSettings.tsx) */
+.nu-keywords {
+  list-style: none;
+  margin: var(--nu-space-1) 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-1);
+}
+
+.nu-keywords__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  padding: 2px var(--nu-space-1) 2px var(--nu-space-2);
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-bg-tertiary);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-keywords__remove {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0 var(--nu-space-1);
+  color: var(--nu-color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-keywords__remove:hover {
+  color: var(--nu-color-danger);
+}
+
+.nu-keywords__add {
+  display: flex;
+  gap: var(--nu-space-2);
+}
+
+.nu-keywords__add .nu-field__input {
+  flex: 1;
+}

@@ -100,3 +100,19 @@ changes):
 
 The menus don't wait for anything: the hook re-renders once the account data and rules come
 back through sync, and a failure is logged to the console.
+
+## Keywords
+
+Account Settings → Account has **Keywords**: words that notify you wherever they're said, as if you'd
+been mentioned (`matrix/keywordNotifications.ts`, `app/KeywordNotificationSettings.tsx`).
+
+Each is a `content` push rule whose ID and `pattern` are the word, with the actions Element writes for
+one (notify, the default sound, highlight). That's the same convention Element and Cinny use, so the
+list is shared with them, and being push rules the homeserver applies them: unread badges, desktop
+notifications and background push follow with no code of their own. The list isn't kept in account
+data; it's read from the homeserver's push rules, leaving the built-in rule for your username alone.
+
+How they mix with the levels above: rules run in the order override, content, room, so a keyword still
+notifies in a channel set to **Only @mentions** (a room rule comes after it) and stays quiet in one set
+to **Nothing** (an override comes before). Matching is the homeserver's: whole words, case-insensitive,
+with `*` and `?` as wildcards. Up to 30, 50 characters each, no repeats.
