@@ -54,4 +54,25 @@ describe('KeywordNotificationSettings', () => {
     expect(await screen.findByText('That one is already on the list.')).toBeInTheDocument();
     expect((mx.addPushRule as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
   });
+
+  it('adds with the button or Enter without submitting the Account Settings form around it', async () => {
+    const mx = fakeServer();
+    const outerSubmit = vi.fn((evt: { preventDefault: () => void }) => evt.preventDefault());
+    render(
+      <MatrixClientContext.Provider value={mx}>
+        <form onSubmit={outerSubmit}>
+          <KeywordNotificationSettings />
+        </form>
+      </MatrixClientContext.Provider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('A word or phrase'), { target: { value: 'movie night' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('movie night')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('A word or phrase'), { target: { value: 'purrlor' } });
+    fireEvent.keyDown(screen.getByPlaceholderText('A word or phrase'), { key: 'Enter' });
+    expect(await screen.findByText('purrlor')).toBeInTheDocument();
+    expect(outerSubmit).not.toHaveBeenCalled();
+  });
 });

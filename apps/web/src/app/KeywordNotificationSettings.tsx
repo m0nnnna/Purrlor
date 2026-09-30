@@ -1,11 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { useMatrixClient } from '../matrix/MatrixClientContext';
 import { addKeyword, cleanKeyword, MAX_KEYWORDS, readKeywords, removeKeyword } from '../matrix/keywordNotifications';
 
 /**
  * Words that notify you anywhere they're said (matrix/keywordNotifications.ts). Like the post
  * switches beside it, each change applies at once, not on the form's Save; the list is read from
- * the homeserver so it matches what Element shows too.
+ * the homeserver so it matches what Element shows too. It sits inside Account Settings' form, so
+ * adding is a plain button and Enter, not a form of its own: a nested form's submit would reach
+ * the outer one too, saving and closing the dialog.
  */
 export function KeywordNotificationSettings() {
   const mx = useMatrixClient();
@@ -39,8 +41,7 @@ export function KeywordNotificationSettings() {
     }
   };
 
-  const handleAdd = (evt: FormEvent) => {
-    evt.preventDefault();
+  const handleAdd = () => {
     if (busy) return;
     const cleaned = cleanKeyword(draft, keywords);
     if ('error' in cleaned) {
@@ -76,7 +77,7 @@ export function KeywordNotificationSettings() {
         </ul>
       )}
       {keywords.length < MAX_KEYWORDS && (
-        <form className="nu-keywords__add" onSubmit={handleAdd}>
+        <div className="nu-keywords__add">
           <input
             className="nu-field__input"
             data-nu-role="keyword-input"
@@ -84,11 +85,22 @@ export function KeywordNotificationSettings() {
             placeholder="A word or phrase"
             maxLength={50}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault(); // not the Account Settings form's submit
+              if (draft.trim()) handleAdd();
+            }}
           />
-          <button type="submit" className="nu-button nu-button--secondary" data-nu-role="keyword-add" disabled={busy || !draft.trim()}>
+          <button
+            type="button"
+            className="nu-button nu-button--secondary"
+            data-nu-role="keyword-add"
+            disabled={busy || !draft.trim()}
+            onClick={handleAdd}
+          >
             Add
           </button>
-        </form>
+        </div>
       )}
       {error && <p className="nu-field__error">{error}</p>}
     </div>
