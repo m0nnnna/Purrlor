@@ -4,3 +4,13 @@
   vertical-align: middle;
   object-fit: contain;
 }
+
+/* In a message, beside text. */
+.nu-emote--message {
+  height: 32px;
+}
+
+/* A message that's only emotes shows them big, as a sticker-like reaction on its own. */
+.nu-emote--jumbo {
+  height: 64px;
+}
