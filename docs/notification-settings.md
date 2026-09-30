@@ -2,8 +2,8 @@
 
 Per-channel, per-DM and per-Space control over what notifies you, with Discord's three choices:
 **All messages**, **Only @mentions**, **Nothing**. The data layer is `apps/web/src/matrix/notificationSettings.ts`,
-kept applied by `apps/web/src/features/notifications/NotificationRules.tsx`. The menus that set it
-are still to be built (see "UI" below).
+kept applied by `apps/web/src/features/notifications/NotificationRules.tsx`, and set from the menus
+in `NotificationLevelMenu.tsx` (see "UI" below).
 
 ## Everything is push rules
 
@@ -86,22 +86,17 @@ done on every pass, because a room with no setting here may have rules from anot
 - Keywords (Element's "Mentions & keywords") aren't offered. Content rules would work unchanged
   (they run before `room` rules), but there's no UI to add them.
 
-## UI (to build)
+## UI
 
-The data layer above is done and tested. What's left is the menus, which only call the functions
-below:
+`features/notifications/NotificationLevelMenu.tsx`, reading levels through
+`matrix/hooks/useNotificationLevel.ts` (re-renders on the settings, `m.push_rules` and Space
+changes):
 
-| Where | What it shows | Calls |
-|---|---|---|
-| Channel list, right-click or ⋯ on a channel; DM list the same | **Use Space setting (Only @mentions)** / All messages / Only @mentions / Nothing, the current one checked. Outside a Space the first option is **Default (All messages)**. | `describeRoomLevel(mx, roomId)` for the state; `setRoomNotificationLevel(mx, roomId, level \| undefined)` |
-| Space header menu (the channel list's Space name) | **Default** / All messages / Only @mentions / Nothing | `readNotificationSettings(mx).spaces[spaceId]`; `setSpaceNotificationLevel(mx, spaceId, level \| undefined)` |
-| Channel list rows | "Nothing" channels dimmed. "Only @mentions" channels still show as unread (bold) when they have new messages, with no count badge. | see below |
+| Where | What it shows |
+|---|---|
+| Bell on a channel's or DM's row (on hover) | A channel in a Space: **Use Space setting (…)** / All messages / Only @mentions / Nothing. Elsewhere the first is left out and "All messages" clears the setting. The current one is checked; a level another client set shows as checked too. |
+| Bell in the Space header, after the other actions | All messages (the default, clears the setting) / Only @mentions / Nothing |
+| Channel rows | A quiet channel shows its level (@ or a crossed-out bell) without hovering. "Nothing" rows are dimmed and never bold. "Only @mentions" rows go bold when someone else has posted since your read receipt (`hasUnreadMessages` in `useUnreadCounts.ts`), since plain messages there don't count; the badge still shows mention counts. |
 
-The unread styling needs one small change. `ChannelList.tsx` marks a channel unread when its
-notification count is above zero, and under "Only @mentions" or "Nothing" that count stays at zero
-for plain messages, so the channel would look fully read. The bold state should come from whether
-there are messages newer than your read receipt (`room.getEventReadUpTo(userId)` against the latest
-message from someone else); the badge keeps using the counts.
-
-Setting a level is two or three requests (account data, then the rules), so the menu should show
-the new choice straight away and log a failure rather than block on it.
+The menus don't wait for anything: the hook re-renders once the account data and rules come
+back through sync, and a failure is logged to the console.

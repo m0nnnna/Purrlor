@@ -20,7 +20,9 @@ import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
-import { useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { useRoomNotificationLevel } from '../../matrix/hooks/useNotificationLevel';
+import { LEVEL_LABELS, RoomNotificationMenu } from '../notifications/NotificationLevelMenu';
 import { useSpaceHierarchy, type HierarchyChannel } from '../../matrix/hooks/useSpaceHierarchy';
 import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
@@ -115,8 +117,13 @@ function ChannelListRow({
   const presence = usePresence(counterpartId ?? '');
   const channelType = useChannelType(room);
   const setActiveVoiceChannelId = useSetAtom(activeVoiceChannelIdAtom);
+  const mx = useMatrixClient();
   const unread = useRoomUnreadCount(room);
-  const isUnread = unread.total > 0;
+  const { effective: level } = useRoomNotificationLevel(room.roomId);
+  // Under "Only @mentions" or "Nothing" plain messages don't count, so the counts can't say
+  // whether there's anything new; read receipts can. A muted channel stays quiet regardless.
+  const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level === 'mentions');
+  const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages);
 
   const handleSelect = () => {
     onSelect();
@@ -129,7 +136,12 @@ function ChannelListRow({
     <div className="nu-channel-list__row">
       <button
         type="button"
-        className={['nu-channel-list__item', active && 'nu-channel-list__item--active', isUnread && 'nu-channel-list__item--unread']
+        className={[
+          'nu-channel-list__item',
+          active && 'nu-channel-list__item--active',
+          isUnread && 'nu-channel-list__item--unread',
+          level === 'nothing' && 'nu-channel-list__item--muted',
+        ]
           .filter(Boolean)
           .join(' ')}
         data-nu-role="channel-list-item"
@@ -151,44 +163,56 @@ function ChannelListRow({
         <span className={isUnread ? 'nu-channel-list__item-name nu-channel-list__item-name--unread' : 'nu-channel-list__item-name'}>
           {room.name}
         </span>
+        {level !== 'all' && (
+          <span
+            className="nu-channel-list__item-level"
+            title={`Notifications: ${LEVEL_LABELS[level]}`}
+            data-nu-role="channel-list-item-level"
+          >
+            <Icon name={level === 'nothing' ? 'bellOff' : 'at'} size={12} />
+          </span>
+        )}
         <UnreadBadge total={unread.total} highlight={unread.highlight} />
       </button>
-      {!isDirectMessage && canManageSpace && (
-        <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
-          <button
-            type="button"
-            className="nu-channel-list__row-action"
-            data-nu-role="channel-list-move-up"
-            title="Move up"
-            aria-label="Move up"
-            disabled={!canMoveUp}
-            onClick={onMoveUp}
-          >
-            <Icon name="arrowUp" size={13} />
-          </button>
-          <button
-            type="button"
-            className="nu-channel-list__row-action"
-            data-nu-role="channel-list-move-down"
-            title="Move down"
-            aria-label="Move down"
-            disabled={!canMoveDown}
-            onClick={onMoveDown}
-          >
-            <Icon name="arrowDown" size={13} />
-          </button>
-          <button
-            type="button"
-            className="nu-channel-list__row-action"
-            data-nu-role="channel-list-remove-from-space"
-            title="Remove from Space"
-            aria-label="Remove from Space"
-            onClick={onRemoveFromSpace}
-          >
-            <Icon name="x" size={13} />
-          </button>
-        </div>
-      )}
+      <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
+        <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
+        {!isDirectMessage && canManageSpace && (
+          <>
+            <button
+              type="button"
+              className="nu-channel-list__row-action"
+              data-nu-role="channel-list-move-up"
+              title="Move up"
+              aria-label="Move up"
+              disabled={!canMoveUp}
+              onClick={onMoveUp}
+            >
+              <Icon name="arrowUp" size={13} />
+            </button>
+            <button
+              type="button"
+              className="nu-channel-list__row-action"
+              data-nu-role="channel-list-move-down"
+              title="Move down"
+              aria-label="Move down"
+              disabled={!canMoveDown}
+              onClick={onMoveDown}
+            >
+              <Icon name="arrowDown" size={13} />
+            </button>
+            <button
+              type="button"
+              className="nu-channel-list__row-action"
+              data-nu-role="channel-list-remove-from-space"
+              title="Remove from Space"
+              aria-label="Remove from Space"
+              onClick={onRemoveFromSpace}
+            >
+              <Icon name="x" size={13} />
+            </button>
+          </>
+        )}
+      </div>
       {!isDirectMessage && channelType === 'voice' && (
         <VoiceChannelOccupants room={room} voiceServer={voiceServer} />
       )}

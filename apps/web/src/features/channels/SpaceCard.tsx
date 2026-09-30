@@ -3,6 +3,7 @@ import { EventType, RoomStateEvent, type Room } from 'matrix-js-sdk';
 import { nameHue } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
+import { SpaceNotificationMenu } from '../notifications/NotificationLevelMenu';
 
 function readSpaceInfo(space: Room) {
   return {
@@ -85,6 +86,7 @@ export function SpaceCard({
           >
             <Icon name="plus" size={16} />
           </button>
+          <SpaceNotificationMenu spaceId={space.roomId} triggerClassName="nu-space-card__action" />
         </div>
       </div>
       <h2 className="nu-space-card__name" data-nu-role="space-card-name">

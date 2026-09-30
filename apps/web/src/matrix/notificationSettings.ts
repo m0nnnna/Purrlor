@@ -182,10 +182,12 @@ async function fetchRules(mx: MatrixClient): Promise<IPushRules> {
 
 type SpaceChildContent = { via?: unknown };
 
-/** The joined, non-Space rooms under each joined Space — what the channel list shows. */
-export function listSpaceChildren(mx: MatrixClient): SpaceChildren {
+/** The joined, non-Space rooms under each joined Space — what the channel list shows. Only
+ *  the Spaces in `onlySpaceIds` when given (the ones with a level: usually none). */
+export function listSpaceChildren(mx: MatrixClient, onlySpaceIds?: string[]): SpaceChildren {
   const result: SpaceChildren = {};
-  for (const space of mx.getRooms()) {
+  const spaces = onlySpaceIds ? onlySpaceIds.flatMap((id) => mx.getRoom(id) ?? []) : mx.getRooms();
+  for (const space of spaces) {
     if (!space.isSpaceRoom() || space.getMyMembership() !== 'join') continue;
     const children = (space.currentState.getStateEvents(EventType.SpaceChild) as MatrixEvent[])
       .filter((event) => {
@@ -221,7 +223,7 @@ export function managedLevels(settings: NotificationSettings, spaceChildren: Spa
  * they already match, so it's cheap to run on every start (NotificationRules.tsx does).
  */
 export async function syncNotificationRules(mx: MatrixClient, settings: NotificationSettings = readNotificationSettings(mx)): Promise<void> {
-  const levels = managedLevels(settings, listSpaceChildren(mx));
+  const levels = managedLevels(settings, listSpaceChildren(mx, Object.keys(settings.spaces)));
   if (Object.keys(levels).length === 0) return;
   await applyRuleChanges(mx, planRuleChanges(await fetchRules(mx), levels));
 }
@@ -282,7 +284,7 @@ export function describeRoomLevel(
   roomId: string
 ): { own: NotificationLevel | undefined; effective: NotificationLevel; fromSpace: NotificationLevel | undefined } {
   const settings = readNotificationSettings(mx);
-  const fromSpace = inheritedLevel(settings, listSpaceChildren(mx), roomId);
+  const fromSpace = inheritedLevel(settings, listSpaceChildren(mx, Object.keys(settings.spaces)), roomId);
   const own = settings.rooms[roomId];
   return { own, fromSpace, effective: own ?? fromSpace ?? readRuleLevel(mx.pushRules, roomId) };
 }

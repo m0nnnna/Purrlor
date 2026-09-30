@@ -1,0 +1,15 @@
+.nu-notification-menu__check {
+  display: inline-flex;
+  width: 14px;
+  color: var(--nu-color-accent);
+}
+
+/* Read by screen readers, not shown: the check mark says the same thing visually. */
+.nu-notification-menu__hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

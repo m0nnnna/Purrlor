@@ -116,6 +116,11 @@ standard install the push gateway is already filled in (see
 also told when someone comments on or likes your post, or replies to your comment. Account
 Settings → **Posts** turns comment and like notifications on or off.
 
+To quiet a channel or DM, hover it and click the bell: **All messages**, **Only @mentions** or
+**Nothing**. The bell in a Space's header sets the same for all its channels at once, and a
+channel's own choice wins over its Space's. Quiet channels show an @ or a crossed-out bell in the
+list; "Nothing" ones are dimmed.
+
 ### Making it yours
 Account Settings → Appearance lets you set a status (Online/Away/Invisible + a message), add a
 bio/banner/animated avatar, pick your own **typing status** (so the indicator says "Alice is
@@ -247,6 +252,9 @@ set a nickname scoped to just that Space, independent of your global display nam
 
 ### Notifications
 - Desktop notifications, gated by the same push-rule evaluation the server uses.
+- Per-channel, per-DM and per-Space levels (All messages / Only @mentions / Nothing), as the same
+  per-room push rules Element uses, so badges, desktop and background notifications all follow
+  them — see [`docs/notification-settings.md`](docs/notification-settings.md).
 - Background push notifications when no tab is open, via a dedicated push gateway
   (`services/push-gateway/`) that bridges Matrix's Push Gateway API to real Web Push (VAPID) —
   see [`docs/push-notifications.md`](docs/push-notifications.md).

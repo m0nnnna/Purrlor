@@ -36,6 +36,51 @@ export function useRoomUnreadCount(room: Room | null): UnreadCount {
   return count;
 }
 
+/** Event types that make a channel "unread" when someone else sends them. */
+const UNREAD_TYPES = new Set(['m.room.message', 'm.room.encrypted', 'm.sticker', 'org.matrix.msc3381.poll.start', 'm.poll.start']);
+
+/** Whether someone else has said something since your read receipt, whatever your push rules
+ *  make of it. Only looks at what's loaded in the live timeline, which after sync is at least
+ *  the latest message. */
+export function hasUnreadMessages(room: Room, userId: string): boolean {
+  const events = room.getLiveTimeline().getEvents();
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event.getSender() === userId) return false;
+    if (UNREAD_TYPES.has(event.getType()) && !event.isRedacted()) {
+      const eventId = event.getId();
+      return !!eventId && !room.hasUserReadEvent(userId, eventId);
+    }
+  }
+  return false;
+}
+
+/**
+ * For a channel set to "Only @mentions" or "Nothing" (matrix/notificationSettings.ts): the
+ * counts above stay at zero for plain messages there, so they can't say whether it has anything
+ * new. This can. `enabled` false skips the work for rooms the counts already cover.
+ */
+export function useRoomHasUnread(room: Room, userId: string, enabled: boolean): boolean {
+  const [unread, setUnread] = useState(() => enabled && hasUnreadMessages(room, userId));
+
+  useEffect(() => {
+    if (!enabled) {
+      setUnread(false);
+      return undefined;
+    }
+    const update = () => setUnread(hasUnreadMessages(room, userId));
+    update();
+    room.on(RoomEvent.Timeline, update);
+    room.on(RoomEvent.Receipt, update);
+    return () => {
+      room.removeListener(RoomEvent.Timeline, update);
+      room.removeListener(RoomEvent.Receipt, update);
+    };
+  }, [room, userId, enabled]);
+
+  return unread;
+}
+
 /** Aggregate unread/notification counts across a list of rooms — used for the server rail's
  *  per-Space badge (sum of its channels) and the Home/DM icon's badge (sum of all DMs). Keys
  *  its subscription on the room IDs themselves rather than the array reference, since callers
