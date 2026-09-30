@@ -19,6 +19,8 @@ import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canMentionRoom } from '../../matrix/permissions';
+import { slowmodeWaitMs } from '../../matrix/channelPermissions';
+import { useChannelPermissions, useSlowmodeWait } from '../../matrix/hooks/useChannelPermissions';
 import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
 import { sendFileMessage, sendVoiceMessage } from '../../matrix/upload';
@@ -70,6 +72,8 @@ export function Composer({
   const people = useMemo(() => membersAsPeople(members), [members]);
   const mention = useMentionAutocomplete({ text, setText, textareaRef, people });
   const shortcodeAutocomplete = useShortcodeAutocomplete({ text, setText, textareaRef, emotes });
+  const permissions = useChannelPermissions(room);
+  const slowmodeWait = useSlowmodeWait(room, permissions.slowmodeSeconds);
 
   // Only while still typing the command name itself (no space yet) — once a space appears the
   // user's typing arguments, not choosing a command, so the dropdown gets out of the way.
@@ -121,6 +125,10 @@ export function Composer({
   const send = async () => {
     const body = text.trim();
     if ((!body && !attachment) || sending) return;
+    // Slowmode (matrix/channelPermissions.ts) holds messages, not commands. Checked afresh here
+    // rather than from the countdown, which only ticks once a second.
+    const isCommand = body.startsWith('/') && !body.startsWith('//');
+    if (!isCommand && room && slowmodeWaitMs(room, mx.getUserId() ?? '') > 0) return;
     setSending(true);
     setText('');
     mention.close();
@@ -304,6 +312,19 @@ export function Composer({
   const showMicButton = !text.trim() && !attachment;
   const isRecordingUi = voiceRecorder.state.status === 'recording' || voiceRecorder.state.status === 'requesting';
 
+  // An announcement channel (or any room whose power levels keep you from posting): say so
+  // instead of offering a box whose every send the server would refuse.
+  if (!permissions.canPost) {
+    return (
+      <div className="nu-composer-wrapper">
+        <p className="nu-composer__locked" data-nu-role="composer-locked">
+          <Icon name="shield" size={14} />
+          {permissions.posting === 'moderators' ? 'Only moderators can post in this channel.' : 'You can’t post in this room.'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={isDragOver ? 'nu-composer-wrapper nu-composer-wrapper--drag-over' : 'nu-composer-wrapper'}
@@ -385,6 +406,11 @@ export function Composer({
           {voiceSendError}
         </p>
       )}
+      {slowmodeWait > 0 && (
+        <p className="nu-composer__slowmode" data-nu-role="composer-slowmode">
+          Slowmode is on: you can send again in {Math.ceil(slowmodeWait / 1000)}s.
+        </p>
+      )}
       {mention.dropdown}
       {shortcodeAutocomplete.dropdown}
       {isRecordingUi ? (
@@ -452,6 +478,7 @@ export function Composer({
               data-nu-role="composer-mic"
               title="Record a voice message"
               aria-label="Record a voice message"
+              disabled={slowmodeWait > 0}
               onClick={handleStartRecording}
             >
               <Icon name="mic" size={18} />
@@ -463,7 +490,7 @@ export function Composer({
               type="submit"
               title={uploading ? 'Uploading…' : 'Send'}
               aria-label={uploading ? 'Uploading' : 'Send'}
-              disabled={(!text.trim() && !attachment) || sending}
+              disabled={(!text.trim() && !attachment) || sending || (slowmodeWait > 0 && !text.trim().startsWith('/'))}
             >
               {uploading ? <span className="nu-composer__send-spinner" aria-hidden="true" /> : <Icon name="arrowUp" size={18} />}
             </button>

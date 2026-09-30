@@ -21,7 +21,7 @@ test('an encrypted chat between two browsers', async ({ browser }) => {
   await Promise.all([logIn(alicePage, alice), logIn(bobPage, bob)]);
 
   for (const page of [alicePage, bobPage]) {
-    await role(page, 'channel-list-item').filter({ hasText: name }).click();
+    await role(page, 'channel-list-item').filter({ hasText: name }).getByText(name, { exact: true }).click();
     await expect(role(page, 'composer-input')).toBeVisible();
   }
 

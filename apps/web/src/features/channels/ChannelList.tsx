@@ -12,6 +12,7 @@ import {
 } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
+import { Menu, MenuItem } from '../../components/Menu';
 import { UnreadBadge } from '../../components/UnreadBadge';
 import { useHasNewPosts } from '../../matrix/hooks/useHasNewPosts';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -42,6 +43,8 @@ import { CreateChannelModal } from './CreateChannelModal';
 import { SpaceCard } from './SpaceCard';
 import { StartDmModal } from './StartDmModal';
 import { SpaceSettingsModal } from '../servers/SpaceSettingsModal';
+import { ChannelPermissionsModal } from './ChannelPermissionsModal';
+import { CHANNEL_SETTINGS_EVENT } from '../../matrix/channelPermissions';
 import './ChannelList.css';
 
 /** For a genuine 1:1 DM (exactly one other joined member), the person on the other end — used
@@ -100,6 +103,7 @@ function ChannelListRow({
   onMoveUp,
   onMoveDown,
   onRemoveFromSpace,
+  onOpenPermissions,
 }: {
   room: Room;
   isDirectMessage: boolean;
@@ -112,6 +116,8 @@ function ChannelListRow({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemoveFromSpace: () => void;
+  /** Channels of a Space only; shown to whoever can change any of the channel's permissions. */
+  onOpenPermissions?: () => void;
 }) {
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
@@ -124,6 +130,10 @@ function ChannelListRow({
   // whether there's anything new; read receipts can. A muted channel stays quiet regardless.
   const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level === 'mentions');
   const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages);
+  const myUserId = mx.getUserId() ?? '';
+  const canEditPermissions =
+    !!onOpenPermissions &&
+    (canSendStateEvent(room, myUserId, 'm.room.power_levels') || canSendStateEvent(room, myUserId, CHANNEL_SETTINGS_EVENT));
 
   const handleSelect = () => {
     onSelect();
@@ -176,41 +186,36 @@ function ChannelListRow({
       </button>
       <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
-        {!isDirectMessage && canManageSpace && (
-          <>
-            <button
-              type="button"
-              className="nu-channel-list__row-action"
-              data-nu-role="channel-list-move-up"
-              title="Move up"
-              aria-label="Move up"
-              disabled={!canMoveUp}
-              onClick={onMoveUp}
-            >
-              <Icon name="arrowUp" size={13} />
-            </button>
-            <button
-              type="button"
-              className="nu-channel-list__row-action"
-              data-nu-role="channel-list-move-down"
-              title="Move down"
-              aria-label="Move down"
-              disabled={!canMoveDown}
-              onClick={onMoveDown}
-            >
-              <Icon name="arrowDown" size={13} />
-            </button>
-            <button
-              type="button"
-              className="nu-channel-list__row-action"
-              data-nu-role="channel-list-remove-from-space"
-              title="Remove from Space"
-              aria-label="Remove from Space"
-              onClick={onRemoveFromSpace}
-            >
-              <Icon name="x" size={13} />
-            </button>
-          </>
+        {/* One "⋯" for everything else, so a hovered row keeps most of its name clickable. */}
+        {(canEditPermissions || (!isDirectMessage && canManageSpace)) && (
+          <Menu
+            label="Channel options"
+            trigger={<Icon name="more" size={13} />}
+            triggerClassName="nu-channel-list__row-action"
+            role="channel-list-row-menu"
+            align="end"
+          >
+            {canEditPermissions && (
+              <MenuItem icon="shield" role="channel-list-permissions" onSelect={() => onOpenPermissions?.()}>
+                Permissions
+              </MenuItem>
+            )}
+            {!isDirectMessage && canManageSpace && canMoveUp && (
+              <MenuItem icon="arrowUp" role="channel-list-move-up" onSelect={onMoveUp}>
+                Move up
+              </MenuItem>
+            )}
+            {!isDirectMessage && canManageSpace && canMoveDown && (
+              <MenuItem icon="arrowDown" role="channel-list-move-down" onSelect={onMoveDown}>
+                Move down
+              </MenuItem>
+            )}
+            {!isDirectMessage && canManageSpace && (
+              <MenuItem icon="x" role="channel-list-remove-from-space" danger onSelect={onRemoveFromSpace}>
+                Remove from Space
+              </MenuItem>
+            )}
+          </Menu>
         )}
       </div>
       {!isDirectMessage && channelType === 'voice' && (
@@ -455,6 +460,7 @@ export function ChannelList() {
   const voiceServer = useSpaceVoiceServer(space);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showSpaceSettings, setShowSpaceSettings] = useState(false);
+  const [permissionsRoom, setPermissionsRoom] = useState<Room | null>(null);
   const [showStartDm, setShowStartDm] = useState(false);
   const [showAddExistingChannel, setShowAddExistingChannel] = useState(false);
 
@@ -610,6 +616,7 @@ export function ChannelList() {
                     onMoveUp={() => handleMoveInUncategorized(index, -1)}
                     onMoveDown={() => handleMoveInUncategorized(index, 1)}
                     onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
+                    onOpenPermissions={() => setPermissionsRoom(room)}
                   />
                 ))}
                 {categoryRooms.map(({ category, rooms }) => (
@@ -635,6 +642,7 @@ export function ChannelList() {
                           onMoveUp={() => handleMoveInCategory(category, rooms, index, -1)}
                           onMoveDown={() => handleMoveInCategory(category, rooms, index, 1)}
                           onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
+                          onOpenPermissions={() => setPermissionsRoom(room)}
                         />
                       ))}
                   </div>
@@ -682,6 +690,9 @@ export function ChannelList() {
       )}
       {showSpaceSettings && space && (
         <SpaceSettingsModal space={space} onClose={() => setShowSpaceSettings(false)} />
+      )}
+      {permissionsRoom && space && (
+        <ChannelPermissionsModal channel={permissionsRoom} space={space} onClose={() => setPermissionsRoom(null)} />
       )}
       {showAddExistingChannel && space && (
         <AddExistingChannelModal

@@ -25,7 +25,8 @@ export async function logIn(page: Page, user: TestUser): Promise<void> {
 
 export async function openChannel(page: Page, spaceName: string, channelName: string): Promise<void> {
   await page.locator(`[data-nu-role="server-rail-item"][aria-label="${spaceName}"]`).click();
-  await role(page, 'channel-list-item').filter({ hasText: channelName }).click();
+  // The name, not the row's middle: hovering a row shows its actions over its right half.
+  await role(page, 'channel-list-item').filter({ hasText: channelName }).getByText(channelName, { exact: true }).click();
   await expect(role(page, 'composer-input')).toBeVisible();
 }
 

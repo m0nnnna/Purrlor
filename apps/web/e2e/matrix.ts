@@ -17,7 +17,9 @@ export function uniqueName(prefix: string): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, accessToken?: string): Promise<T> {
-  const res = await fetch(`${HOMESERVER}/_matrix/client/v3${path}`, {
+  // A path of its own under /_matrix (a v1 endpoint, say), else the usual client-server v3.
+  const url = path.startsWith('/_matrix/') ? `${HOMESERVER}${path}` : `${HOMESERVER}/_matrix/client/v3${path}`;
+  const res = await fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),

@@ -155,6 +155,25 @@
   font-size: var(--nu-font-size-sm);
 }
 
+.nu-composer__slowmode {
+  margin: 0 var(--nu-space-4);
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+/* Where the composer would be, in a channel you can't post in. */
+.nu-composer__locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  margin: 0 var(--nu-space-4) var(--nu-space-4);
+  padding: var(--nu-space-3) var(--nu-space-4);
+  border: 1px dashed var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
 .nu-composer__reply {
   display: flex;
   align-items: center;
