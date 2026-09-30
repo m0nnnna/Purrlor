@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Modal } from '../components/Modal';
 import { AccountGeneralSettings } from './AccountGeneralSettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { RemindersSettings } from './RemindersSettings';
 import { SessionsSettings } from './SessionsSettings';
 import './AccountSettingsModal.css';
 
-type AccountSettingsTab = 'account' | 'sessions' | 'appearance';
+type AccountSettingsTab = 'account' | 'sessions' | 'appearance' | 'reminders';
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<AccountSettingsTab>('account');
@@ -34,10 +35,19 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
         >
           Appearance
         </button>
+        <button
+          type="button"
+          className={tab === 'reminders' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+          data-nu-role="account-settings-reminders-tab"
+          onClick={() => setTab('reminders')}
+        >
+          Reminders
+        </button>
       </div>
       {tab === 'account' && <AccountGeneralSettings onClose={onClose} />}
       {tab === 'sessions' && <SessionsSettings />}
       {tab === 'appearance' && <AppearanceSettings />}
+      {tab === 'reminders' && <RemindersSettings onClose={onClose} />}
     </Modal>
   );
 }

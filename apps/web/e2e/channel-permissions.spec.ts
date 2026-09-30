@@ -181,3 +181,29 @@ test('a custom role and what it can do reach the channels, and a channel gets a 
   const spaceLevels = await api<PowerLevels>(alice, 'GET', `/rooms/${enc(spaceId)}/state/m.room.power_levels/`);
   expect(spaceLevels.users?.[carol.userId]).toBeUndefined();
 });
+
+test('an admin renames a channel and sets its topic from its settings', async ({ page }) => {
+  const alice = await createUser('alice');
+  const { channelId, spaceName } = await createSpaceWithChannel(alice);
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+
+  const row = page.locator('.nu-channel-list__row').filter({ has: role(page, 'channel-list-item').filter({ hasText: 'general' }) });
+  await row.hover();
+  await role(row, 'channel-list-row-menu').click();
+  await role(row, 'channel-list-settings').click();
+  await role(page, 'channel-settings-name').fill('announcements');
+  await role(page, 'channel-settings-topic').fill('Read this first');
+  await role(page, 'channel-settings-save').click();
+  await expect(role(page, 'channel-settings')).toBeHidden();
+
+  await eventually(
+    () => api<{ name?: string }>(alice, 'GET', `/rooms/${enc(channelId)}/state/m.room.name/`),
+    (state) => state.name === 'announcements'
+  );
+  await eventually(
+    () => api<{ topic?: string }>(alice, 'GET', `/rooms/${enc(channelId)}/state/m.room.topic/`),
+    (state) => state.topic === 'Read this first'
+  );
+  await expect(role(page, 'channel-list-item').filter({ hasText: 'announcements' })).toBeVisible();
+});

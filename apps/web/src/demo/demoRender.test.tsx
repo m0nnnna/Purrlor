@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
-import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
+import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
 import { ChannelList } from '../features/channels/ChannelList';
 import { FeedView } from '../features/feed/FeedView';
 import { GlobalFeedView } from '../features/feed/GlobalFeedView';
 import { ProfileView } from '../features/feed/ProfileView';
+import { CalendarView } from '../features/calendar/CalendarView';
+import { SpaceReportsSettings } from '../features/servers/SpaceReportsSettings';
+import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { createDemoClient } from './demoClient';
@@ -278,5 +281,64 @@ describe('The social side against the demo world', () => {
     fireEvent.click(rows()[0]);
     expect(store.get(globalFeedOpenAtom)).toBe(false);
     expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general);
+  });
+
+  it('opens a Space’s Posts in the main pane and keeps the sidebar, and Back returns to the feed', async () => {
+    const { store } = renderWithDemo(
+      <>
+        <ChannelList />
+        <MainPane />
+      </>,
+      { spaceId: null, globalFeed: true }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cat Café/ }));
+    expect(await screen.findByPlaceholderText(/Post something to Cat Café/)).toBeInTheDocument();
+    // Still the social sidebar, not the Space's channel list.
+    expect(screen.getByText('Notifications')).toBeInTheDocument();
+    expect(screen.queryByText('Text channels')).not.toBeInTheDocument();
+    expect(store.get(globalFeedOpenAtom)).toBe(true);
+    expect(store.get(socialSpaceIdAtom)).toBe(DEMO_ROOM_IDS.cafe);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(store.get(socialSpaceIdAtom)).toBeNull();
+    expect(store.get(globalFeedOpenAtom)).toBe(true);
+  });
+});
+
+describe('The sample Space’s moderation, calendar and webhook', () => {
+  it('has reports waiting in the queue, one of them about a post', async () => {
+    const mx = createDemoClient();
+    render(
+      <JotaiProvider>
+        <MatrixClientContext.Provider value={mx}>
+          <SpaceReportsSettings space={mx.getRoom(DEMO_ROOM_IDS.cafe)!} />
+        </MatrixClientContext.Provider>
+      </JotaiProvider>
+    );
+    const reports = await screen.findAllByText(/Pixel|Nibbles/, { selector: 'strong' });
+    expect(reports).toHaveLength(2);
+    expect(screen.getByText(/Posting spoilers/)).toBeInTheDocument();
+    expect(screen.getByText(/wrote a post/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to post' })).toBeInTheDocument();
+  });
+
+  it('has two events on the calendar', async () => {
+    const mx = createDemoClient();
+    render(
+      <JotaiProvider>
+        <MatrixClientContext.Provider value={mx}>
+          <CalendarView space={mx.getRoom(DEMO_ROOM_IDS.cafe)!} />
+        </MatrixClientContext.Provider>
+      </JotaiProvider>
+    );
+    expect(await screen.findByRole('heading', { name: 'Movie night' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Game night' })).toBeInTheDocument();
+  });
+
+  it('has a webhook on #general, and a message it posted under its own name', () => {
+    const general = createDemoClient().getRoom(DEMO_ROOM_IDS.general)!;
+    expect(general.currentState.getStateEvents('xyz.nekous.webhook')).toHaveLength(1);
+    expect(general.getLiveTimeline().getEvents().some((e) => e.getContent().body === 'Build 42 passed ✅')).toBe(true);
   });
 });

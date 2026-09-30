@@ -34,6 +34,13 @@ export type SocialView = 'everyone' | 'following' | 'notifications';
 export const socialViewAtom = atom<SocialView>('everyone');
 
 /**
+ * A Space whose Posts page is showing inside the social side (SocialNav's "Posts in your spaces"),
+ * in place of the Everyone / Following / Notifications page. Null when none is. Cleared whenever the
+ * social side closes or another of its pages opens, so it never lingers.
+ */
+export const socialSpaceIdAtom = atom<string | null>(null);
+
+/**
  * Whose profile is open in the main pane (ProfileView), over whatever else is selected. Set from
  * any author name on a post or from a member's profile card; opening a room closes it.
  */

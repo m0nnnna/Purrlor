@@ -36,8 +36,12 @@ import './FeedView.css';
 
 type Tab = 'hub' | 'mine';
 
-/** A Space's own Posts page: its members' posts, and the place to post into this Space. */
-export function FeedView({ space, hidden = false }: { space: Room; hidden?: boolean }) {
+/**
+ * A Space's own Posts page: its members' posts, and the place to post into this Space. Opened from
+ * the Space's channel list, Back returns to its channels; opened from the social side's sidebar
+ * (`onBack`), Back returns to the page before.
+ */
+export function FeedView({ space, hidden = false, onBack }: { space: Room; hidden?: boolean; onBack?: () => void }) {
   const mx = useMatrixClient();
   const myUserId = mx.getUserId() ?? '';
   const setSpaceView = useSetAtom(selectedSpaceViewAtom);
@@ -225,9 +229,9 @@ export function FeedView({ space, hidden = false }: { space: Room; hidden?: bool
           type="button"
           className="nu-main-pane__header-back"
           data-nu-role="main-pane-back"
-          title="Back to channels"
-          aria-label="Back to channels"
-          onClick={() => setSpaceView(null)}
+          title={onBack ? 'Back' : 'Back to channels'}
+          aria-label={onBack ? 'Back' : 'Back to channels'}
+          onClick={onBack ?? (() => setSpaceView(null))}
         >
           <Icon name="arrowLeft" size={18} />
         </button>

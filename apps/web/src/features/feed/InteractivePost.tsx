@@ -1,12 +1,14 @@
 import { useEffect, useState, type ComponentProps, type FormEvent, type ReactNode } from 'react';
 import { useSetAtom } from 'jotai';
+import { MatrixEvent } from 'matrix-js-sdk';
 import { openPostAtom } from '../../app/state/selection';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { buildPostContent, deletePost, editPost, type PostContent, type PostOrigin, type RepostOf } from '../../matrix/feed';
+import { buildPostContent, deletePost, editPost, POST_EVENT_TYPE, readFeedMarker, type PostContent, type PostOrigin, type RepostOf } from '../../matrix/feed';
 import type { FeedSource } from '../../matrix/globalFeed';
+import { COMMENT_EVENT_TYPE } from '../../matrix/postInteractions';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canModerateFeed, isRemovedFromSpace } from '../../matrix/feedGovernance';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
@@ -86,6 +88,32 @@ export function InteractivePost({
   const [notice, setNotice] = useState<string>();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [reporting, setReporting] = useState<{ eventId: string; what: 'post' | 'comment' }>();
+
+  /**
+   * What reaching the Space's moderators needs (ReportDialog): the reported event and the Space its
+   * feed belongs to. Only a Space's own feed has moderators; a profile feed has none. The event is
+   * the loaded one when the feed room has it, else built from what the card already shows.
+   */
+  const reportedEventAndSpace = ({ eventId, what }: { eventId: string; what: 'post' | 'comment' }) => {
+    const room = mx.getRoom(roomId);
+    const marker = room ? readFeedMarker(room) : undefined;
+    const space = marker?.spaceId && !marker.profile ? mx.getRoom(marker.spaceId) : undefined;
+    if (!space) return {};
+    const loaded = room?.findEventById(eventId);
+    if (loaded) return { event: loaded, space };
+    const comment = what === 'comment' ? interactions.comments.find((c) => c.eventId === eventId) : undefined;
+    const sender = what === 'post' ? card.author.userId : comment?.sender;
+    if (!sender) return { space };
+    const body = what === 'post' ? card.content.body : (comment?.content.body ?? '');
+    const event = new MatrixEvent({
+      type: what === 'post' ? POST_EVENT_TYPE : COMMENT_EVENT_TYPE,
+      room_id: roomId,
+      event_id: eventId,
+      sender,
+      content: { body },
+    });
+    return { event, space };
+  };
   const [quoting, setQuoting] = useState(false);
   const [reposting, setReposting] = useState(false);
   const [showLikers, setShowLikers] = useState(false);
@@ -472,6 +500,8 @@ export function InteractivePost({
               eventId={reporting.eventId}
               what={reporting.what}
               ownerId={card.author.userId}
+              postId={postId}
+              {...reportedEventAndSpace(reporting)}
               onClose={() => setReporting(undefined)}
             />
           )}

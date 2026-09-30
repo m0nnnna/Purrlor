@@ -16,6 +16,8 @@ import {
   type CalendarEvent,
   type Rsvp,
 } from '../../matrix/calendar';
+import { buildIcs, downloadTextFile, fileNameFor } from '../../matrix/calendarExport';
+import { localDayKey, localeWeekStart, monthGrid } from '../../matrix/calendarMonth';
 import { EventFormModal } from './EventFormModal';
 import './CalendarView.css';
 
@@ -40,6 +42,16 @@ const timeFormat: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-dig
 function dayKey(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Saves events as an .ics file, with a channel standing in as the place for one held in it. */
+function exportEvents(events: CalendarEvent[], space: Room, name: string) {
+  const channelNames: Record<string, string> = {};
+  for (const event of events) {
+    const channel = event.channelId ? space.client.getRoom(event.channelId) : null;
+    if (event.channelId && channel) channelNames[event.channelId] = channel.name;
+  }
+  downloadTextFile(`${fileNameFor(name)}.ics`, buildIcs(events, { spaceId: space.roomId, spaceName: space.name, channelNames }), 'text/calendar');
 }
 
 function EventCard({ space, event, going, interested }: { space: Room; event: CalendarEvent; going: string[]; interested: string[] }) {
@@ -114,6 +126,15 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
           >
             Interested
           </button>
+          <button
+            type="button"
+            className="nu-button nu-button--secondary"
+            data-nu-role="calendar-event-ics"
+            title="Download this event to add to your own calendar"
+            onClick={() => exportEvents([event], space, event.title)}
+          >
+            Add to calendar
+          </button>
           {canManage && (
             <>
               <button type="button" className="nu-button nu-button--secondary" data-nu-role="calendar-event-edit" onClick={() => setEditing(true)}>
@@ -161,6 +182,89 @@ function EventList({ space, events }: { space: Room; events: CalendarEvent[] }) 
   );
 }
 
+const monthFormat: Intl.DateTimeFormatOptions = { month: 'long', year: 'numeric' };
+
+/** A month as a grid (matrix/calendarMonth.ts): pick a day to see its events beneath. */
+function MonthView({ space, events }: { space: Room; events: CalendarEvent[] }) {
+  const today = new Date();
+  const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  const [selectedKey, setSelectedKey] = useState(localDayKey(today.getTime()));
+  const weekStart = localeWeekStart();
+  const grid = monthGrid(cursor.year, cursor.month, events, weekStart);
+  const todayKey = localDayKey(today.getTime());
+  const selected = grid.flat().find((cell) => cell.key === selectedKey);
+  const step = (by: number) => {
+    const next = new Date(cursor.year, cursor.month + by, 1);
+    setCursor({ year: next.getFullYear(), month: next.getMonth() });
+  };
+  const weekdays = grid[0].map((cell) => cell.date.toLocaleDateString([], { weekday: 'short' }));
+
+  return (
+    <section className="nu-calendar__month" data-nu-role="calendar-month">
+      <div className="nu-calendar__month-head">
+        <button type="button" className="nu-calendar__month-step" data-nu-role="calendar-month-prev" aria-label="Previous month" onClick={() => step(-1)}>
+          <Icon name="chevronLeft" size={16} />
+        </button>
+        <h2 className="nu-calendar__month-title" data-nu-role="calendar-month-title">
+          {new Date(cursor.year, cursor.month, 1).toLocaleDateString([], monthFormat)}
+        </h2>
+        <button type="button" className="nu-calendar__month-step" data-nu-role="calendar-month-next" aria-label="Next month" onClick={() => step(1)}>
+          <Icon name="chevronRight" size={16} />
+        </button>
+        <button
+          type="button"
+          className="nu-button nu-button--secondary"
+          onClick={() => {
+            setCursor({ year: today.getFullYear(), month: today.getMonth() });
+            setSelectedKey(todayKey);
+          }}
+        >
+          Today
+        </button>
+      </div>
+      <div className="nu-calendar__grid" role="grid">
+        {weekdays.map((name) => (
+          <div key={name} className="nu-calendar__weekday" role="columnheader">
+            {name}
+          </div>
+        ))}
+        {grid.flat().map((cell) => (
+          <button
+            key={cell.key}
+            type="button"
+            role="gridcell"
+            className={[
+              'nu-calendar__cell',
+              !cell.inMonth && 'nu-calendar__cell--outside',
+              cell.key === todayKey && 'nu-calendar__cell--today',
+              cell.key === selectedKey && 'nu-calendar__cell--selected',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            data-nu-role="calendar-cell"
+            aria-label={`${cell.date.toLocaleDateString([], dayFormat)}${cell.events.length ? `, ${cell.events.length} event${cell.events.length === 1 ? '' : 's'}` : ''}`}
+            aria-pressed={cell.key === selectedKey}
+            onClick={() => setSelectedKey(cell.key)}
+          >
+            <span className="nu-calendar__cell-day">{cell.day}</span>
+            {cell.events.slice(0, 2).map((event) => (
+              <span key={event.id} className="nu-calendar__cell-event">
+                {event.title}
+              </span>
+            ))}
+            {cell.events.length > 2 && <span className="nu-calendar__cell-more">+{cell.events.length - 2} more</span>}
+          </button>
+        ))}
+      </div>
+      {selected && selected.events.length > 0 ? (
+        <EventList space={space} events={selected.events} />
+      ) : (
+        <p className="nu-calendar__empty">Nothing on {selected?.date.toLocaleDateString([], dayFormat) ?? 'this day'}.</p>
+      )}
+    </section>
+  );
+}
+
 /**
  * A Space's calendar (matrix/calendar.ts): what's coming up, grouped by day, with RSVPs. Whoever
  * can manage it (moderators, by default) adds, edits and cancels events. Going to an event means a
@@ -171,6 +275,7 @@ export function CalendarView({ space }: { space: Room }) {
   const setSpaceView = useSetAtom(selectedSpaceViewAtom);
   useSpaceStateVersion(space);
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<'list' | 'month'>('list');
   const events = readCalendarEvents(space);
   const upcoming = upcomingEvents(events);
   const past = pastEvents(events).slice(0, 20);
@@ -192,6 +297,32 @@ export function CalendarView({ space }: { space: Room }) {
         <Icon name="calendar" size={20} className="nu-main-pane__header-icon" />
         <h1 className="nu-main-pane__header-name">Events</h1>
         <div className="nu-main-pane__header-actions">
+          <div className="nu-calendar__modes" role="tablist" aria-label="View">
+            {(['list', 'month'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={mode === value}
+                className={mode === value ? 'nu-calendar__mode nu-calendar__mode--active' : 'nu-calendar__mode'}
+                data-nu-role={`calendar-mode-${value}`}
+                onClick={() => setMode(value)}
+              >
+                {value === 'list' ? 'List' : 'Month'}
+              </button>
+            ))}
+          </div>
+          {upcoming.length > 0 && (
+            <button
+              type="button"
+              className="nu-button nu-button--secondary"
+              data-nu-role="calendar-export"
+              title="Download every upcoming event as an .ics file"
+              onClick={() => exportEvents(upcoming, space, space.name)}
+            >
+              Export
+            </button>
+          )}
           {canManage && (
             <button type="button" className="nu-button nu-button--primary" data-nu-role="calendar-new-event" onClick={() => setCreating(true)}>
               New event
@@ -200,14 +331,16 @@ export function CalendarView({ space }: { space: Room }) {
         </div>
       </div>
       <div className="nu-calendar" data-nu-role="calendar">
-        {upcoming.length === 0 ? (
+        {mode === 'month' ? (
+          <MonthView space={space} events={events} />
+        ) : upcoming.length === 0 ? (
           <p className="nu-calendar__empty" data-nu-role="calendar-empty">
             Nothing coming up in {space.name}.{canManage ? ' Add an event and everyone here can RSVP.' : ''}
           </p>
         ) : (
           <EventList space={space} events={upcoming} />
         )}
-        {past.length > 0 && (
+        {mode === 'list' && past.length > 0 && (
           <details className="nu-calendar__past">
             <summary>Past events</summary>
             <EventList space={space} events={past} />

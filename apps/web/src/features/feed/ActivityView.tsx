@@ -13,7 +13,7 @@ import {
 import { Avatar } from '../../components/Avatar';
 import { Icon, type IconName } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { markActivitySeen, type ActivityItem, type ActivityKind } from '../../matrix/activity';
+import { isUnread, markActivitySeen, type ActivityItem, type ActivityKind } from '../../matrix/activity';
 import { readPostContent } from '../../matrix/feed';
 import { useUserProfile } from '../../matrix/hooks/useUserProfile';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
@@ -271,7 +271,7 @@ export function ActivityView() {
       ) : (
         <ul className="nu-activity" data-nu-role="activity-list">
           {items.map((item) => (
-            <ActivityRow key={item.key} item={item} unread={item.ts > seenAtOpen} />
+            <ActivityRow key={item.key} item={item} unread={isUnread(item, seenAtOpen)} />
           ))}
         </ul>
       )}

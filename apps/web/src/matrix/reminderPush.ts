@@ -17,14 +17,15 @@ import { EVENT_REMINDER_LEAD_MS, readReminders, type MessageReminder } from './r
 
 export type GatewayReminder = { id: string; at: number; title: string; body: string; roomId?: string; eventId?: string };
 
-/** An event's reminder isn't worth firing once it's this far under way (as in ReminderWatcher). */
-const EVENT_LATE_MS = 10 * 60 * 1000;
-
 const GENERIC_BODY = 'A message you asked to be reminded about';
 
 /**
  * The list to send, from your message reminders and the events you're going to. A message in an
  * encrypted room keeps its words off the gateway: the reminder says only that it's due. Pure.
+ *
+ * Only what's still ahead goes. The gateway forgets a reminder once it has fired, but a message
+ * reminder stays in account data until a tab shows it, and an event's is worked out afresh; sent
+ * again once due, either would fire a second time. Anything already due is this open tab's to show.
  */
 export function remindersForGateway(
   messages: MessageReminder[],
@@ -39,15 +40,13 @@ export function remindersForGateway(
     roomId: r.roomId,
     eventId: r.eventId,
   }));
-  const fromEvents = events
-    .filter((event) => event.start + EVENT_LATE_MS > now)
-    .map((event) => ({
-      id: `event:${event.id}`,
-      at: event.start - EVENT_REMINDER_LEAD_MS,
-      title: event.title,
-      body: `Starts at ${new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
-    }));
-  return [...fromMessages, ...fromEvents].sort((a, b) => a.at - b.at);
+  const fromEvents = events.map((event) => ({
+    id: `event:${event.id}`,
+    at: event.start - EVENT_REMINDER_LEAD_MS,
+    title: event.title,
+    body: `Starts at ${new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+  }));
+  return [...fromMessages, ...fromEvents].filter((r) => r.at > now).sort((a, b) => a.at - b.at);
 }
 
 /** Sends this account's reminders to its push gateway. Nothing to do without one. */

@@ -44,7 +44,8 @@ export function useThreads(roomId: string | null): Map<string, ThreadSummary> {
     const recompute = () => {
       const next = new Map<string, ThreadSummary>();
       for (const thread of room.getThreads()) {
-        next.set(thread.id, summarize(thread));
+        // One opened in the thread panel but not replied to yet (useThreadEvents) isn't a thread to show.
+        if (thread.length > 0) next.set(thread.id, summarize(thread));
       }
       setThreads(next);
     };
@@ -82,6 +83,11 @@ export function useThreads(roomId: string | null): Map<string, ThreadSummary> {
  * message with no replies) by returning an empty list and lazily attaching once a matching
  * thread is actually created — e.g. right after sending the first reply through this same
  * panel — rather than requiring the caller to already know a Thread object exists.
+ *
+ * A root with no thread yet gets an empty one here, as Element's thread view does. Without it the
+ * SDK has nowhere to put the first reply: its local echo belongs to no timeline, and the server's
+ * copy is then taken for that echo's return and skipped, so the reply never shows (nor does the
+ * thread) until a reload.
  */
 export function useThreadEvents(room: Room | undefined, rootEventId: string | null): MatrixEvent[] {
   const [events, setEvents] = useState<MatrixEvent[]>([]);
@@ -92,7 +98,8 @@ export function useThreadEvents(room: Room | undefined, rootEventId: string | nu
       return undefined;
     }
 
-    let thread = room.getThread(rootEventId) ?? undefined;
+    const rootEvent = room.findEventById(rootEventId);
+    let thread = room.getThread(rootEventId) ?? (rootEvent ? room.createThread(rootEventId, rootEvent, [], true) : undefined);
     const update = () => setEvents(thread ? [...thread.events] : []);
 
     const attach = (t: Thread) => {

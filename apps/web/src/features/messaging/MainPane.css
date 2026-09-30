@@ -188,3 +188,10 @@
   align-items: center;
   justify-content: center;
 }
+
+/* A lock after the channel's name when it's end-to-end encrypted. */
+.nu-main-pane__header-lock {
+  flex: none;
+  display: inline-flex;
+  color: var(--nu-color-text-muted);
+}

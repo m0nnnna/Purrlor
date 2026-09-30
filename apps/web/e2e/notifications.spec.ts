@@ -39,3 +39,21 @@ test('channel and Space notification levels become push rules', async ({ page })
   await eventually(rules, (r) => !hasRule(r, 'room', channelId) && !hasRule(r, 'override', channelId));
   await expect(role(row, 'channel-list-item-level')).toHaveCount(0);
 });
+
+test('a keyword becomes a content push rule, and removing it deletes the rule', async ({ page }) => {
+  const alice = await createUser('alice');
+  type ContentRules = { global: { content?: { rule_id: string; pattern?: string }[] } };
+  const rules = () => api<ContentRules>(alice, 'GET', '/pushrules/');
+  const hasKeyword = (r: ContentRules) => (r.global.content ?? []).some((rule) => rule.rule_id === 'movie night' && rule.pattern === 'movie night');
+
+  await logIn(page, alice);
+  await role(page, 'user-panel-settings').click();
+  await role(page, 'keyword-input').fill('movie night');
+  await role(page, 'keyword-add').click();
+  await expect(role(page, 'keyword').filter({ hasText: 'movie night' })).toBeVisible();
+  await eventually(rules, hasKeyword);
+
+  await role(page, 'keyword-remove').click();
+  await eventually(rules, (r) => !hasKeyword(r));
+  await expect(role(page, 'keyword')).toHaveCount(0);
+});

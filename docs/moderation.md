@@ -32,6 +32,11 @@ reporter's client ──to-device──▶ each Space moderator's devices
    homeserver vouches for. It checks first that it moderates that Space and that the reporter is a
    member of it. Two moderators online at once may both file the same report; it has a random
    `report_id`, and the queue shows each id once.
+   **Posts and comments** in a Space's feed reach the moderators the same way. Those live in the
+   member's feed room rather than a channel, so the report carries `content_kind` (`post` or
+   `comment`) and `post_id` (the post it is or sits under), and the queue shows "wrote a post" and
+   opens it as a post. Only a Space's own feed has moderators; a report from a member's profile
+   feed goes to the server's admins only.
 3. **Act.** Space Settings → Reports lists open reports: who, where, when, the reason and who
    reported it, with **Go to message**, **Delete message**, **Remove author**, **Ban author** and
    **Dismiss**. Each writes an `xyz.nekous.report_resolution` event referencing the report, and

@@ -18,7 +18,11 @@ export const WEBHOOK_EVENT = 'xyz.nekous.webhook';
 /** MSC4144: a name and avatar for one message, which this app shows instead of the sender's. */
 export const PER_MESSAGE_PROFILE = 'com.beeper.per_message_profile';
 
-export type Webhook = { id: string; name: string; createdBy: string; createdAt: number };
+export type Webhook = { id: string; name: string; createdBy: string; createdAt: number; avatarUrl?: string };
+
+/** Only an mxc:// URL is a usable avatar (the service drops anything else too). */
+export const mxcOrUndefined = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.startsWith('mxc://') ? value : undefined;
 
 export function listWebhooks(channel: Room): Webhook[] {
   return (channel.currentState.getStateEvents(WEBHOOK_EVENT) as MatrixEvent[])
@@ -28,6 +32,7 @@ export function listWebhooks(channel: Room): Webhook[] {
       name: event.getContent<{ name: string }>().name,
       createdBy: event.getSender() ?? '',
       createdAt: event.getTs(),
+      ...(mxcOrUndefined(event.getContent().avatar_url) && { avatarUrl: event.getContent<{ avatar_url: string }>().avatar_url }),
     }))
     .sort((a, b) => a.createdAt - b.createdAt);
 }
@@ -66,14 +71,20 @@ export function webhookUrl(baseUrl: string, roomId: string, webhookId: string, t
  * that URL. Brings the bot into the channel, and, in a channel only moderators can post in,
  * gives it the level it needs (ChannelGovernance leaves the bot's level alone).
  */
-export async function createWebhook(mx: MatrixClient, channel: Room, space: Room, name: string): Promise<string> {
+export async function createWebhook(mx: MatrixClient, channel: Room, space: Room, name: string, avatar?: File): Promise<string> {
   const service = webhookService(mx, space);
   if (!service) throw new Error('Webhooks go through this Space’s voice server, which isn’t set up (Space Settings → General).');
   if (isEncryptedRoom(channel)) throw new Error('Webhooks can’t post in an end-to-end encrypted channel.');
 
   const id = crypto.randomUUID();
   const token = randomToken();
-  await mx.sendStateEvent(channel.roomId, WEBHOOK_EVENT as any, { name: name.trim().slice(0, 80), token_sha256: await sha256Hex(token) } as any, id);
+  const avatarUrl = avatar ? (await mx.uploadContent(avatar)).content_uri : undefined;
+  await mx.sendStateEvent(
+    channel.roomId,
+    WEBHOOK_EVENT as any,
+    { name: name.trim().slice(0, 80), token_sha256: await sha256Hex(token), ...(avatarUrl && { avatar_url: avatarUrl }) } as any,
+    id
+  );
 
   const bot = service.botUserId;
   const membership = channel.getMember(bot)?.membership;
@@ -85,6 +96,18 @@ export async function createWebhook(mx: MatrixClient, channel: Room, space: Room
   if (userPowerLevel(channel, bot) < needed && needed < myLevel) await mx.setPowerLevel(channel.roomId, bot, needed);
 
   return webhookUrl(service.baseUrl, channel.roomId, id, token);
+}
+
+/**
+ * Gives a webhook a new avatar, or takes it off (no file). Rewrites its state with everything else
+ * (the token's hash, above all) as it was, so the URL keeps working.
+ */
+export async function setWebhookAvatar(mx: MatrixClient, channel: Room, webhookId: string, file: File | undefined): Promise<void> {
+  const current = channel.currentState.getStateEvents(WEBHOOK_EVENT, webhookId)?.getContent<Record<string, unknown>>();
+  if (!current || typeof current.token_sha256 !== 'string') throw new Error('That webhook no longer exists.');
+  const { avatar_url: _old, ...rest } = current;
+  const avatarUrl = file ? (await mx.uploadContent(file)).content_uri : undefined;
+  await mx.sendStateEvent(channel.roomId, WEBHOOK_EVENT as any, { ...rest, ...(avatarUrl && { avatar_url: avatarUrl }) } as any, webhookId);
 }
 
 /** Empty content: the service finds no webhook, and the URL stops working at once. */

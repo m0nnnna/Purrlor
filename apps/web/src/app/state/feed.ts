@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import type { ActivityItem } from '../../matrix/activity';
+import { isUnread, type ActivityItem } from '../../matrix/activity';
 
 /**
  * What the global feed's search box holds — `#tag` or words (matrix/hashtags.ts). Set from
@@ -20,5 +20,5 @@ export const activityAtom = atom<ActivityState>({ items: [], loaded: false, seen
 /** How many notifications are newer than the last time you looked — the rail's and sidebar's count. */
 export const unreadActivityCountAtom = atom((get) => {
   const { items, seenTs } = get(activityAtom);
-  return items.filter((item) => item.ts > seenTs).length;
+  return items.filter((item) => isUnread(item, seenTs)).length;
 });

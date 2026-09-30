@@ -40,7 +40,35 @@ export type ActivityItem = {
   postId?: string;
   /** A quote: the quoting post (it lives in the quoter's own feed). */
   quote?: { roomId: string; eventId: string };
+  /** A chat mention you've already read in its channel (markChannelReads): it stops counting as new. */
+  readInChannel?: boolean;
 };
+
+/** Whether an item is new to you: newer than what you last looked at here, and not a chat mention
+ *  you've already read where it was said. */
+export function isUnread(item: ActivityItem, seenTs: number): boolean {
+  return item.ts > seenTs && !item.readInChannel;
+}
+
+/**
+ * Marks the chat mentions in `items` that your read receipt in their channel already covers, so
+ * reading a message where it was said clears it here too, without opening Notifications. Posts and
+ * comments have no read receipts, so those stay new until you look here. Returns the same array
+ * when nothing changed. Pure over what the room has loaded.
+ */
+export function markChannelReads(mx: MatrixClient, items: ActivityItem[]): ActivityItem[] {
+  const myUserId = mx.getUserId();
+  if (!myUserId) return items;
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.kind !== 'mention' || item.postId) return item;
+    const read = !!mx.getRoom(item.roomId)?.hasUserReadEvent(myUserId, item.eventId);
+    if (read === !!item.readInChannel) return item;
+    changed = true;
+    return { ...item, readInChannel: read };
+  });
+  return changed ? next : items;
+}
 
 export type RawActivityEvent = {
   event_id: string;
@@ -240,7 +268,7 @@ export function createActivityReader(mx: MatrixClient) {
         new Set(fromOwn.map((item) => item.eventId)),
         myUserId
       );
-      return [...fromOwn, ...elsewhere].sort((a, b) => b.ts - a.ts);
+      return markChannelReads(mx, [...fromOwn, ...elsewhere].sort((a, b) => b.ts - a.ts));
     },
     /** Whether this event is a mention it holds; forgets it if so (it was deleted). */
     forget(roomId: string, eventId: string): boolean {

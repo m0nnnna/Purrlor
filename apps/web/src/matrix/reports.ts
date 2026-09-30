@@ -47,7 +47,14 @@ export type ReportContent = {
   reported_at: number;
   /** Set on reports filed by automod.ts rather than a person. */
   automod?: { word: string; deleted: boolean };
+  /** Set when what's reported is a post or a comment in a feed room rather than a chat message:
+   *  which, and the post it is or sits under (to open it). */
+  content_kind?: 'post' | 'comment';
+  post_id?: string;
 };
+
+/** What a reported post or comment adds to a report so the queue can show and open it. */
+export type ReportedPost = { kind: 'post' | 'comment'; postId: string };
 
 export type Resolution = 'deleted' | 'removed' | 'banned' | 'dismissed';
 
@@ -132,7 +139,8 @@ export async function reportToSpaceModerators(
   mx: MatrixClient,
   space: Room,
   event: MatrixEvent,
-  reason: string
+  reason: string,
+  about?: ReportedPost
 ): Promise<number> {
   const roomId = event.getRoomId();
   const eventId = event.getId();
@@ -152,6 +160,7 @@ export async function reportToSpaceModerators(
     reason,
     ...(!event.isEncrypted() && { excerpt: excerptOf(event.getContent()) }),
     reported_at: Date.now(),
+    ...(about && { content_kind: about.kind, post_id: about.postId }),
   };
   await sendEncryptedToDevice(mx, moderators, REPORT_EVENT, content);
   return moderators.length;

@@ -70,6 +70,7 @@ export const DEMO_ROOM_IDS = {
   feedYou: `!feed-you:${DEMO_SERVER_NAME}`,
   feedNibbles: `!feed-nibbles:${DEMO_SERVER_NAME}`,
   feedPixel: `!feed-pixel:${DEMO_SERVER_NAME}`,
+  review: `!review:${DEMO_SERVER_NAME}`,
   dmNibbles: `!dm-nibbles:${DEMO_SERVER_NAME}`,
   groupChat: `!group-chat:${DEMO_SERVER_NAME}`,
 } as const;
@@ -103,6 +104,8 @@ function powerLevelEvent(roomId: string, userIds: readonly string[]): MatrixEven
 type RoomSeed = {
   roomId: string;
   name: string;
+  /** The room's type (`m.room.create` content), for rooms the app keeps for itself. */
+  roomType?: string;
   topic?: string;
   isSpace?: boolean;
   /** Voice channel marker (`xyz.nekous.channel_type`). */
@@ -128,7 +131,7 @@ function buildRoom(client: MatrixClient, seed: RoomSeed): Room {
       content: {
         creator: DEMO_USER_ID,
         room_version: '10',
-        ...(seed.isSpace ? { type: RoomType.Space } : {}),
+        ...(seed.isSpace ? { type: RoomType.Space } : seed.roomType ? { type: seed.roomType } : {}),
       },
     }),
     demoEvent(seed.roomId, { type: EventType.RoomName, stateKey: '', content: { name: seed.name } }),
@@ -183,8 +186,8 @@ function feedPointerEvent(spaceId: string, userId: string, feedRoomId: string): 
 }
 
 /** A post on someone's feed — `xyz.nekous.post`, not an `m.room.message`. */
-function demoPost(roomId: string, sender: string, body: string, minutesAgo: number): MatrixEvent {
-  return demoEvent(roomId, { type: 'xyz.nekous.post', sender, content: { body }, ts: ts(minutesAgo) });
+function demoPost(roomId: string, sender: string, body: string, minutesAgo: number, eventId?: string): MatrixEvent {
+  return demoEvent(roomId, { type: 'xyz.nekous.post', sender, content: { body }, ts: ts(minutesAgo), eventId });
 }
 
 /** `m.space.child` + the reciprocal `m.space.parent`, which is how voice.ts finds a Space. */
@@ -227,6 +230,17 @@ function textMessage(
  * `formatted_body`, so Markdown in the body is what actually exercises bold/italic/code/fences/
  * spoilers on screen — the thing a demo most needs to show.
  */
+const REPORTED_MESSAGE_ID = '$demo-reported-message';
+const REPORTED_POST_ID = '$demo-reported-post';
+
+/** A local time `days` from now, as a timestamp. */
+function inDays(days: number, hour: number): number {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(hour, 0, 0, 0);
+  return d.getTime();
+}
+
 const GENERAL_TIMELINE = (roomId: string): MatrixEvent[] => {
   const welcome = textMessage(roomId, NIBBLES, 'welcome to the café ☕', 240);
   const reactTarget = textMessage(
@@ -258,7 +272,25 @@ const GENERAL_TIMELINE = (roomId: string): MatrixEvent[] => {
       'the trick was setting `maxFramerate` explicitly:\n```ts\nscreenShareEncoding: {\n  maxBitrate: 8_000_000,\n  maxFramerate: 60,\n}\n```',
       120
     ),
-    textMessage(roomId, PIXEL, 'careful though ||it pegs a weak server on packet crypto||', 90),
+    // A fixed ID so the sample report below can point at it.
+    demoEvent(roomId, {
+      type: EventType.RoomMessage,
+      sender: PIXEL,
+      ts: ts(90),
+      eventId: REPORTED_MESSAGE_ID,
+      content: { msgtype: 'm.text', body: 'careful though ||it pegs a weak server on packet crypto||' },
+    }),
+    // What a webhook posts: the Space's service bot, carrying the webhook's name (matrix/webhooks.ts).
+    demoEvent(roomId, {
+      type: EventType.RoomMessage,
+      sender: DEMO_BOT_USER_ID,
+      ts: ts(75),
+      content: {
+        msgtype: 'm.notice',
+        body: 'Build 42 passed ✅',
+        'com.beeper.per_message_profile': { id: 'demo-deploys', displayname: 'Deploys' },
+      },
+    }),
     demoEvent(roomId, {
       type: EventType.RoomMessage,
       sender: NIBBLES,
@@ -304,6 +336,27 @@ const seeds = (): RoomSeed[] => [
       }),
       feedPointerEvent(id, DEMO_USER_ID, DEMO_ROOM_IDS.feedYou),
       feedPointerEvent(id, NIBBLES, DEMO_ROOM_IDS.feedNibbles),
+      // Report review is on, with a couple of sample reports in its queue (the Reports room below).
+      demoEvent(id, { type: 'xyz.nekous.moderation', stateKey: '', content: { review_room: DEMO_ROOM_IDS.review } }),
+      // Two events on the Space's calendar (matrix/calendar.ts), one in a text channel, one in voice.
+      demoEvent(id, {
+        type: 'xyz.nekous.calendar_event',
+        stateKey: 'demo-movie-night',
+        ts: ts(300),
+        content: {
+          title: 'Movie night',
+          description: 'Bring snacks. We vote on the film at 6:45.',
+          start: inDays(2, 19),
+          end: inDays(2, 22),
+          channel_id: DEMO_ROOM_IDS.general,
+        },
+      }),
+      demoEvent(id, {
+        type: 'xyz.nekous.calendar_event',
+        stateKey: 'demo-game-night',
+        ts: ts(200),
+        content: { title: 'Game night', description: '', start: inDays(5, 20), channel_id: DEMO_ROOM_IDS.lounge },
+      }),
       demoEvent(id, {
         type: 'xyz.nekous.channel_categories',
         stateKey: '',
@@ -320,7 +373,11 @@ const seeds = (): RoomSeed[] => [
     roomId: DEMO_ROOM_IDS.general,
     name: 'general',
     topic: 'Markdown, code blocks, spoilers, reactions and mentions all render here.',
-    state: (id) => [spaceParentEvent(id, DEMO_ROOM_IDS.cafe)],
+    state: (id) => [
+      spaceParentEvent(id, DEMO_ROOM_IDS.cafe),
+      // A webhook on this channel (matrix/webhooks.ts); only a hash of its token is ever stored.
+      demoEvent(id, { type: 'xyz.nekous.webhook', stateKey: 'demo-deploys', content: { name: 'Deploys', token_sha256: '0'.repeat(64) } }),
+    ],
     timeline: GENERAL_TIMELINE,
   },
   {
@@ -381,6 +438,50 @@ const seeds = (): RoomSeed[] => [
     members: [DEMO_USER_ID, PIXEL],
     state: (id) => [spaceParentEvent(id, DEMO_ROOM_IDS.arcade)],
   },
+  {
+    // Cat Café's report review room (matrix/reports.ts): moderators only, never listed as a chat.
+    // Two reports waiting, one about a message and one about a post.
+    roomId: DEMO_ROOM_IDS.review,
+    name: 'Reports',
+    roomType: 'xyz.nekous.review_room',
+    members: [DEMO_USER_ID, NIBBLES],
+    timeline: (id) => [
+      demoEvent(id, {
+        type: 'xyz.nekous.report',
+        sender: NIBBLES,
+        ts: ts(60),
+        content: {
+          report_id: 'demo-report-1',
+          space_id: DEMO_ROOM_IDS.cafe,
+          room_id: DEMO_ROOM_IDS.general,
+          event_id: REPORTED_MESSAGE_ID,
+          reported_user: PIXEL,
+          reason: 'Posting spoilers with no warning',
+          excerpt: 'careful though ||it pegs a weak server on packet crypto||',
+          reported_at: ts(62),
+          reporter: MOCHI,
+        },
+      }),
+      demoEvent(id, {
+        type: 'xyz.nekous.report',
+        sender: NIBBLES,
+        ts: ts(20),
+        content: {
+          report_id: 'demo-report-2',
+          space_id: DEMO_ROOM_IDS.cafe,
+          room_id: DEMO_ROOM_IDS.feedNibbles,
+          event_id: REPORTED_POST_ID,
+          reported_user: NIBBLES,
+          reason: 'Off-topic',
+          excerpt: 'movie night friday, bring snacks',
+          reported_at: ts(22),
+          content_kind: 'post',
+          post_id: REPORTED_POST_ID,
+          reporter: PIXEL,
+        },
+      }),
+    ],
+  },
   // Feed rooms are deliberately NOT space children: they're discovered through their owner's
   // member event, so nothing lists them as channels (matrix/feed.ts).
   {
@@ -410,7 +511,7 @@ const seeds = (): RoomSeed[] => [
     feed: NIBBLES,
     members: [DEMO_USER_ID, NIBBLES],
     timeline: (id) => [
-      demoPost(id, NIBBLES, 'movie night friday, bring snacks', 12),
+      demoPost(id, NIBBLES, 'movie night friday, bring snacks', 12, REPORTED_POST_ID),
       demoEvent(id, {
         type: 'xyz.nekous.post',
         sender: NIBBLES,
