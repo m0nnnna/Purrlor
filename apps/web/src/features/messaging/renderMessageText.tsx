@@ -50,14 +50,12 @@ export function extractFirstUrl(text: string): string | undefined {
   return new RegExp(URL_PATTERN.source, URL_PATTERN.flags).exec(text)?.[0];
 }
 
-type Match = { index: number; length: number; node: ReactNode };
+type Match = { index: number; length: number; node: ReactNode; emote?: Emote };
 
-function pushPatternMatches(
-  matches: Match[],
-  text: string,
-  pattern: RegExp,
-  build: (content: string) => ReactNode
-): void {
+/** At most this many emotes on their own make a message of big ones; past it they stay inline. */
+const JUMBO_MAX = 27;
+
+function pushPatternMatches(matches: Match[], text: string, pattern: RegExp, build: (content: string) => ReactNode): void {
   for (const match of text.matchAll(pattern)) {
     matches.push({ index: match.index, length: match[0].length, node: build(match[1]) });
   }
@@ -132,7 +130,8 @@ export function renderMessageText(
       matches.push({
         index: match.index,
         length: match[0].length,
-        node: <EmoteImage key={key++} shortcode={emote.shortcode} mxcUrl={emote.mxcUrl} />,
+        node: null, // built below, once it's known whether the message is only emotes
+        emote,
       });
     }
   }
@@ -200,12 +199,34 @@ export function renderMessageText(
   if (matches.length === 0) return text;
   matches.sort((a, b) => a.index - b.index);
 
-  const parts: ReactNode[] = [];
+  const kept: Match[] = [];
   let lastIndex = 0;
   for (const match of matches) {
     if (match.index < lastIndex) continue; // overlapping match — keep the earlier one
+    kept.push(match);
+    lastIndex = match.index + match.length;
+  }
+
+  // Nothing but emotes, with only spaces between them: the emotes are shown big.
+  const emoteCount = kept.filter((match) => match.emote).length;
+  const jumbo =
+    emoteCount > 0 &&
+    emoteCount === kept.length &&
+    emoteCount <= JUMBO_MAX &&
+    kept.every((match, i) => text.slice(i === 0 ? 0 : kept[i - 1].index + kept[i - 1].length, match.index).trim() === '') &&
+    text.slice(lastIndex).trim() === '';
+
+  const parts: ReactNode[] = [];
+  lastIndex = 0;
+  for (const match of kept) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push(match.node);
+    parts.push(
+      match.emote ? (
+        <EmoteImage key={key++} shortcode={match.emote.shortcode} mxcUrl={match.emote.mxcUrl} size={jumbo ? 'jumbo' : 'message'} />
+      ) : (
+        match.node
+      )
+    );
     lastIndex = match.index + match.length;
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
