@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
-import { isPollEndEvent, isPollResponseEvent, parsePollEnd, parsePollResponse, parsePollStart } from '../polls';
+import { fetchPollRelations, isPollEndEvent, isPollResponseEvent, parsePollEnd, parsePollResponse, parsePollStart } from '../polls';
 import { tallyPoll, type PollDefinition, type PollResponseInput, type PollTally } from '../pollTally';
 
 export type PollState = { definition: PollDefinition; tally: PollTally };
 
 /**
- * Live poll results for a single `m.poll.start` event. Scans the room's currently-loaded
- * timeline for its `m.poll.response`/`m.poll.end` events (both hidden from the rendered timeline
- * itself — see MessageTimeline.tsx's `messages` filter) and feeds them through the pure
- * `tallyPoll`, the same "aggregate matrix-js-sdk's own timeline, not a hand-rolled event log"
- * approach useReactions.ts uses for `m.reaction`. Like that hook, this only sees responses that
- * have actually been loaded into the live timeline — a poll whose votes are further back than
- * this session has paginated won't have them counted until scrollback reaches them.
+ * Live poll results for a single `m.poll.start` event: its `m.poll.response`/`m.poll.end` events
+ * (both hidden from the rendered timeline itself — see MessageTimeline.tsx's `messages` filter),
+ * fed through the pure `tallyPoll`. They come from two places, merged by event id: the server's
+ * `/relations` for the poll, fetched once when it's shown, which has every vote however long ago
+ * it was cast; and the loaded timeline, which brings new votes as they arrive.
  */
 export function usePollTally(room: Room | undefined, startEvent: MatrixEvent): PollState | null {
   const mx = useMatrixClient();
@@ -31,10 +29,19 @@ export function usePollTally(room: Room | undefined, startEvent: MatrixEvent): P
       return undefined;
     }
 
+    // From /relations: every vote the server has, including ones from long before this session.
+    let fetched: MatrixEvent[] = [];
+    let cancelled = false;
+
     const compute = () => {
       const responses: PollResponseInput[] = [];
       let endTs: number | null = null;
-      for (const event of room.getLiveTimeline().getEvents()) {
+      // The same vote can be both fetched and in the timeline; the timeline's copy wins, as it's
+      // the one redactions and local echoes update.
+      const byId = new Map<string, MatrixEvent>();
+      for (const event of fetched) byId.set(event.getId() ?? '', event);
+      for (const event of room.getLiveTimeline().getEvents()) byId.set(event.getId() ?? '', event);
+      for (const event of byId.values()) {
         if (event.isRedacted()) continue;
         if (isPollResponseEvent(event)) {
           const parsed = parsePollResponse(event);
@@ -54,6 +61,13 @@ export function usePollTally(room: Room | undefined, startEvent: MatrixEvent): P
     };
 
     compute();
+    fetchPollRelations(mx, room.roomId, startEventId)
+      .then((events) => {
+        if (cancelled) return;
+        fetched = events;
+        compute();
+      })
+      .catch((err: unknown) => console.warn('Couldn’t load the poll’s earlier votes', err));
 
     const onTimeline = (event: MatrixEvent, timelineRoom?: Room) => {
       if (timelineRoom?.roomId !== room.roomId) return;
@@ -74,6 +88,7 @@ export function usePollTally(room: Room | undefined, startEvent: MatrixEvent): P
     room.on(RoomEvent.LocalEchoUpdated, onLocalEcho);
     room.on(RoomEvent.Redaction, onRedaction);
     return () => {
+      cancelled = true;
       room.removeListener(RoomEvent.Timeline, onTimeline);
       room.removeListener(RoomEvent.LocalEchoUpdated, onLocalEcho);
       room.removeListener(RoomEvent.Redaction, onRedaction);

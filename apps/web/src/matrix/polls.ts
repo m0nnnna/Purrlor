@@ -167,3 +167,26 @@ export async function endPoll(mx: MatrixClient, roomId: string, pollEventId: str
 export function canEndPoll(room: Room, userId: string, pollStartEvent: MatrixEvent): boolean {
   return canRedactEvent(room, userId, pollStartEvent);
 }
+
+/** Pages of relations to read at most, so a poll with an enormous history can't stall the view. */
+const MAX_RELATION_PAGES = 20;
+
+/**
+ * Every vote and end for a poll the server has, not just what's loaded in the timeline: the
+ * `m.reference` relations of its start event (`/relations`, as Element does). Without this an old
+ * poll showed only the votes this session had scrolled back far enough to load. Decrypted here,
+ * since the SDK only decrypts relations when asked for one event type and votes come in two (the
+ * stable and unstable names).
+ */
+export async function fetchPollRelations(mx: MatrixClient, roomId: string, pollEventId: string): Promise<MatrixEvent[]> {
+  const events: MatrixEvent[] = [];
+  let from: string | undefined;
+  for (let page = 0; page < MAX_RELATION_PAGES; page++) {
+    const result = await mx.relations(roomId, pollEventId, REFERENCE_RELATION.name, null, { dir: 'b' as any, from });
+    await Promise.all(result.events.map((event) => mx.decryptEventIfNeeded(event)));
+    events.push(...result.events.filter((event) => isPollResponseEvent(event) || isPollEndEvent(event)));
+    if (!result.nextBatch) break;
+    from = result.nextBatch;
+  }
+  return events;
+}
