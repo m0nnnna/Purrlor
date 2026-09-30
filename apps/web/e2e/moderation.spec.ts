@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { logIn, message, openChannel, role } from './app';
+import { clickMessageAction, logIn, message, openChannel, role } from './app';
 import { api, createSpaceWithChannel, createUser, eventually, latestEvents, sendText } from './matrix';
 
 const enc = encodeURIComponent;
@@ -31,8 +31,7 @@ test('a report reaches the Space’s moderators, who delete the message', async 
   await logIn(bobPage, bob);
   await openChannel(bobPage, spaceName, 'general');
   const spam = message(bobPage, 'buy followers');
-  await spam.hover();
-  await role(spam, 'timeline-report-action').click();
+  await clickMessageAction(spam, 'timeline-report-action');
   await expect(role(bobPage, 'report-dialog')).toContainText(`the moderators of ${spaceName}`);
   await role(bobPage, 'report-reason').fill('spam');
   await role(bobPage, 'report-submit').click();

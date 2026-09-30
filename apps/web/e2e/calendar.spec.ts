@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { logIn, message, openChannel, role } from './app';
+import { clickMessageAction, logIn, message, openChannel, role } from './app';
 import { api, createSpaceWithChannel, createUser, eventually, sendText, type TestUser } from './matrix';
 
 const enc = encodeURIComponent;
@@ -69,8 +69,7 @@ test('“Remind me” on a message, and a due reminder opening it', async ({ pag
   await logIn(page, alice);
   await openChannel(page, spaceName, 'general');
   const target = message(page, 'remember the milk');
-  await target.hover();
-  await role(target, 'timeline-remind-action').click();
+  await clickMessageAction(target, 'timeline-remind-action');
   await role(target, 'timeline-remind-choice').filter({ hasText: 'In 1 hour' }).click();
   const saved = await eventually(
     () => api<{ items?: { eventId: string; remindAt: number }[] }>(alice, 'GET', `/user/${enc(alice.userId)}/account_data/xyz.nekous.reminders`).catch(() => ({ items: [] })),

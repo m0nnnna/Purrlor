@@ -34,6 +34,19 @@ export function message(page: Page, text: string): Locator {
   return role(page, 'timeline-message').filter({ hasText: text });
 }
 
+/**
+ * Clicks one of a message's hover actions. Hovers again before each attempt: the timeline can still
+ * be settling (scrolling to the newest message), which slides the message out from under the
+ * pointer, and the actions only take clicks while their message is hovered — as for a person, who'd
+ * just move the mouse back.
+ */
+export async function clickMessageAction(target: Locator, action: string): Promise<void> {
+  await expect(async () => {
+    await target.hover();
+    await role(target, action).click({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
+}
+
 export async function send(page: Page, text: string): Promise<void> {
   const input = role(page, 'composer-input');
   await input.click();

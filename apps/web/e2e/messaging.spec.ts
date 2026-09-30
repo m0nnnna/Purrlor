@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { logIn, message, openChannel, role, send } from './app';
+import { clickMessageAction, logIn, message, openChannel, role, send } from './app';
 import { createSpaceWithChannel, createUser, eventually, latestEvents, sendText } from './matrix';
 
 test('sign in, send a message, and see a reply arrive', async ({ page }) => {
@@ -29,8 +29,7 @@ test('react to a message', async ({ page }) => {
   await openChannel(page, spaceName, 'general');
 
   const target = message(page, 'react to this');
-  await target.hover();
-  await role(target, 'reaction-picker-toggle').click();
+  await clickMessageAction(target, 'reaction-picker-toggle');
   await role(target, 'reaction-picker-panel').getByRole('button', { name: '👍' }).click();
   await expect(role(target, 'reaction-pill')).toContainText('1');
 
