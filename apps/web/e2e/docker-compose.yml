@@ -1,0 +1,23 @@
+# The homeserver the end-to-end tests run against: Continuwuity, the one deploy/docker-compose.yml
+# bundles, with federation off. Its database is a tmpfs, so every `up` is a brand-new server and
+# no test can depend on what an earlier run left behind. start-homeserver.sh brings it up.
+name: purrlor-e2e
+
+services:
+  matrix:
+    image: forgejo.ellis.link/continuwuation/continuwuity:latest
+    ports:
+      - '127.0.0.1:6167:8008'
+    environment:
+      CONTINUWUITY_SERVER_NAME: localhost
+      CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
+      CONTINUWUITY_ADDRESS: 0.0.0.0
+      CONTINUWUITY_PORT: 8008
+      CONTINUWUITY_ALLOW_REGISTRATION: 'true'
+      # What the tests register with (E2E_REGISTRATION_TOKEN). It only works once the server's
+      # first account exists, which start-homeserver.sh creates with the one-time bootstrap token.
+      CONTINUWUITY_REGISTRATION_TOKEN: e2e-registration-token
+      CONTINUWUITY_ALLOW_FEDERATION: 'false'
+      CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ''
+    tmpfs:
+      - /var/lib/continuwuity

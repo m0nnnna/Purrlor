@@ -15,3 +15,7 @@ deploy/livekit-certs/*.pem
 backups/
 # nginx config setup.sh writes for a separate nginx server, specific to one install.
 deploy/edge/
+
+# Playwright output (apps/web/e2e).
+apps/web/test-results/
+apps/web/playwright-report/

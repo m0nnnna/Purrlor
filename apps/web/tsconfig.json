@@ -11,7 +11,10 @@
     "resolveJsonModule": true,
     "outDir": "dist",
     "skipLibCheck": true,
-    "lib": ["ES2020", "DOM"]
+    "lib": ["ES2020", "DOM"],
+    // No global type packages: the app runs in a browser, so Node's globals (installed for the
+    // end-to-end tests in e2e/, which have their own tsconfig) mustn't typecheck here.
+    "types": []
   },
   "exclude": ["node_modules", "dist"],
   "include": ["src"]

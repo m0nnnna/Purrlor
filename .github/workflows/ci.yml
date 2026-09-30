@@ -32,6 +32,39 @@ jobs:
       # bundled (a bad dynamic import, a worker path, a CSS reference to a missing file).
       - run: npm run build
 
+  # The app against a real homeserver in a real browser: sign-in, messages, reactions, posts,
+  # notification settings, and end-to-end encryption between two browsers — what unit tests with a
+  # mocked client can't reach. See apps/web/e2e/README.md.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e:homeserver
+      - run: npm run build
+      - run: npm run e2e
+      - name: Homeserver log
+        if: failure()
+        run: docker compose -f e2e/docker-compose.yml logs matrix
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   token-server:
     name: token-server
     runs-on: ubuntu-latest

@@ -420,9 +420,13 @@ hook (via a faked LiveKit room).
 Components wired directly to a `MatrixClient` are covered through demo mode's fake client
 (`src/demo/*.test.*`): the real `ChannelList` and `MessageTimeline` are rendered against the
 seeded world, and the voice service-bot self-heal is driven end to end through the unmodified
-`useVoiceConnection` against the fake token server's real HTTP shapes. What still isn't covered
-anywhere is a live homeserver (real sync, E2EE, device verification) and a live LiveKit call —
-run the app against a real deployment to exercise those.
+`useVoiceConnection` against the fake token server's real HTTP shapes.
+
+`npm run e2e` (Playwright, `apps/web/e2e/`) runs the production build in Chromium against a real
+Continuwuity in Docker: signing in, sending and receiving, reactions, posts, notification settings,
+and an encrypted chat between two browsers. CI runs it on every push; see
+[`apps/web/e2e/README.md`](apps/web/e2e/README.md) to run it locally. Still not covered anywhere:
+device verification and a live LiveKit call — run the app against a real deployment for those.
 
 ## Production deployment
 
