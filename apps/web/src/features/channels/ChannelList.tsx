@@ -602,6 +602,23 @@ export function ChannelList() {
                     <UnreadBadge total={newPosts ? 1 : 0} highlight={0} />
                   </button>
                 </div>
+                <div className="nu-channel-list__row">
+                  <button
+                    type="button"
+                    className={spaceView === 'events' ? 'nu-channel-list__item nu-channel-list__item--active' : 'nu-channel-list__item'}
+                    data-nu-role="channel-list-events"
+                    onClick={() => {
+                      setGlobalFeedOpen(false);
+                      setProfileUserId(null);
+                      setSpaceView('events');
+                    }}
+                  >
+                    <span className="nu-channel-list__item-icon" aria-hidden="true">
+                      <Icon name="calendar" size={18} />
+                    </span>
+                    <span className="nu-channel-list__item-name">Events</span>
+                  </button>
+                </div>
                 {uncategorizedRooms.map((room, index) => (
                   <ChannelListRow
                     key={room.roomId}

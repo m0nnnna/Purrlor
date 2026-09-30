@@ -143,6 +143,12 @@ const PATHS: Record<string, ReactNode> = {
     <path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7M10.3 21a1.94 1.94 0 0 0 3.4 0M2 2l20 20" />
   ),
   check: <path d="M20 6 9 17l-5-5" />,
+  calendar: (
+    <>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </>
+  ),
   posts: (
     <>
       <rect x="3" y="3" width="18" height="18" rx="3" />

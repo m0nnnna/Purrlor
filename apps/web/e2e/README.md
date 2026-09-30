@@ -13,6 +13,7 @@ the same server.
 | `notifications.spec.ts` | Space and channel notification levels become the right push rules and back |
 | `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode |
 | `moderation.spec.ts` | A report reaching the Space's moderators, who delete the message from the queue; automod refusing a blocked word in Purrlor and deleting one sent from elsewhere |
+| `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
 
 ## Running locally

@@ -15,7 +15,7 @@ export const selectedRoomIdAtom = atom<string | null>(null);
  * merge across many rooms (`feed.ts`) rather than any one of them, so it can't be expressed as a
  * `selectedRoomIdAtom` value. `null` means an ordinary channel is selected.
  */
-export const selectedSpaceViewAtom = atom<'feed' | null>(null);
+export const selectedSpaceViewAtom = atom<'feed' | 'events' | null>(null);
 
 /**
  * Whether the global feed (public posts from every public Space, see matrix/globalFeed.ts) is

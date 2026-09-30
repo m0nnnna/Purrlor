@@ -17,6 +17,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { canInviteToRoom } from '../../matrix/permissions';
 import type { ReplyTarget } from '../../matrix/replies';
 import { FeedView } from '../feed/FeedView';
+import { CalendarView } from '../calendar/CalendarView';
 import { PostPage } from '../feed/PostPage';
 import { GlobalFeedView } from '../feed/GlobalFeedView';
 import { ProfileView } from '../feed/ProfileView';
@@ -119,6 +120,8 @@ export function MainPane() {
   // the same tab and scroll position instead of reloading the feed from the top.
   const feedSpace = spaceView === 'feed' && selectedSpaceId ? mx.getRoom(selectedSpaceId) : null;
   const feed = globalFeedOpen ? 'global' : feedSpace ? 'space' : null;
+  const calendarSpace = spaceView === 'events' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;
+  if (calendarSpace && !profileUserId && !openPost) return <CalendarView key={calendarSpace.roomId} space={calendarSpace} />;
   if (feed || profileUserId || openPost) {
     const covered = !!profileUserId || !!openPost;
     return (

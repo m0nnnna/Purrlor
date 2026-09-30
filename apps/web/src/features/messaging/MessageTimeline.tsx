@@ -4,6 +4,8 @@ import { useAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { ReportDialog } from '../feed/ReportDialog';
+import { Menu, MenuItem } from '../../components/Menu';
+import { addReminder, reminderChoices } from '../../matrix/reminders';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { RoleBadge } from '../../components/RoleBadge';
 import { pendingJumpTargetAtom } from '../../app/state/selection';
@@ -465,6 +467,27 @@ function MessageRow({
           >
             <Icon name="bookmark" size={16} filled={saved} />
           </button>
+          <Menu
+            label="Remind me"
+            trigger={<Icon name="bell" size={16} />}
+            triggerClassName="nu-timeline__message-pin-action"
+            role="timeline-remind-action"
+            align="end"
+          >
+            {reminderChoices(new Date()).map((choice) => (
+              <MenuItem
+                key={choice.label}
+                role="timeline-remind-choice"
+                onSelect={() =>
+                  void addReminder(mx, { roomId: room.roomId, eventId, remindAt: choice.at, preview: previewTextFor(event).slice(0, 140) }).catch(
+                    (err: unknown) => console.warn('Couldn’t set the reminder', err)
+                  )
+                }
+              >
+                {choice.label}
+              </MenuItem>
+            ))}
+          </Menu>
           {isEditable && (
             <button
               type="button"

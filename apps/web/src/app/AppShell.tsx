@@ -9,6 +9,7 @@ import { NotificationRules } from '../features/notifications/NotificationRules';
 import { FeedGovernance } from '../features/feed/FeedGovernance';
 import { ChannelGovernance } from '../features/channels/ChannelGovernance';
 import { ModerationWatcher } from '../features/moderation/ModerationWatcher';
+import { ReminderWatcher } from '../features/reminders/ReminderWatcher';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { MentionInboxCollector } from '../features/notifications/MentionInboxCollector';
 import { MentionInviteAcceptor } from '../features/notifications/MentionInviteAcceptor';
@@ -40,7 +41,7 @@ export function AppShell() {
   const postOpen = !!useAtomValue(openPostAtom);
   // On a phone the main pane only shows once there's something in it: a room, a Space's Posts,
   // or the global feed. The last two aren't rooms, so a room check alone left them invisible.
-  const mainPaneHasContent = !!selectedRoomId || spaceView === 'feed' || globalFeedOpen || profileOpen || postOpen;
+  const mainPaneHasContent = !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
   useOpenRoomFromNotification();
   useComposeShortcut();
   const inviteLinkJoin = useJoinFromInviteLink();
@@ -77,6 +78,7 @@ export function AppShell() {
       {!isDemoMode() && <FeedGovernance />}
       {!isDemoMode() && <ChannelGovernance />}
       {!isDemoMode() && <ModerationWatcher />}
+      <ReminderWatcher />
       <MentionInboxCollector />
       <ActivityWatcher />
       <MentionInviteAcceptor />

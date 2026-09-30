@@ -259,6 +259,7 @@ else. It just isn't shown there.
 | `xyz.nekous.feed` | `""` | A feed room | `{ "owner": "@…", "spaceId": "!…" }`, or `{ "owner": "@…", "profile": true }` for a profile feed | Feed owner, at creation |
 | `im.ponies.room_emotes` | `"@user:server"` | The emote library | A standard MSC2545 pack: that person's own global emotes and stickers. Each image may carry `xyz.nekous.added_at` (ms), which decides who keeps a shortcode two people chose. Packs under any other state key are ignored. | That person only (Matrix rejects an `@`-prefixed state key that isn't the sender's own ID) |
 | `xyz.nekous.emote_moderation` | `""` | The emote library | `{ "hidden": ["mxc://…"] }`: images every Purrlor client leaves out | Library moderators |
+| `xyz.nekous.calendar_event` | the event's id | A Space | `{ "title", "description"?, "start", "end"?, "channel_id"?, "location"? }` (times in UTC ms); `{}` when cancelled. See [calendar.md](calendar.md). | Space moderators |
 | `xyz.nekous.moderation` | `""` | A Space | `{ "review_room": "!…", "blocked_words": ["…"] }`: report review and automod. See [moderation.md](moderation.md). | Space moderators |
 | `xyz.nekous.channel_settings` | `""` | A channel | `{ "moderators_only": true, "slowmode_seconds": 30 }`, both optional. Moderators-only also means the room is invite-only; slowmode is honoured by Purrlor's composer only. See [channel-permissions.md](channel-permissions.md). | Channel moderators |
 
@@ -270,6 +271,7 @@ A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its o
 | Event | Key | Value | Why |
 |---|---|---|---|
 | `m.space.child` (in a Space) | `xyz.nekous.channel_type` | Same as the channel's own type | Lets the voice bot find voice channels without joining text channels |
+| `m.room.member` (your own, in a Space) | `xyz.nekous.rsvps` | `{ "<calendar event id>": "going" \| "interested" }` | RSVPs, which only you can write. See [`calendar.md`](calendar.md). |
 | `m.room.member` (your own, in a Space) | `xyz.nekous.feed_room` | Your feed room's ID | Feed discovery. It's the one piece of Space state every member can write for themselves and everyone can read. See [`posts.md`](posts.md). |
 
 ### 5.2 Room types
@@ -382,6 +384,7 @@ Un-liking redacts the reaction. One like is counted per person.
 | `xyz.nekous.post_notifications` | `{ "comments": true, "likes": true }`. Both default to on. |
 | `xyz.nekous.notification_settings` | `{ "spaces": { "<spaceId>": "<level>" }, "rooms": { "<roomId>": "<level>" } }`, level `all`, `mentions` or `nothing`. A room's own level beats its Space's. See [notification-settings.md](notification-settings.md). |
 | `xyz.nekous.push_gateway` | `{ "url": "https://push.DOMAIN" }` |
+| `xyz.nekous.reminders` | `{ "items": [ { "id", "roomId", "eventId", "remindAt", "preview" } ] }`. Message reminders; removed once shown. |
 | `xyz.nekous.saved_messages` | `{ "items": [ { "roomId", "eventId", "savedAt" } ] }` |
 | `xyz.nekous.mention_inbox` | `{ "items": [ { "roomId", "eventId", "mentionedAt" } ] }` |
 | `xyz.nekous.space_nicknames` | `{ "<spaceId>": "<nickname>" }` |
