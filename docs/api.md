@@ -146,6 +146,14 @@ caller is a joined member of**.
 The former `GET /api/livekit/rooms/participants?roomIds=…` now answers `401` with
 `"code": "auth_required"`.
 
+### `POST /api/webhooks/{roomId}/{webhookId}/{token}`
+
+An incoming webhook: posts `{ "content": "…", "username"?: "…" }` (Discord's shape) or
+`{ "text": "…" }` (Slack's) into the channel as the service bot, under the webhook's name. The token
+is the credential; the channel stores only its SHA-256 (`xyz.nekous.webhook` state). `204` posted,
+`400` bad body, `404` unknown webhook or wrong token, `409` encrypted channel, `429` rate limited.
+See [webhooks.md](webhooks.md).
+
 ---
 
 ## 3. Push gateway HTTP API
@@ -259,6 +267,7 @@ else. It just isn't shown there.
 | `xyz.nekous.feed` | `""` | A feed room | `{ "owner": "@…", "spaceId": "!…" }`, or `{ "owner": "@…", "profile": true }` for a profile feed | Feed owner, at creation |
 | `im.ponies.room_emotes` | `"@user:server"` | The emote library | A standard MSC2545 pack: that person's own global emotes and stickers. Each image may carry `xyz.nekous.added_at` (ms), which decides who keeps a shortcode two people chose. Packs under any other state key are ignored. | That person only (Matrix rejects an `@`-prefixed state key that isn't the sender's own ID) |
 | `xyz.nekous.emote_moderation` | `""` | The emote library | `{ "hidden": ["mxc://…"] }`: images every Purrlor client leaves out | Library moderators |
+| `xyz.nekous.webhook` | the webhook's id | A channel | `{ "name", "token_sha256", "avatar_url"? }`; `{}` once deleted. See [webhooks.md](webhooks.md). | Channel moderators |
 | `xyz.nekous.calendar_event` | the event's id | A Space | `{ "title", "description"?, "start", "end"?, "channel_id"?, "location"? }` (times in UTC ms); `{}` when cancelled. See [calendar.md](calendar.md). | Space moderators |
 | `xyz.nekous.moderation` | `""` | A Space | `{ "review_room": "!…", "blocked_words": ["…"] }`: report review and automod. See [moderation.md](moderation.md). | Space moderators |
 | `xyz.nekous.channel_settings` | `""` | A channel | `{ "moderators_only": true, "slowmode_seconds": 30 }`, both optional. Moderators-only also means the room is invite-only; slowmode is honoured by Purrlor's composer only. See [channel-permissions.md](channel-permissions.md). | Channel moderators |

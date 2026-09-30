@@ -5,6 +5,7 @@ import { validateOpenIdToken } from './openid.js';
 import { checkMembership, getBotUserId, mayViewParticipants } from './membership.js';
 import { grantsForPowerLevel } from './grants.js';
 import { livekitRoomName } from './livekitRoomName.js';
+import { handleWebhook } from './webhooks.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -188,6 +189,15 @@ app.post('/api/livekit/rooms/participants', async (req, res) => {
   );
 
   res.json(result);
+});
+
+/**
+ * Incoming webhooks (webhooks.ts): an outside service posts into a channel. The token in the path
+ * is the credential, so this is deliberately not behind CORS or a login — it's called by servers,
+ * not browsers.
+ */
+app.post('/api/webhooks/:roomId/:webhookId/:token', (req, res) => {
+  void handleWebhook(req, res);
 });
 
 app.listen(PORT, () => {

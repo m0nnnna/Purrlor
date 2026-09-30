@@ -44,6 +44,8 @@ import { SpaceCard } from './SpaceCard';
 import { StartDmModal } from './StartDmModal';
 import { SpaceSettingsModal } from '../servers/SpaceSettingsModal';
 import { ChannelPermissionsModal } from './ChannelPermissionsModal';
+import { WebhooksModal } from './WebhooksModal';
+import { canManageWebhooks } from '../../matrix/webhooks';
 import { CHANNEL_SETTINGS_EVENT } from '../../matrix/channelPermissions';
 import './ChannelList.css';
 
@@ -104,6 +106,7 @@ function ChannelListRow({
   onMoveDown,
   onRemoveFromSpace,
   onOpenPermissions,
+  onOpenWebhooks,
 }: {
   room: Room;
   isDirectMessage: boolean;
@@ -118,6 +121,8 @@ function ChannelListRow({
   onRemoveFromSpace: () => void;
   /** Channels of a Space only; shown to whoever can change any of the channel's permissions. */
   onOpenPermissions?: () => void;
+  /** Same, for a channel's webhooks (matrix/webhooks.ts). */
+  onOpenWebhooks?: () => void;
 }) {
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
@@ -131,6 +136,7 @@ function ChannelListRow({
   const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level === 'mentions');
   const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages);
   const myUserId = mx.getUserId() ?? '';
+  const canEditWebhooks = !!onOpenWebhooks && canManageWebhooks(room, myUserId);
   const canEditPermissions =
     !!onOpenPermissions &&
     (canSendStateEvent(room, myUserId, 'm.room.power_levels') || canSendStateEvent(room, myUserId, CHANNEL_SETTINGS_EVENT));
@@ -187,7 +193,7 @@ function ChannelListRow({
       <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
         {/* One "⋯" for everything else, so a hovered row keeps most of its name clickable. */}
-        {(canEditPermissions || (!isDirectMessage && canManageSpace)) && (
+        {(canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace)) && (
           <Menu
             label="Channel options"
             trigger={<Icon name="more" size={13} />}
@@ -198,6 +204,11 @@ function ChannelListRow({
             {canEditPermissions && (
               <MenuItem icon="shield" role="channel-list-permissions" onSelect={() => onOpenPermissions?.()}>
                 Permissions
+              </MenuItem>
+            )}
+            {canEditWebhooks && (
+              <MenuItem icon="link" role="channel-list-webhooks" onSelect={() => onOpenWebhooks?.()}>
+                Webhooks
               </MenuItem>
             )}
             {!isDirectMessage && canManageSpace && canMoveUp && (
@@ -461,6 +472,7 @@ export function ChannelList() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showSpaceSettings, setShowSpaceSettings] = useState(false);
   const [permissionsRoom, setPermissionsRoom] = useState<Room | null>(null);
+  const [webhooksRoom, setWebhooksRoom] = useState<Room | null>(null);
   const [showStartDm, setShowStartDm] = useState(false);
   const [showAddExistingChannel, setShowAddExistingChannel] = useState(false);
 
@@ -634,6 +646,7 @@ export function ChannelList() {
                     onMoveDown={() => handleMoveInUncategorized(index, 1)}
                     onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
                     onOpenPermissions={() => setPermissionsRoom(room)}
+                    onOpenWebhooks={() => setWebhooksRoom(room)}
                   />
                 ))}
                 {categoryRooms.map(({ category, rooms }) => (
@@ -660,6 +673,7 @@ export function ChannelList() {
                           onMoveDown={() => handleMoveInCategory(category, rooms, index, 1)}
                           onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
                           onOpenPermissions={() => setPermissionsRoom(room)}
+                          onOpenWebhooks={() => setWebhooksRoom(room)}
                         />
                       ))}
                   </div>
@@ -708,6 +722,7 @@ export function ChannelList() {
       {showSpaceSettings && space && (
         <SpaceSettingsModal space={space} onClose={() => setShowSpaceSettings(false)} />
       )}
+      {webhooksRoom && space && <WebhooksModal channel={webhooksRoom} space={space} onClose={() => setWebhooksRoom(null)} />}
       {permissionsRoom && space && (
         <ChannelPermissionsModal channel={permissionsRoom} space={space} onClose={() => setPermissionsRoom(null)} />
       )}

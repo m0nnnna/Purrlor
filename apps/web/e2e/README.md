@@ -1,7 +1,7 @@
 # End-to-end tests
 
 The production build in Chromium, against a real homeserver: a fresh Continuwuity in Docker with
-federation off. Each test registers its own users and makes its own rooms through the client-server
+federation off, plus the token server built from this checkout (for webhooks). Each test registers its own users and makes its own rooms through the client-server
 API (`matrix.ts`), drives the app through its `data-nu-role` attributes (`app.ts`), then checks what
 actually reached the server. Tests share nothing, so they run in parallel and can be rerun against
 the same server.
@@ -14,6 +14,7 @@ the same server.
 | `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode |
 | `moderation.spec.ts` | A report reaching the Space's moderators, who delete the message from the queue; automod refusing a blocked word in Purrlor and deleting one sent from elsewhere |
 | `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
+| `webhooks.spec.ts` | A webhook posting through a real token server under its own name (APP), wrong tokens refused, deleting it, and a person unable to pose as one |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
 
 ## Running locally
@@ -22,7 +23,7 @@ From `apps/web`, with Docker running:
 
 ```sh
 npx playwright install chromium   # once
-npm run e2e:homeserver            # a fresh server at 127.0.0.1:6167, first account created
+npm run e2e:homeserver            # a fresh server at 127.0.0.1:6167 and token server at :6168
 npm run build
 npm run e2e
 docker compose -f e2e/docker-compose.yml down

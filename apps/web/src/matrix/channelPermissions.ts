@@ -1,6 +1,6 @@
 import { EventType, JoinRule, RestrictedAllowType, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { privilegedCreators, userPowerLevel } from './permissions';
-import { readOwnVoiceServerConfig } from './voice';
+import { readVoiceServerConfig } from './voice';
 
 /**
  * Per-channel permissions on top of a Space's roles: who can post (everyone, or moderators — an
@@ -132,14 +132,16 @@ export function spaceRoleLevels(space: Room): Record<string, number> {
  * A channel's `users` power levels with the Space's moderators and admins copied in, or
  * undefined when nothing changes. Only touches what `myLevel` is allowed to (a level below it,
  * to a level below it), leaves anyone below moderator in the channel alone (a muted member, say),
- * and never touches the channel's own privileged creators. Someone who's a moderator in the
- * channel but not in the Space goes back to the default: roles come from the Space. Pure.
+ * and never touches anyone in `untouchable`: the channel's own privileged creators, and the
+ * Space's service bot, which a webhook in an announcement channel needs at moderator level
+ * (webhooks.ts). Someone else who's a moderator in the channel but not in the Space goes back to
+ * the default: roles come from the Space. Pure.
  */
 export function syncedChannelUsers(
   channel: PowerLevels,
   spaceLevels: Record<string, number>,
   myLevel: number,
-  channelCreators: string[] = []
+  untouchable: string[] = []
 ): Record<string, number> | undefined {
   const users = { ...channel.users };
   const defaultLevel = channel.users_default ?? 0;
@@ -147,7 +149,7 @@ export function syncedChannelUsers(
   const canChange = (from: number, to: number) => from < myLevel && to < myLevel;
 
   for (const [userId, level] of Object.entries(spaceLevels)) {
-    if (channelCreators.includes(userId)) continue;
+    if (untouchable.includes(userId)) continue;
     const current = users[userId] ?? defaultLevel;
     if (current !== level && canChange(current, level)) {
       users[userId] = level;
@@ -155,7 +157,7 @@ export function syncedChannelUsers(
     }
   }
   for (const [userId, level] of Object.entries(users)) {
-    if (spaceLevels[userId] !== undefined || channelCreators.includes(userId)) continue;
+    if (spaceLevels[userId] !== undefined || untouchable.includes(userId)) continue;
     if (level >= MODERATOR_LEVEL && canChange(level, defaultLevel)) {
       delete users[userId];
       changed = true;
@@ -230,10 +232,12 @@ export async function governChannel(mx: MatrixClient, channel: Room, space: Room
   if (!myUserId || channel.getMyMembership() !== 'join') return;
   const myLevel = userPowerLevel(channel, myUserId);
   const spaceLevels = spaceRoleLevels(space);
+  const botUserId = readVoiceServerConfig(mx, space)?.botUserId;
+  const untouchable = [...privilegedCreators(channel), ...(botUserId ? [botUserId] : [])];
 
   if (canSendState(channel, myUserId, EventType.RoomPowerLevels)) {
     const current = powerLevels(channel);
-    const users = syncedChannelUsers(current, spaceLevels, myLevel, privilegedCreators(channel));
+    const users = syncedChannelUsers(current, spaceLevels, myLevel, untouchable);
     if (users) await mx.sendStateEvent(channel.roomId, EventType.RoomPowerLevels, { ...current, users } as any, '');
   }
 
@@ -243,14 +247,9 @@ export async function governChannel(mx: MatrixClient, channel: Room, space: Room
     membership: event.getContent<{ membership?: string }>().membership ?? 'leave',
   }));
   const spaceMembers = space.getJoinedMembers().map((member) => member.userId);
-  // Never removed: yourself, the channel's creators, and the Space's voice service bot, which a
-  // voice channel needs in the room to let anyone into the call (voiceBot.ts).
-  const botUserId = readOwnVoiceServerConfig(space)?.botUserId;
-  const { invite, remove } = moderatorsOnlyChanges(members, Object.keys(spaceLevels), spaceMembers, [
-    myUserId,
-    ...privilegedCreators(channel),
-    ...(botUserId ? [botUserId] : []),
-  ]);
+  // Never removed: yourself, the channel's creators, and the Space's service bot, which a voice
+  // channel needs in the room to let anyone into the call (voiceBot.ts) and webhooks post as.
+  const { invite, remove } = moderatorsOnlyChanges(members, Object.keys(spaceLevels), spaceMembers, [myUserId, ...untouchable]);
   if (myLevel >= actionLevel(channel, 'invite')) {
     for (const userId of invite) await mx.invite(channel.roomId, userId).catch(() => undefined);
   }

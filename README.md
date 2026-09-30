@@ -13,7 +13,7 @@ hood, [`docs/posts.md`](docs/posts.md) for posts, comments and the global feed,
 notification levels, [`docs/channel-permissions.md`](docs/channel-permissions.md) for
 announcement and moderators-only channels and slowmode, [`docs/moderation.md`](docs/moderation.md)
 for report review and automod, [`docs/calendar.md`](docs/calendar.md) for Space calendars and
-reminders, and
+reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old
@@ -240,6 +240,9 @@ set a nickname scoped to just that Space, independent of your global display nam
 - **Events**: each Space has a calendar (its "Events" entry) that moderators add to and members
   RSVP to, with a reminder 15 minutes before anything you're going to. Any message can be set to
   come back later as a reminder too (its bell) — see [`docs/calendar.md`](docs/calendar.md).
+- **Webhooks**: a channel's "⋯" → Webhooks gives a URL that CI, monitoring or anything that can
+  send Discord- or Slack-style webhooks posts into the channel with, marked APP — see
+  [`docs/webhooks.md`](docs/webhooks.md).
 - Per-server nicknames — a display-name override scoped to one Space, layered on top of Matrix's
   per-room `m.room.member` override.
 - Add an existing room as a channel, or discover and join public Spaces/rooms via a directory

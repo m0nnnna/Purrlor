@@ -178,9 +178,16 @@ async function createBotClient(): Promise<MatrixClient> {
 
   mx.on(RoomMemberEvent.Membership, (_event, member) => {
     if (member.userId === mx.getUserId() && member.membership === 'invite') {
-      joinIfServed(mx, member.roomId).catch((err: unknown) => {
-        console.error(`Failed to auto-join room ${member.roomId}`, err);
-      });
+      // A tick later: this fires while the SDK is still applying the invite's stripped state, and
+      // until it has, the room has no `m.room.create` — so a Space invite didn't look like one and
+      // was refused, leaving the bot out of the Space until the next reconciliation pass (up to a
+      // minute). Checked against Continuwuity with the SDK: no type at this moment, "m.space" one
+      // tick on.
+      setTimeout(() => {
+        joinIfServed(mx, member.roomId).catch((err: unknown) => {
+          console.error(`Failed to auto-join room ${member.roomId}`, err);
+        });
+      }, 0);
     }
   });
 
@@ -212,6 +219,17 @@ function getBotClient(): Promise<MatrixClient> {
     botClientPromise = createBotClient();
   }
   return botClientPromise;
+}
+
+/**
+ * The bot, in `roomId`, for posting there (webhooks.ts): only for a room this deployment serves,
+ * joined first if it has to be (through the same tenancy check as any join). Null otherwise.
+ */
+export async function botInServedRoom(roomId: string): Promise<MatrixClient | null> {
+  const mx = await getBotClient();
+  if (!(await isRoomServed(mx, roomId))) return null;
+  if (mx.getRoom(roomId)?.getMyMembership() !== 'join' && !(await ensureBotJoined(mx, roomId))) return null;
+  return mx;
 }
 
 /**

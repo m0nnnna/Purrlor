@@ -6,6 +6,8 @@ import { Icon } from '../../components/Icon';
 import { ReportDialog } from '../feed/ReportDialog';
 import { Menu, MenuItem } from '../../components/Menu';
 import { addReminder, reminderChoices } from '../../matrix/reminders';
+import { webhookProfile } from '../../matrix/webhooks';
+import { readVoiceServerConfig } from '../../matrix/voice';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { RoleBadge } from '../../components/RoleBadge';
 import { pendingJumpTargetAtom } from '../../app/state/selection';
@@ -111,6 +113,12 @@ function ChannelWelcome({ room }: { room: Room }) {
   );
 }
 
+/** Who a message is from as a reader sees it: a webhook's name and id, or no webhook at all. */
+function webhookSenderKey(event: MatrixEvent, botUserId: string | undefined): string {
+  const profile = webhookProfile(event, botUserId);
+  return profile ? JSON.stringify([profile.id, profile.name]) : '';
+}
+
 function previewTextFor(event: MatrixEvent): string {
   const content = event.getContent();
   if (M_POLL_START.matches(event.getType())) return `📊 ${parsePollStart(event)?.question ?? 'Poll'}`;
@@ -163,6 +171,7 @@ function MessageRow({
   onOpenThread,
   onReply,
   members,
+  webhookBotId,
 }: {
   mx: MatrixClient;
   room: Room;
@@ -182,10 +191,13 @@ function MessageRow({
   onOpenThread: () => void;
   onReply: (target: ReplyTarget) => void;
   members: RoomMember[];
+  /** The Space's service bot, whose messages may carry a webhook's name (matrix/webhooks.ts). */
+  webhookBotId: string | undefined;
 }) {
   const sender = event.sender;
-  const senderName = sender?.name ?? event.getSender() ?? '?';
-  const senderRole = roleFor(sender?.powerLevel ?? 0).id;
+  const webhook = webhookProfile(event, webhookBotId);
+  const senderName = webhook?.name ?? sender?.name ?? event.getSender() ?? '?';
+  const senderRole = webhook ? 'member' : roleFor(sender?.powerLevel ?? 0).id;
   // event.getContent() already returns the latest m.replace edit's content automatically —
   // matrix-js-sdk aggregates edits onto the original event the same way it aggregates
   // reactions/thread relations (see room.relations, useReactions.ts/useThreads.ts). We just
@@ -272,7 +284,7 @@ function MessageRow({
           data-nu-role="timeline-message-avatar"
           onClick={() => setShowProfile(true)}
         >
-          <Avatar name={senderName} mxcUrl={sender?.getMxcAvatarUrl()} size={40} />
+          <Avatar name={senderName} mxcUrl={webhook ? webhook.avatarUrl ?? null : sender?.getMxcAvatarUrl()} size={40} />
         </button>
       )}
       <div className="nu-timeline__message-body">
@@ -293,6 +305,11 @@ function MessageRow({
                   {senderName}
                 </button>
                 <RoleBadge roleId={senderRole} />
+                {webhook && (
+                  <span className="nu-timeline__app-badge" data-nu-role="timeline-webhook-badge" title="Posted by a webhook">
+                    APP
+                  </span>
+                )}
                 <time className="nu-timeline__message-time" dateTime={new Date(event.getTs()).toISOString()} title={new Date(event.getTs()).toLocaleString()}>
                   {isSameDay(event.getTs(), Date.now()) ? formatTime(event.getTs()) : `${new Date(event.getTs()).toLocaleDateString()} ${formatTime(event.getTs())}`}
                 </time>
@@ -581,6 +598,8 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const threads = useThreads(roomId);
   const members = useRoomMembers(roomId);
   const savedMessages = useSavedMessages();
+  const parentSpace = mx.getRoom(findParentSpaceId(mx, roomId) ?? '');
+  const webhookBotId = parentSpace ? readVoiceServerConfig(mx, parentSpace)?.botUserId : undefined;
   const savedEventIds = new Set(savedMessages.filter((item) => item.roomId === roomId).map((item) => item.eventId));
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null);
   const [pendingJump, setPendingJump] = useAtom(pendingJumpTargetAtom);
@@ -858,6 +877,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
             !newDay &&
             !isFirstUnread &&
             prevEvent.getSender() === event.getSender() &&
+            // Two webhooks posting through the same bot are two senders as far as anyone reading can
+            // tell, and so is one webhook posting under two names (a request's `username`).
+            webhookSenderKey(prevEvent, webhookBotId) === webhookSenderKey(event, webhookBotId) &&
             !getReplyEventId(event) &&
             event.getTs() - prevEvent.getTs() < GROUP_WINDOW_MS;
           return (
@@ -883,6 +905,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
               onOpenThread={() => setOpenThreadRootId(event.getId() ?? null)}
               onReply={onReply}
               members={members}
+              webhookBotId={webhookBotId}
             />
             </Fragment>
           );

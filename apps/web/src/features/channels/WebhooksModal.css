@@ -1,0 +1,24 @@
+.nu-webhooks__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-webhooks__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+}
+
+.nu-webhooks__create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}

@@ -470,3 +470,16 @@
     transform: translateY(8px);
   }
 }
+
+/* A message a webhook posted (matrix/webhooks.ts): marked, so nobody takes "GitHub" for a person. */
+.nu-timeline__app-badge {
+  align-self: center;
+  padding: 0 var(--nu-space-1);
+  border-radius: var(--nu-radius-sm);
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+}
