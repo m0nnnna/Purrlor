@@ -5,18 +5,14 @@
 The current plan is the Claude Docs doc "Purrlor: what's next":
 https://claude.ai/code/artifact/277fec85-bdab-431f-bcf6-cbdf368db48b
 
-Its "Work split: Sonnet vs Opus" table assigns each task a model. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checklist and open questions may have changed), then do every task assigned to that model. Work on a new branch off `opus-work` unless it has been merged to `master`.
+Its "Work split: Sonnet vs Opus" table assigns each task a model. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checklist and open questions may have changed), then do every task assigned to that model, on a new branch off `master`.
 
 The earlier plan, and the record of everything built so far, is "Purrlor review & roadmap":
 https://claude.ai/code/artifact/8f290dcd-d140-46e7-9ab5-994d822de800
 
 Branches as of 2026-09-30:
-- `global-emote-library`: the global emote & sticker library.
-- `sonnet-work`: built on top of that, with all the Sonnet tasks except GIF search.
-- `opus-work`: built on `sonnet-work`, with all the Opus tasks and encrypted DMs and channels. The latest branch, pushed; the one to merge to `master`.
+- `master`: everything, merged 2026-09-30 (fast-forward from `opus-work`; `global-emote-library`, `sonnet-work` and `opus-work` are now fully contained in it). The live server is small and treated as a beta, so `master` deploys straight to it.
 - `sonnet/gif`: GIF search via Klipy. On hold, do not merge. Klipy's terms forbid the server proxy, re-hosting and caching this branch does unless Klipy approves it in writing.
-
-`opus-work` was tested against a local Continuwuity (the end-to-end suite in `apps/web/e2e/`); none has been tried on a real deployment.
 
 ## Checks
 
