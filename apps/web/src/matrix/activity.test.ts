@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MatrixClient } from 'matrix-js-sdk';
-import { buildActivity, buildMentionActivity, createActivityReader, type RawActivityEvent } from './activity';
+import { buildActivity, buildMentionActivity, createActivityReader, isUnread, markChannelReads, type ActivityItem, type RawActivityEvent } from './activity';
 
 const ME = '@me:x';
 const POST = '$post';
@@ -144,5 +144,46 @@ describe('createActivityReader', () => {
     c.accountData['xyz.nekous.mention_inbox'] = { items: [] };
     const items = await reader.read({ rooms: [] });
     expect(items.map((item) => item.kind)).toEqual(['like']);
+  });
+});
+
+describe('a chat mention you read in its channel', () => {
+  const item = (over: Partial<ActivityItem>): ActivityItem => ({
+    key: 'k',
+    kind: 'mention',
+    senders: ['@a:x'],
+    ts: 100,
+    roomId: '!chan',
+    eventId: '$m',
+    ...over,
+  });
+  const client = (readEvents: string[]) =>
+    ({
+      getUserId: () => ME,
+      getRoom: (roomId: string) => (roomId === '!chan' ? { hasUserReadEvent: (_u: string, eventId: string) => readEvents.includes(eventId) } : null),
+    }) as unknown as MatrixClient;
+
+  it('stops counting as new once your read receipt covers it, and only chat mentions do', () => {
+    const chat = item({});
+    const inPost = item({ key: 'p', eventId: '$p', postId: '$post' });
+    const like = item({ key: 'l', kind: 'like', eventId: '$l' });
+
+    const unread = markChannelReads(client([]), [chat, inPost, like]);
+    expect(unread.map((i) => isUnread(i, 0))).toEqual([true, true, true]);
+
+    const read = markChannelReads(client(['$m', '$p']), [chat, inPost, like]);
+    // The post mention has no read receipt to go by, even if its event ID matched one.
+    expect(read.map((i) => isUnread(i, 0))).toEqual([false, true, true]);
+  });
+
+  it('keeps the same array when nothing changed, and counts only what’s newer than you last looked', () => {
+    const items = [item({})];
+    expect(markChannelReads(client([]), items)).toBe(items);
+    expect(isUnread(item({ ts: 100 }), 100)).toBe(false);
+    expect(isUnread(item({ ts: 101 }), 100)).toBe(true);
+  });
+
+  it('a room it can’t see leaves it counting', () => {
+    expect(isUnread(markChannelReads(client(['$m']), [item({ roomId: '!gone' })])[0], 0)).toBe(true);
   });
 });

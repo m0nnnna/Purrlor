@@ -6,6 +6,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   ACTIVITY_SEEN_ACCOUNT_DATA,
   createActivityReader,
+  markChannelReads,
   isActivityEventType,
   ownFeedRoomIds,
   readActivitySeen,
@@ -53,6 +54,16 @@ export function ActivityWatcher() {
     setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
     void load();
 
+    // Reading a mention in its channel clears it here: re-check the chat mentions when a read
+    // receipt of yours arrives, without fetching anything.
+    const onReceipt = (_event: MatrixEvent, room: Room) => {
+      setActivity((prev) => {
+        if (!prev.items.some((item) => item.roomId === room.roomId && item.kind === 'mention' && !item.postId)) return prev;
+        const items = markChannelReads(mx, prev.items);
+        return items === prev.items ? prev : { ...prev, items };
+      });
+    };
+
     const onTimeline = (event: MatrixEvent, room: Room | undefined, toStart: boolean | undefined) => {
       if (toStart || !room || event.getSender() === mx.getUserId()) return;
       // A deleted mention, anywhere, leaves the list.
@@ -74,12 +85,14 @@ export function ActivityWatcher() {
     }, RELOAD_EVERY_MS);
 
     mx.on(RoomEvent.Timeline, onTimeline);
+    mx.on(RoomEvent.Receipt, onReceipt);
     mx.on(ClientEvent.AccountData, onAccountData);
     return () => {
       cancelled = true;
       clearTimeout(timer);
       clearInterval(interval);
       mx.removeListener(RoomEvent.Timeline, onTimeline);
+      mx.removeListener(RoomEvent.Receipt, onReceipt);
       mx.removeListener(ClientEvent.AccountData, onAccountData);
     };
   }, [mx, setActivity]);
