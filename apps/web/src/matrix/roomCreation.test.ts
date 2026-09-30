@@ -28,6 +28,23 @@ function joinRuleOf(opts: ICreateRoomOpts) {
 }
 
 describe('createRoom', () => {
+  it('encrypts a room from its first event when asked, and not otherwise', () => {
+    const { mx, createRoomFn } = fakeClient();
+    void createRoom(mx, { name: 'Private', isPublic: false, encrypted: true });
+    void createRoom(mx, { name: 'Plain', isPublic: false });
+    const encryptionOf = (call: number) =>
+      (createRoomFn.mock.calls[call][0] as ICreateRoomOpts).initial_state?.find((e) => e.type === EventType.RoomEncryption)?.content;
+    expect(encryptionOf(0)).toEqual({ algorithm: 'm.megolm.v1.aes-sha2' });
+    expect(encryptionOf(1)).toBeUndefined();
+  });
+
+  it('never encrypts a Space, which holds no messages', () => {
+    const { mx, createRoomFn } = fakeClient();
+    void createRoom(mx, { name: 'Hub', isPublic: false, isSpace: true, encrypted: true });
+    const opts = createRoomFn.mock.calls[0][0] as ICreateRoomOpts;
+    expect(opts.initial_state?.some((e) => e.type === EventType.RoomEncryption)).toBe(false);
+  });
+
   it('publishes to the directory (visibility: public) when isPublic is set, not just the join rule', () => {
     const { mx, createRoomFn } = fakeClient();
     void createRoom(mx, { name: 'Open Room', isPublic: true });

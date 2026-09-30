@@ -1,4 +1,5 @@
 import { EventType, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import { isEncryptedRoom } from './encryption';
 import { canSendStateEvent, userPowerLevel } from './permissions';
 import { readVoiceServerConfig } from './voice';
 
@@ -29,10 +30,6 @@ export function listWebhooks(channel: Room): Webhook[] {
       createdAt: event.getTs(),
     }))
     .sort((a, b) => a.createdAt - b.createdAt);
-}
-
-export function isEncryptedRoom(room: Room): boolean {
-  return !!room.currentState.getStateEvents(EventType.RoomEncryption, '');
 }
 
 /** Webhooks need somewhere to go (the Space's voice server) and a channel they can post in. */

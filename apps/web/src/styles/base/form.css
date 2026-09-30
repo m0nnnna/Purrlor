@@ -89,6 +89,17 @@
   font-size: var(--nu-font-size-xs);
 }
 
+/* Something a setting does that can't be taken back: said before Save, not after. */
+.nu-field__warning {
+  display: block;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border: 1px solid var(--nu-color-danger);
+  border-radius: var(--nu-radius-md);
+  background: color-mix(in srgb, var(--nu-color-danger) 12%, transparent);
+  color: var(--nu-color-text-primary);
+  font-size: var(--nu-font-size-sm);
+}
+
 .nu-form-actions {
   display: flex;
   justify-content: flex-end;

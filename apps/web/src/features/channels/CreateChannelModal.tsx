@@ -21,6 +21,9 @@ export function CreateChannelModal({ space, onClose, onCreated }: CreateChannelM
   const [topic, setTopic] = useState('');
   const [channelType, setChannelType] = useState<ChannelType>('text');
   const [isPublic, setIsPublic] = useState(false);
+  // Follows "Public" (on for a private channel, off for a public one) until chosen by hand.
+  const [encryptedChoice, setEncryptedChoice] = useState<boolean>();
+  const encrypted = encryptedChoice ?? !isPublic;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -44,6 +47,7 @@ export function CreateChannelModal({ space, onClose, onCreated }: CreateChannelM
         isPublic,
         parentSpace: space,
         channelType,
+        encrypted,
         // A voice channel the token server's bot isn't in can't authorize anyone into the call,
         // and a Space-level invite never reaches its channels — so invite it here, at creation,
         // rather than leaving every new voice channel dead until someone works that out.
@@ -116,9 +120,24 @@ export function CreateChannelModal({ space, onClose, onCreated }: CreateChannelM
           <textarea className="nu-field__textarea" value={topic} onChange={(e) => setTopic(e.target.value)} />
         </label>
         <label className="nu-field__checkbox-row">
-          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+          <input type="checkbox" data-nu-role="create-channel-public" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
           Public — anyone can find and join
         </label>
+        <label className="nu-field__checkbox-row">
+          <input
+            type="checkbox"
+            data-nu-role="create-channel-encrypted"
+            checked={encrypted}
+            onChange={(e) => setEncryptedChoice(e.target.checked)}
+          />
+          End-to-end encrypted — only members’ devices can read it
+        </label>
+        {encrypted && (
+          <span className="nu-field__hint" data-nu-role="create-channel-encrypted-hint">
+            {isPublic ? 'A public channel anyone can join gains little from encryption. ' : ''}
+            This can’t be turned off later, and webhooks can’t post in an encrypted channel.
+          </span>
+        )}
         {error && (
           <p className="nu-field__error" data-nu-role="create-channel-error">
             {error}

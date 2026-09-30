@@ -12,6 +12,8 @@ import {
   type Visibility,
 } from '../../matrix/channelPermissions';
 import { canSendStateEvent } from '../../matrix/permissions';
+import { canEnableEncryption, enableEncryption, isEncryptedRoom } from '../../matrix/encryption';
+import { listWebhooks } from '../../matrix/webhooks';
 
 const SLOWMODE_CHOICES: { seconds: number; label: string }[] = [
   { seconds: 0, label: 'Off' },
@@ -25,8 +27,9 @@ const SLOWMODE_CHOICES: { seconds: number; label: string }[] = [
 ];
 
 /**
- * A channel's permissions (matrix/channelPermissions.ts): who can post, who can see it, and
- * slowmode. Each setting is only offered to someone who can change it in that channel.
+ * A channel's permissions (matrix/channelPermissions.ts): who can post, who can see it, slowmode,
+ * and turning on end-to-end encryption (matrix/encryption.ts), which can't be undone. Each setting
+ * is only offered to someone who can change it in that channel.
  */
 export function ChannelPermissionsModal({ channel, space, onClose }: { channel: Room; space: Room; onClose: () => void }) {
   const mx = useMatrixClient();
@@ -35,6 +38,9 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const [posting, setPosting] = useState<PostingMode>(initial.posting);
   const [visibility, setVisibilityChoice] = useState<Visibility>(initial.visibility);
   const [slowmode, setSlowmodeChoice] = useState(initial.slowmodeSeconds);
+  const alreadyEncrypted = isEncryptedRoom(channel);
+  const [encrypt, setEncrypt] = useState(false);
+  const webhookCount = listWebhooks(channel).length;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -42,6 +48,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const canChangeVisibility =
     canSendStateEvent(channel, myUserId, EventType.RoomJoinRules) && canSendStateEvent(channel, myUserId, CHANNEL_SETTINGS_EVENT);
   const canChangeSlowmode = canSendStateEvent(channel, myUserId, CHANNEL_SETTINGS_EVENT);
+  const canEncrypt = canEnableEncryption(channel, myUserId);
   // A value that isn't one of the choices (set elsewhere) still shows, rather than reading "Off".
   const slowmodeChoices = SLOWMODE_CHOICES.some((c) => c.seconds === slowmode)
     ? SLOWMODE_CHOICES
@@ -55,6 +62,8 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
       if (posting !== initial.posting) await setPostingMode(mx, channel, posting);
       if (slowmode !== initial.slowmodeSeconds) await setSlowmode(mx, channel, slowmode);
       if (visibility !== initial.visibility) await setVisibility(mx, channel, space, visibility);
+      // Last, so a failure above doesn't leave the one change that can't be undone half-made.
+      if (encrypt && !alreadyEncrypted) await enableEncryption(mx, channel);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t save the channel’s permissions');
@@ -117,6 +126,37 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
             apps don’t know about it.
           </span>
         </label>
+        <div className="nu-field" data-nu-role="channel-permissions-encryption">
+          Encryption
+          {alreadyEncrypted ? (
+            <span className="nu-field__hint" data-nu-role="channel-permissions-encrypted">
+              End-to-end encrypted: only members’ devices can read this channel.
+            </span>
+          ) : (
+            <>
+              <label className="nu-field__checkbox-row">
+                <input
+                  type="checkbox"
+                  data-nu-role="channel-permissions-encrypt"
+                  checked={encrypt}
+                  disabled={!canEncrypt}
+                  onChange={(e) => setEncrypt(e.target.checked)}
+                />
+                Turn on end-to-end encryption
+              </label>
+              {encrypt ? (
+                <span className="nu-field__warning" data-nu-role="channel-permissions-encrypt-warning" role="alert">
+                  <strong>This can’t be undone.</strong> Matrix has no way to turn encryption off again. Messages sent from now on
+                  can only be read on members’ devices; earlier ones stay as they are.
+                  {webhookCount > 0 &&
+                    ` This channel’s ${webhookCount === 1 ? 'webhook' : `${webhookCount} webhooks`} will stop working: they can’t post in an encrypted channel.`}
+                </span>
+              ) : (
+                <span className="nu-field__hint">Off. Messages here are readable by the servers that carry them.</span>
+              )}
+            </>
+          )}
+        </div>
         {error && (
           <p className="nu-field__error" data-nu-role="channel-permissions-error">
             {error}

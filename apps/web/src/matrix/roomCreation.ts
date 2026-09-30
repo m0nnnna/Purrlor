@@ -11,6 +11,7 @@ import {
   type Room,
 } from 'matrix-js-sdk';
 import { channelTypeInitialStateEvent, SPACE_CHILD_CHANNEL_TYPE_KEY, type ChannelType } from './channelType';
+import { ENCRYPTION_INITIAL_STATE } from './encryption';
 
 export type CreateRoomOptions = {
   name: string;
@@ -29,6 +30,9 @@ export type CreateRoomOptions = {
    * makes that atomic with creation instead of a manual step nobody knows to take.
    */
   invite?: string[];
+  /** End-to-end encrypted from its first event (encryption.ts). Ignored for a Space, which holds
+   *  no messages. */
+  encrypted?: boolean;
 };
 
 type JoinRuleContent = { join_rule: JoinRule; allow?: { type: RestrictedAllowType; room_id: string }[] };
@@ -87,6 +91,10 @@ export async function createRoom(mx: MatrixClient, options: CreateRoomOptions): 
 
     if (!options.isSpace && options.channelType === 'voice') {
       initialState.push(channelTypeInitialStateEvent('voice'));
+    }
+
+    if (!options.isSpace && options.encrypted) {
+      initialState.push(ENCRYPTION_INITIAL_STATE);
     }
 
     return {

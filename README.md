@@ -260,6 +260,10 @@ set a nickname scoped to just that Space, independent of your global display nam
 ### Security & Encryption
 - End-to-end encryption via `matrix-js-sdk`'s Rust crypto engine, with cross-signing, secret
   storage, and key backup set up automatically at registration.
+- New DMs are end-to-end encrypted, and so are new private channels unless you untick
+  "End-to-end encrypted" when creating one (public channels start unencrypted, since anyone can
+  join them). An existing channel's "⋯" → Permissions can turn encryption on; Matrix can't turn
+  it off again, which it says before you save. Webhooks can't post in encrypted channels.
 - Recovery-key restore flow for new sessions that can't yet decrypt history (standard recovery
   key or a custom passphrase).
 - Interactive emoji (SAS) device verification, both for your own devices and for verifying
