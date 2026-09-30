@@ -22,3 +22,8 @@
   flex-direction: column;
   gap: var(--nu-space-2);
 }
+
+.nu-webhooks__item-text {
+  flex: 1;
+  min-width: 0;
+}

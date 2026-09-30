@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { createWebhook, deleteWebhook, listWebhooks, WEBHOOK_EVENT, webhookService } from '../../matrix/webhooks';
+import { createWebhook, deleteWebhook, listWebhooks, setWebhookAvatar, WEBHOOK_EVENT, webhookService } from '../../matrix/webhooks';
+import { Avatar } from '../../components/Avatar';
 import './WebhooksModal.css';
 
 /**
@@ -13,6 +14,8 @@ export function WebhooksModal({ channel, space, onClose }: { channel: Room; spac
   const mx = useMatrixClient();
   const [, setVersion] = useState(0);
   const [name, setName] = useState('');
+  const [newAvatar, setNewAvatar] = useState<File>();
+  const [avatarBusy, setAvatarBusy] = useState<string>();
   const [creating, setCreating] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string>();
   const [copied, setCopied] = useState(false);
@@ -37,13 +40,26 @@ export function WebhooksModal({ channel, space, onClose }: { channel: Room; spac
     setCreating(true);
     setError(undefined);
     try {
-      setCreatedUrl(await createWebhook(mx, channel, space, name));
+      setCreatedUrl(await createWebhook(mx, channel, space, name, newAvatar));
       setName('');
+      setNewAvatar(undefined);
       setCopied(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t create the webhook');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const changeAvatar = async (webhookId: string, file: File | undefined) => {
+    setAvatarBusy(webhookId);
+    setError(undefined);
+    try {
+      await setWebhookAvatar(mx, channel, webhookId, file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t change the avatar');
+    } finally {
+      setAvatarBusy(undefined);
     }
   };
 
@@ -83,10 +99,36 @@ export function WebhooksModal({ channel, space, onClose }: { channel: Room; spac
           <ul className="nu-webhooks__list" data-nu-role="webhook-list">
             {webhooks.map((webhook) => (
               <li key={webhook.id} className="nu-webhooks__item" data-nu-role="webhook">
-                <span>
+                <Avatar name={webhook.name} mxcUrl={webhook.avatarUrl} size={32} />
+                <span className="nu-webhooks__item-text">
                   <strong>{webhook.name}</strong>
                   <span className="nu-field__hint"> · made by {space.getMember(webhook.createdBy)?.name ?? webhook.createdBy}</span>
                 </span>
+                <label className="nu-button nu-button--secondary nu-file-picker" data-nu-role="webhook-avatar-picker">
+                  {avatarBusy === webhook.id ? 'Uploading…' : webhook.avatarUrl ? 'Change avatar' : 'Add avatar'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    data-nu-role="webhook-avatar"
+                    disabled={avatarBusy === webhook.id}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void changeAvatar(webhook.id, file);
+                    }}
+                  />
+                </label>
+                {webhook.avatarUrl && (
+                  <button
+                    type="button"
+                    className="nu-button nu-button--secondary"
+                    data-nu-role="webhook-avatar-remove"
+                    disabled={avatarBusy === webhook.id}
+                    onClick={() => void changeAvatar(webhook.id, undefined)}
+                  >
+                    Remove avatar
+                  </button>
+                )}
                 <button
                   type="button"
                   className="nu-button nu-button--danger"
@@ -111,6 +153,10 @@ export function WebhooksModal({ channel, space, onClose }: { channel: Room; spac
                 placeholder="GitHub, Deploys, Uptime…"
                 onChange={(e) => setName(e.target.value)}
               />
+            </label>
+            <label className="nu-button nu-button--secondary nu-file-picker">
+              {newAvatar ? newAvatar.name : 'Choose an avatar (optional)'}
+              <input type="file" accept="image/*" data-nu-role="webhook-new-avatar" onChange={(e) => setNewAvatar(e.target.files?.[0])} />
             </label>
             <div className="nu-form-actions">
               <button type="submit" className="nu-button nu-button--primary" data-nu-role="webhook-create" disabled={creating || !name.trim()}>
