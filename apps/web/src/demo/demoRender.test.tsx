@@ -12,6 +12,7 @@ import { SpaceReportsSettings } from '../features/servers/SpaceReportsSettings';
 import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
+import { AccountSettingsModal } from '../app/AccountSettingsModal';
 import { createDemoClient } from './demoClient';
 import { DEMO_OUTSIDE_SPACE, DEMO_ROOM_IDS } from './demoWorld';
 
@@ -340,5 +341,16 @@ describe('The sample Space’s moderation, calendar and webhook', () => {
     const general = createDemoClient().getRoom(DEMO_ROOM_IDS.general)!;
     expect(general.currentState.getStateEvents('xyz.nekous.webhook')).toHaveLength(1);
     expect(general.getLiveTimeline().getEvents().some((e) => e.getContent().body === 'Build 42 passed ✅')).toBe(true);
+  });
+});
+
+describe('Account Settings against the demo world', () => {
+  it('opens, and keeps a keyword the demo can add and remove', async () => {
+    renderWithDemo(<AccountSettingsModal onClose={() => undefined} />);
+    fireEvent.change(await screen.findByPlaceholderText('A word or phrase'), { target: { value: 'movie night' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('movie night')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove movie night' }));
+    await waitFor(() => expect(screen.queryByText('movie night')).not.toBeInTheDocument());
   });
 });

@@ -87,6 +87,13 @@ export function createDemoClient(): MatrixClient {
 
   const client = emitter as unknown as MatrixClient & Record<string, unknown>;
 
+  // Push rules: none to start, kept in memory. Enough for what reads and changes them (keyword
+  // notifications, notification levels); without them, Account Settings crashed in the demo.
+  type DemoRule = { rule_id: string; default: boolean; enabled: boolean; [key: string]: unknown };
+  const pushRules: { global: Record<string, DemoRule[]> } = {
+    global: { override: [], content: [], room: [], sender: [], underride: [] },
+  };
+
   Object.assign(client, {
     // --- identity -------------------------------------------------------------------------
     getUserId: () => DEMO_USER_ID,
@@ -324,6 +331,23 @@ export function createDemoClient(): MatrixClient {
     deleteDevice: async () => {},
     setPusher: async () => {},
     removePusher: async () => {},
+    pushRules,
+    getPushRules: async () => structuredClone(pushRules),
+    addPushRule: async (_scope: string, kind: string, ruleId: string, body: Record<string, unknown>) => {
+      const list = (pushRules.global[kind] ??= []);
+      const rule = { ...body, rule_id: ruleId, default: false, enabled: true };
+      const at = list.findIndex((r) => r.rule_id === ruleId);
+      if (at >= 0) list[at] = rule;
+      else list.unshift(rule); // a new rule goes first, as on a homeserver
+      return {};
+    },
+    deletePushRule: async (_scope: string, kind: string, ruleId: string) => {
+      const list = pushRules.global[kind] ?? [];
+      const at = list.findIndex((r) => r.rule_id === ruleId);
+      if (at < 0) throw Object.assign(new Error('Push rule not found'), { errcode: 'M_NOT_FOUND', httpStatus: 404 });
+      list.splice(at, 1);
+      return {};
+    },
     getOpenIdToken: async () => ({
       access_token: 'demo-openid-token',
       token_type: 'Bearer',
