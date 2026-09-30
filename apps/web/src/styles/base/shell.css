@@ -13,8 +13,13 @@
  * up scrolling instead of just the pane that should. Same story one level down for the flex
  * children inside each pane that carry the actual overflow-y: auto (see ChannelList.css,
  * MainPane.css, MemberList.css) — both levels need min-height: 0 for internal scroll to work.
+ *
+ * In a voice call the panes sit one level down, inside LiveKitRoom's `display: contents` wrapper
+ * (ActiveVoiceCall.tsx): still grid items, but no longer children of .nu-shell, so they're named
+ * here too. Without it, joining voice made the whole page scroll, side bars and all.
  */
-.nu-shell > * {
+.nu-shell > *,
+.nu-shell > [data-nu-role='voice-session'] > * {
   min-height: 0;
 }
 
