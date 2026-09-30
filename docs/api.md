@@ -378,6 +378,7 @@ Un-liking redacts the reaction. One like is counted per person.
 | `xyz.nekous.private_posts` | `{ "items": [ { "id", "spaceId", "body", "createdAt", "attachments"? } ] }`. "Only me" posts; never in any room. |
 | `xyz.nekous.follows` | `{ "users": ["@…"], "spaces": ["!…"] }`. Never shown to anyone else. |
 | `xyz.nekous.post_notifications` | `{ "comments": true, "likes": true }`. Both default to on. |
+| `xyz.nekous.notification_settings` | `{ "spaces": { "<spaceId>": "<level>" }, "rooms": { "<roomId>": "<level>" } }`, level `all`, `mentions` or `nothing`. A room's own level beats its Space's. See [notification-settings.md](notification-settings.md). |
 | `xyz.nekous.push_gateway` | `{ "url": "https://push.DOMAIN" }` |
 | `xyz.nekous.saved_messages` | `{ "items": [ { "roomId", "eventId", "savedAt" } ] }` |
 | `xyz.nekous.mention_inbox` | `{ "items": [ { "roomId", "eventId", "mentionedAt" } ] }` |
@@ -419,6 +420,21 @@ PUT /_matrix/client/v3/pushrules/global/override/xyz.nekous.feed_like.<roomId>
 
 User rules outrank the server default `.m.rule.reaction`, which otherwise mutes reactions. Reply
 notifications need no custom rule; they use the built-in mention rule (5.3).
+
+For `xyz.nekous.notification_settings`, each room at "Only @mentions" or "Nothing" (its own level,
+or its Space's) gets one rule named after the room, the same rules Element and Cinny write for
+their per-room settings. "All messages" means neither rule.
+
+```json
+// Only @mentions: plain messages stop here; mention rules are overrides, so they run first
+PUT /_matrix/client/v3/pushrules/global/room/<roomId>
+{ "actions": [] }
+
+// Nothing: runs before the mention rules too
+PUT /_matrix/client/v3/pushrules/global/override/<roomId>
+{ "conditions": [ { "kind": "event_match", "key": "room_id", "pattern": "<roomId>" } ],
+  "actions": [] }
+```
 
 ### 5.7 Pusher
 

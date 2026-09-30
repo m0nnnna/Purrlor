@@ -8,7 +8,9 @@ See [`docs/api.md`](docs/api.md) for the API reference (the services' HTTP APIs 
 extension Purrlor defines), [`docs/theming.md`](docs/theming.md) for the CSS theming contract,
 [`docs/voice-architecture.md`](docs/voice-architecture.md) for how voice/video calls work under the
 hood, [`docs/posts.md`](docs/posts.md) for posts, comments and the global feed,
-[`docs/push-notifications.md`](docs/push-notifications.md) for background push, and
+[`docs/push-notifications.md`](docs/push-notifications.md) for background push,
+[`docs/notification-settings.md`](docs/notification-settings.md) for per-channel and per-Space
+notification levels, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old

@@ -346,7 +346,7 @@ sound, likes notify quietly. User rules outrank server defaults, and each is sco
 `room_id`, so they cover only your own feeds, not every feed you've joined to comment on.
 
 Because they're real push rules, the homeserver applies them itself: in-app notifications and
-background push both follow. `PostNotificationRules` (mounted in AppShell) keeps them in step with
+background push both follow. `NotificationRules` (mounted in AppShell) keeps them in step with
 the feeds you own and your settings (**Account Settings → Posts**), including from another device,
 since both live in account data. It reads rules from the client's synced ruleset, because
 Continuwuity doesn't implement listing one rule kind. The push gateway words them as "Commented on
