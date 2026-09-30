@@ -48,15 +48,31 @@ the whole queue.
 The queue only counts reports and resolutions sent by someone who is a moderator in the review
 room, so someone demoted but not yet removed can't add to or change it.
 
-### Not end-to-end encrypted
+### Encrypted in transit
 
-The to-device messages are plain. matrix-js-sdk can only Olm-encrypt to people whose devices it
-tracks, which means people you share an encrypted room with, and a reporter usually shares none
-with the moderators. The servers carrying a report can therefore read it. That tells them no more
-than the homeserver report already does: which message was reported, and why. The quoted text
-(`excerpt`, kept in case the message is edited or deleted) is only included for **unencrypted**
-rooms, so an encrypted channel's text never reaches the review room, which isn't encrypted itself
-so that new moderators can read the queue.
+The to-device messages are Olm-encrypted to each of the moderators' devices
+(`sendEncryptedToDevice` in `reports.ts`), so the servers carrying a report can't read it.
+
+matrix-js-sdk only encrypts to devices it tracks, which it does for members of encrypted rooms
+you're in, and a reporter usually shares none with the moderators. So the reporter's client adds
+the moderators to its tracked users and fetches their device keys first: the same two calls the
+SDK makes when someone joins an encrypted room (`OlmMachine.updateTrackedUsers`, then processing
+the outgoing key query). Those are internals of the SDK's Rust crypto, so they're checked for, not
+assumed. If they're missing (an SDK that renamed them, or a client without encryption), or a
+moderator has no device with keys, that moderator gets the report plain, as before, rather than
+not at all.
+
+What this doesn't change:
+
+- The **review room** isn't encrypted, so that a moderator who joins later can read the queue.
+  Once a moderator's client files a report there, the moderators' homeserver can read it.
+- The **homeserver report** (the standard `/report` call, which reaches the server's admins) still
+  goes too, with the reason.
+- The quoted text (`excerpt`, kept in case the message is edited or deleted) is still only
+  included for **unencrypted** rooms, so an encrypted channel's text never reaches the review room.
+
+So the gain is against every *other* server a report passes through: on a federated Space, the
+reporter's own homeserver and any in between see only ciphertext.
 
 ## Automod
 
