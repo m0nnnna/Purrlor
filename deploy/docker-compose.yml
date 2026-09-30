@@ -100,12 +100,13 @@ services:
       - MATRIX_HOMESERVER_URL=${MATRIX_HOMESERVER_URL}
       # Bot login: either MATRIX_BOT_ACCESS_TOKEN + MATRIX_BOT_USER_ID, or MATRIX_BOT_USERNAME +
       # MATRIX_BOT_PASSWORD (see services/token-server/src/membership.ts) — set whichever pair
-      # you're using in .env; the unset pair's vars are just empty strings here, which the token
-      # server treats as "not provided" and falls through to the other pair.
-      - MATRIX_BOT_USER_ID=${MATRIX_BOT_USER_ID}
-      - MATRIX_BOT_ACCESS_TOKEN=${MATRIX_BOT_ACCESS_TOKEN}
-      - MATRIX_BOT_USERNAME=${MATRIX_BOT_USERNAME}
-      - MATRIX_BOT_PASSWORD=${MATRIX_BOT_PASSWORD}
+      # you're using in .env; the unset pair's vars are just empty strings here (defaulted, so
+      # compose doesn't warn about them), which the token server treats as "not provided" and
+      # falls through to the other pair.
+      - MATRIX_BOT_USER_ID=${MATRIX_BOT_USER_ID:-}
+      - MATRIX_BOT_ACCESS_TOKEN=${MATRIX_BOT_ACCESS_TOKEN:-}
+      - MATRIX_BOT_USERNAME=${MATRIX_BOT_USERNAME:-}
+      - MATRIX_BOT_PASSWORD=${MATRIX_BOT_PASSWORD:-}
       - VOICE_MODERATOR_POWER_LEVEL=${VOICE_MODERATOR_POWER_LEVEL:-50}
       - VOICE_ALLOWED_SPACES=${VOICE_ALLOWED_SPACES:-}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}

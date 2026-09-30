@@ -134,17 +134,29 @@ cmd_info() {
   if [ -f .install-summary ]; then cat .install-summary; else warn "No saved summary — this install predates it. Settings are in $REPO_ROOT/.env."; fi
 }
 
+# cmd_status [grace seconds]: what's running, and whether each part answers. Right after containers
+# are recreated (update), a service can still be starting — Node takes a few seconds to listen —
+# so the grace period keeps asking until then rather than reporting a FAIL that isn't one.
 cmd_status() {
+  local grace="${1:-0}"
   compose ps
   echo
-  local ok=0 a
+  local ok=0 a deadline=$((SECONDS + grace))
   a="$(env_get BIND_ADDR)"; a="${a:-127.0.0.1}"
-  curl -fsS -m 5 http://$a:8080/ >/dev/null 2>&1 && echo "  ok   web" || { echo "  FAIL web"; ok=1; }
-  curl -fsS -m 5 http://$a:3001/health >/dev/null 2>&1 && echo "  ok   token-server" || { echo "  FAIL token-server"; ok=1; }
-  curl -fsS -m 5 http://$a:3002/health >/dev/null 2>&1 && echo "  ok   push-gateway" || { echo "  FAIL push-gateway"; ok=1; }
-  curl -fsS -m 5 http://$a:7880/ >/dev/null 2>&1 && echo "  ok   livekit" || { echo "  FAIL livekit"; ok=1; }
+  [ "$grace" -gt 0 ] && echo "  (giving everything up to ${grace}s to start answering)"
+  # answers URL: whether it responds, asking again every 2s until the grace period is over.
+  answers() {
+    until curl -fsS -m 5 "$1" >/dev/null 2>&1; do
+      [ "$SECONDS" -lt "$deadline" ] || return 1
+      sleep 2
+    done
+  }
+  answers http://$a:8080/ && echo "  ok   web" || { echo "  FAIL web"; ok=1; }
+  answers http://$a:3001/health && echo "  ok   token-server" || { echo "  FAIL token-server"; ok=1; }
+  answers http://$a:3002/health && echo "  ok   push-gateway" || { echo "  FAIL push-gateway"; ok=1; }
+  answers http://$a:7880/ && echo "  ok   livekit" || { echo "  FAIL livekit"; ok=1; }
   if has_matrix; then
-    curl -fsS -m 5 http://$a:8008/_matrix/client/versions >/dev/null 2>&1 && echo "  ok   matrix" || { echo "  FAIL matrix"; ok=1; }
+    answers http://$a:8008/_matrix/client/versions && echo "  ok   matrix" || { echo "  FAIL matrix"; ok=1; }
   fi
   [ "$ok" -eq 0 ] || echo "
 Something isn't answering — 'purrlor logs <service>' shows why."
@@ -302,7 +314,7 @@ cmd_update_apply() {
   say "Removing images the update left behind"
   docker image prune -f >/dev/null
   echo
-  cmd_status
+  cmd_status 60
 }
 
 cmd_backup() {
