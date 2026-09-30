@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
-import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../app/state/selection';
+import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
 import { ChannelList } from '../features/channels/ChannelList';
 import { FeedView } from '../features/feed/FeedView';
 import { GlobalFeedView } from '../features/feed/GlobalFeedView';
 import { ProfileView } from '../features/feed/ProfileView';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
+import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { createDemoClient } from './demoClient';
 import { DEMO_OUTSIDE_SPACE, DEMO_ROOM_IDS } from './demoWorld';
 
@@ -47,16 +48,18 @@ afterEach(cleanup);
 
 function renderWithDemo(
   ui: React.ReactElement,
-  selected: { spaceId?: string | null; roomId?: string | null; globalFeed?: boolean } = {}
+  selected: { spaceId?: string | null; roomId?: string | null; globalFeed?: boolean; socialView?: SocialView } = {}
 ) {
   const mx = createDemoClient();
   const store = createStore();
   if (selected.spaceId !== undefined) store.set(selectedSpaceIdAtom, selected.spaceId);
   if (selected.roomId !== undefined) store.set(selectedRoomIdAtom, selected.roomId);
   if (selected.globalFeed) store.set(globalFeedOpenAtom, true);
+  if (selected.socialView) store.set(socialViewAtom, selected.socialView);
 
   return {
     mx,
+    store,
     ...render(
       <JotaiProvider store={store}>
         <MatrixClientContext.Provider value={mx}>{ui}</MatrixClientContext.Provider>
@@ -241,5 +244,39 @@ describe('ProfileView against the demo world', () => {
     await waitFor(() => expect(screen.queryByText('Loading posts…')).not.toBeInTheDocument());
     expect(screen.queryByText(/movie night friday/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Follow' })).toBeInTheDocument();
+  });
+});
+
+describe('The social side against the demo world', () => {
+  it('lists its own places in the channel column instead of your DMs', () => {
+    renderWithDemo(<ChannelList />, { spaceId: null, globalFeed: true });
+
+    for (const name of ['Everyone', 'Following', 'Notifications', 'Your profile', 'Cat Café', 'Pixel Arcade']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    expect(screen.queryByText('Direct messages')).not.toBeInTheDocument();
+  });
+
+  it('shows likes, comments and chat mentions in one Notifications list, with a Mentions filter', async () => {
+    const { store } = renderWithDemo(
+      <>
+        <ActivityWatcher />
+        <GlobalFeedView />
+      </>,
+      { globalFeed: true, socialView: 'notifications' }
+    );
+
+    const rows = () => screen.getAllByRole('button').filter((el) => el.dataset.nuRole === 'activity-row');
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(rows().map((row) => row.dataset.nuKind)).toEqual(['comment', 'like', 'mention']);
+    expect(rows()[2].textContent).toContain('mentioned you in #general');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Mentions' }));
+    expect(rows().map((row) => row.dataset.nuKind)).toEqual(['mention']);
+
+    // A chat mention opens at its message in its channel.
+    fireEvent.click(rows()[0]);
+    expect(store.get(globalFeedOpenAtom)).toBe(false);
+    expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general);
   });
 });

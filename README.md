@@ -49,9 +49,11 @@ screen (or add `?demo` to the URL) — see [Demo mode](#demo-mode).
 ### Layout
 - **Server rail** (far left) — a column of Space icons, like Discord servers. The pinned icon at
   the top is Home (Direct Messages and any room not organized under a Space); below it are your
-  joined Spaces, then Mentions, Invites, and Discover.
+  joined Spaces, then Notifications, Invites, and Discover.
 - **Channel list** — the selected Space's channels, grouped into categories, with voice channels
-  shown separately from text channels.
+  shown separately from text channels. On the social side (the globe or the bell) it lists the
+  social side's own places instead: Everyone, Following, Notifications, your profile, and each of
+  your Spaces' Posts.
 - **Main pane** — the selected channel's timeline (or a voice channel's call panel).
 - **Member list** (far right, collapsible on mobile) — who's in the current channel/Space.
 - Below ~900px wide, this collapses into one screen at a time instead of four columns side by side.
@@ -78,8 +80,8 @@ with syntax highlighting, `@mentions` (autocompleted), and slash commands (`/me`
 `/topic`, `/invite`, `/kick`, `/ban`, `/unban`, `/leave`, `/shrug`). Drag a file in or paste an
 image to upload it. Hover a message for reactions, reply, edit, forward, pin, and save-for-later;
 right-click (or the "..." menu) for more. The 🔍 icon searches the current channel or everywhere;
-the @ icon in the server rail opens your Mention Inbox — everywhere you were actually @mentioned,
-so you don't have to scroll back to find it.
+the 🔔 in the server rail opens Notifications, which includes everywhere you were actually
+@mentioned, so you don't have to scroll back to find it.
 
 ### Voice & video
 Click a voice channel to join instantly — no separate "call" step. The call bar stays active even
@@ -104,8 +106,10 @@ specific comment, and **Repost** (instantly, or **Quote** it with your own words
 has the rest: **Report**, **See who liked**, and on your own posts **Edit**, **Pin to profile** and
 **Delete**. A Space's moderators can remove any post or comment in that Space. `@mention` people
 and use `#tags`; a tag opens every post with it. A timeline shows a post's newest 3 comments; tap a
-post's time or text for its own page with the whole thread. The global feed's **Notifications** tab
-shows who liked, commented on, reposted or quoted your posts, followed you, or mentioned you.
+post's time or text for its own page with the whole thread. **Notifications** (the 🔔 on the
+server rail, with a count of what's new) is one list of everything about you: who liked, commented
+on, reposted or quoted your posts, followed you, or mentioned you — in a post, a comment or a
+channel. Filter it to just **Mentions**; a chat mention opens at the message in its channel.
 Click any name for their profile: posts, media, who they follow and who follows them.
 
 A Space's posts reach the global feed only when the Space is **listed in Discover**: Space
@@ -145,8 +149,9 @@ set a nickname scoped to just that Space, independent of your global display nam
 - Pinned messages, read receipts, typing indicators, and unread/mention badges that clear
   correctly server-side.
 - Server-side message search (per-room or global) with jump-to-and-highlight on the result.
-- A dedicated Mention Inbox — every real `@mention` gets logged to a private list you can jump
-  back to later, independent of scrolling back through a busy channel.
+- Every real `@mention` is logged privately and shows in Notifications, alongside likes,
+  comments and follows, so you can jump back to it later without scrolling back through a busy
+  channel.
 - Slash commands: `/me`, `/shrug`, `/nick`, `/topic`, `/invite`, `/kick`, `/ban`, `/unban`, `/leave`.
 - Custom animated emotes and stickers via MSC2545 image packs (interoperable with Element/cinny/
   FluffyChat) — per-channel or space-wide, managed from a permission-gated picker.

@@ -41,6 +41,7 @@ import { UserPanel } from '../account/UserPanel';
 import { AddExistingChannelModal } from './AddExistingChannelModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { SpaceCard } from './SpaceCard';
+import { SocialNav } from '../feed/SocialNav';
 import { StartDmModal } from './StartDmModal';
 import { SpaceSettingsModal } from '../servers/SpaceSettingsModal';
 import { ChannelPermissionsModal } from './ChannelPermissionsModal';
@@ -445,14 +446,15 @@ const voiceDefaultedSpaces = new Set<string>();
 /**
  * Second column. Two modes, toggled by the server rail's pinned Home/DM icon
  * (selectedSpaceId === null): the Direct Messages list (1:1s and group chats alike — see
- * useSpacelessRooms), or the selected Space's channels.
+ * useSpacelessRooms), or the selected Space's channels. While the social side is open (the
+ * rail's globe or bell) it's the social side's own navigation instead (SocialNav).
  */
 export function ChannelList() {
   const mx = useMatrixClient();
   const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
   const [selectedRoomId, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const [spaceView, setSpaceView] = useAtom(selectedSpaceViewAtom);
-  const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
+  const [globalFeedOpen, setGlobalFeedOpen] = useAtom(globalFeedOpenAtom);
   const setProfileUserId = useSetAtom(profileUserIdAtom);
   const space = useRoom(selectedSpaceId);
   const newPosts = useHasNewPosts(space ?? null);
@@ -543,6 +545,18 @@ export function ChannelList() {
     removeRoomFromSpace(mx, selectedSpaceId, roomId).catch(console.error);
     if (selectedRoomId === roomId) setSelectedRoomId(null);
   };
+
+  // The social side has its own places to go; a Space's channels or your DMs aren't among them.
+  if (globalFeedOpen) {
+    return (
+      <aside className="nu-channel-list" data-nu-role="channel-list">
+        <SocialNav />
+        <NowPlayingCard />
+        <ActiveCallBar />
+        <UserPanel />
+      </aside>
+    );
+  }
 
   return (
     <aside className="nu-channel-list" data-nu-role="channel-list">

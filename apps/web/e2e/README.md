@@ -8,7 +8,7 @@ the same server.
 
 | Spec | What it covers |
 |---|---|
-| `messaging.spec.ts` | Sign in, send a message another user receives, see their reply arrive, react; the composer keeping keyboard focus (on opening a channel, after an emoji, after attaching a file) |
+| `messaging.spec.ts` | Sign in, send a message another user receives, see their reply arrive, react; the composer keeping keyboard focus (on opening a channel, after an emoji, after attaching a file); a channel mention reaching Notifications and opening at the message |
 | `posts.spec.ts` | Publish a post to a Space, which also creates your feed room |
 | `notifications.spec.ts` | Space and channel notification levels become the right push rules and back |
 | `channel-permissions.spec.ts` | Space moderators copied into channels, announcement channels (enforced by the server), moderators-only channels (members removed, hidden from the hierarchy, new moderators brought in), slowmode |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildActivity, type RawActivityEvent } from './activity';
+import { buildActivity, buildMentionActivity, type RawActivityEvent } from './activity';
 
 const ME = '@me:x';
 const POST = '$post';
@@ -63,5 +63,31 @@ describe('buildActivity', () => {
       ME
     );
     expect(rows.map((row) => row.senders)).toEqual([['@b:x', '@a:x'], ['@c:x']]);
+  });
+});
+
+describe('buildMentionActivity', () => {
+  it('turns chat, post and comment mentions into rows, and a comment answering you into a reply', () => {
+    const chat = { ...ev('m.room.message', '@a:x', 1, { body: 'hey @me' }), room_id: '!channel' };
+    const inPost = ev('xyz.nekous.post', '@b:x', 2, { body: 'with @me' });
+    const answer = comment('@c:x', 3, ME);
+    const rows = buildMentionActivity(
+      [{ event: chat }, { event: inPost, postId: inPost.event_id }, { event: answer, postId: POST }],
+      new Set(),
+      ME
+    );
+    expect(rows.map((row) => [row.kind, row.roomId, row.postId])).toEqual([
+      ['mention', '!channel', undefined],
+      ['mention', '!mine', inPost.event_id],
+      ['reply', '!mine', POST],
+    ]);
+  });
+
+  it('skips what your own rooms already showed, your own messages, and deleted ones', () => {
+    const shown = comment('@a:x', 1);
+    const mine = ev('m.room.message', ME, 2, { body: '@me' });
+    const deleted = { ...ev('m.room.message', '@b:x', 3, { body: '@me' }), unsigned: { redacted_because: {} } };
+    const rows = buildMentionActivity([{ event: shown, postId: POST }, { event: mine }, { event: deleted }], new Set([shown.event_id]), ME);
+    expect(rows).toEqual([]);
   });
 });

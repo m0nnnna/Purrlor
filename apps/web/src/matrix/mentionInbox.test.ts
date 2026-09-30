@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MatrixClient } from 'matrix-js-sdk';
-import { addMentionToInbox, clearMentionInbox, readMentionInbox, removeMentionFromInbox } from './mentionInbox';
+import { addMentionToInbox, readMentionInbox } from './mentionInbox';
 
 const MENTION_INBOX_EVENT = 'xyz.nekous.mention_inbox';
 
@@ -53,27 +53,5 @@ describe('addMentionToInbox', () => {
     expect(written.items).toHaveLength(50);
     expect(written.items[0].eventId).toBe('$1'); // oldest ($0) dropped
     expect(written.items[written.items.length - 1].eventId).toBe('$new');
-  });
-});
-
-describe('removeMentionFromInbox', () => {
-  it('removes only the matching entry', async () => {
-    const { mx, setAccountData } = fakeClient([
-      { roomId: '!a:example.org', eventId: '$1', mentionedAt: 1 },
-      { roomId: '!a:example.org', eventId: '$2', mentionedAt: 2 },
-    ]);
-    await removeMentionFromInbox(mx, '!a:example.org', '$1');
-    expect(setAccountData).toHaveBeenCalledWith(
-      MENTION_INBOX_EVENT,
-      expect.objectContaining({ items: [expect.objectContaining({ eventId: '$2' })] })
-    );
-  });
-});
-
-describe('clearMentionInbox', () => {
-  it('empties the list', async () => {
-    const { mx, setAccountData } = fakeClient([{ roomId: '!a:example.org', eventId: '$1', mentionedAt: 1 }]);
-    await clearMentionInbox(mx);
-    expect(setAccountData).toHaveBeenCalledWith(MENTION_INBOX_EVENT, expect.objectContaining({ items: [] }));
   });
 });

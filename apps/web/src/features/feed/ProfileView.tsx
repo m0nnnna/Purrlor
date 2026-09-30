@@ -132,7 +132,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
       <div className="nu-main-pane__header" data-nu-role="main-pane-header">
         <button
           type="button"
-          className="nu-main-pane__header-back nu-profile-view__back"
+          className="nu-main-pane__header-back nu-main-pane__header-back--always"
           data-nu-role="profile-view-back"
           title="Back"
           aria-label="Back"

@@ -18,9 +18,10 @@ const RELOAD_DELAY_MS = 1500;
 const RELOAD_EVERY_MS = 5 * 60_000;
 
 /**
- * Keeps Activity (matrix/activity.ts) current for the global feed's tab and the unread dot on
- * the rail: read once at start, then again whenever someone else's like, comment, repost or follow
- * lands in one of your feed rooms, or the mention inbox gains an entry.
+ * Keeps Activity (matrix/activity.ts) current for the Notifications page and the unread counts on
+ * the rail's bell and the social sidebar: read once at start, then again whenever someone else's
+ * like, comment, repost or follow lands in one of your feed rooms, or the mention inbox gains an
+ * entry (a mention anywhere, chat included).
  *
  * Headless: mounted once in AppShell, renders nothing, runs for the app's lifetime.
  */

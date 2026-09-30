@@ -388,7 +388,21 @@ const seeds = (): RoomSeed[] => [
     name: "You's posts",
     feed: DEMO_USER_ID,
     members: [DEMO_USER_ID, NIBBLES],
-    timeline: (id) => [demoPost(id, DEMO_USER_ID, 'finally got the **voice channels** working', 45)],
+    timeline: (id) => {
+      // Someone liked and commented on your post, so Notifications has something to show.
+      const post = demoPost(id, DEMO_USER_ID, 'finally got the **voice channels** working', 45);
+      const about = { 'm.relates_to': { rel_type: 'm.reference', event_id: post.getId() } };
+      return [
+        post,
+        demoEvent(id, {
+          type: EventType.Reaction,
+          sender: NIBBLES,
+          ts: ts(40),
+          content: { 'm.relates_to': { rel_type: 'm.annotation', event_id: post.getId(), key: '❤️' } },
+        }),
+        demoEvent(id, { type: 'xyz.nekous.comment', sender: NIBBLES, ts: ts(38), content: { body: 'finally!! testing it tonight', ...about } }),
+      ];
+    },
   },
   {
     roomId: DEMO_ROOM_IDS.feedNibbles,

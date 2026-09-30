@@ -6,8 +6,8 @@ import { COMMENT_EVENT_TYPE, LIKE_KEY, REPOST_RECEIPT_TYPE } from './postInterac
 import { FOLLOWED_EVENT, getOwnProfileRoomId } from './profileFeed';
 
 /**
- * Activity — the global feed's notifications tab: likes, comments, replies, reposts and quotes of
- * your posts, new followers, and mentions of you in posts and comments.
+ * Activity — the Notifications page: likes, comments, replies, reposts and quotes of your posts,
+ * new followers, and mentions of you anywhere (posts, comments and chat).
  *
  * Nearly all of it is already delivered to you, because it lands in **your own feed rooms** (your
  * profile feed and your feed in each Space): a like, a comment, a repost marker
@@ -16,8 +16,8 @@ import { FOLLOWED_EVENT, getOwnProfileRoomId } from './profileFeed';
  * those rooms' recent history — nothing extra to collect or store, and it's complete across
  * devices and time spent offline.
  *
- * The one thing that happens *elsewhere* is being mentioned or replied to under someone else's
- * post. Those come from the mention inbox (mentionInbox.ts), which already records every post and
+ * What happens *elsewhere* is being mentioned: in a channel, or in or under someone else's post.
+ * Those come from the mention inbox (mentionInbox.ts), which records every message, post and
  * comment that mentions you — and a reply always mentions whoever it answers.
  *
  * What you've seen is a timestamp in account data, so the unread dot clears on every device.
@@ -35,7 +35,8 @@ export type ActivityItem = {
   /** The room the newest event is in, and the event: what a comment/reply/mention shows. */
   roomId: string;
   eventId: string;
-  /** The post it's about — yours, or for a mention/reply, the post it's in or under. */
+  /** The post it's about — yours, or for a mention/reply, the post it's in or under. None for a
+   *  chat mention, which opens at its message in its channel. */
   postId?: string;
   /** A quote: the quoting post (it lives in the quoter's own feed). */
   quote?: { roomId: string; eventId: string };
@@ -149,23 +150,58 @@ async function recentEvents(mx: MatrixClient, roomId: string): Promise<RawActivi
   return (res.chunk ?? []).map((event) => ({ ...event, room_id: roomId }));
 }
 
-type MentionEvent = { event: RawActivityEvent; postId: string };
+export type MentionEvent = { event: RawActivityEvent; postId?: string };
 
-/** Mentions and replies from other people's rooms, via the mention inbox: post and comment
- *  mentions only (a chat mention isn't activity). Each is read back to know who and what it is. */
+/** Mentions from other people's rooms, via the mention inbox — in chat, posts and comments. Each is
+ *  read back to know who and what it is: from memory when the room has it (already decrypted, in
+ *  an encrypted channel), else from the server. */
 async function mentionEvents(mx: MatrixClient): Promise<MentionEvent[]> {
-  const refs = readMentionInbox(mx).filter((ref) => !!ref.postId);
   const read = await Promise.all(
-    refs.map(async (ref): Promise<MentionEvent | undefined> => {
+    readMentionInbox(mx).map(async (ref): Promise<MentionEvent | undefined> => {
+      const local = mx.getRoom(ref.roomId)?.findEventById(ref.eventId);
+      if (local) {
+        const event: RawActivityEvent = {
+          event_id: ref.eventId,
+          room_id: ref.roomId,
+          type: local.getType(),
+          sender: local.getSender() ?? '',
+          origin_server_ts: local.getTs(),
+          content: local.getContent(),
+          unsigned: local.isRedacted() ? { redacted_because: true } : undefined,
+        };
+        return { event, postId: ref.postId };
+      }
       try {
         const raw = (await mx.fetchRoomEvent(ref.roomId, ref.eventId)) as unknown as Omit<RawActivityEvent, 'room_id'>;
-        return { event: { ...raw, room_id: ref.roomId }, postId: ref.postId as string };
+        return { event: { ...raw, room_id: ref.roomId }, postId: ref.postId };
       } catch {
         return undefined;
       }
     })
   );
   return read.filter((item): item is MentionEvent => !!item);
+}
+
+/**
+ * Mention inbox entries → activity rows, leaving out what your own rooms already showed (a comment
+ * on your post that also mentions you is one row, not two). A comment answering you is a reply;
+ * anything else is a mention. Pure, so it's tested without a server.
+ */
+export function buildMentionActivity(mentions: MentionEvent[], alreadyShown: Set<string>, myUserId: string): ActivityItem[] {
+  return mentions
+    .filter(({ event }) => !alreadyShown.has(event.event_id) && event.sender !== myUserId && !event.unsigned?.redacted_because)
+    .map(({ event, postId }): ActivityItem => {
+      const replyTo = event.content['xyz.nekous.reply_to'] as { sender?: unknown } | undefined;
+      return {
+        key: event.event_id,
+        kind: event.type === COMMENT_EVENT_TYPE && replyTo?.sender === myUserId ? 'reply' : 'mention',
+        senders: [event.sender],
+        ts: event.origin_server_ts,
+        roomId: event.room_id,
+        eventId: event.event_id,
+        ...(postId && { postId }),
+      };
+    });
 }
 
 /** Everything above, read fresh. A room that can't be read right now is skipped, not fatal. */
@@ -176,21 +212,7 @@ export async function fetchActivity(mx: MatrixClient): Promise<ActivityItem[]> {
     mentionEvents(mx).catch(() => []),
   ]);
   const own = buildActivity(perRoom.flat(), myUserId);
-  const known = new Set(own.map((item) => item.eventId));
-  const elsewhere = mentions
-    .filter(({ event }) => !known.has(event.event_id) && event.sender !== myUserId && !event.unsigned?.redacted_because)
-    .map(({ event, postId }): ActivityItem => {
-      const replyTo = event.content['xyz.nekous.reply_to'] as { sender?: unknown } | undefined;
-      return {
-        key: event.event_id,
-        kind: event.type === COMMENT_EVENT_TYPE && replyTo?.sender === myUserId ? 'reply' : 'mention',
-        senders: [event.sender],
-        ts: event.origin_server_ts,
-        roomId: event.room_id,
-        eventId: event.event_id,
-        postId,
-      };
-    });
+  const elsewhere = buildMentionActivity(mentions, new Set(own.map((item) => item.eventId)), myUserId);
   return [...own, ...elsewhere].sort((a, b) => b.ts - a.ts);
 }
 
