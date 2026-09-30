@@ -31,4 +31,17 @@ describe('remindersForGateway', () => {
   it('leaves out an event that’s well under way', () => {
     expect(remindersForGateway([], [event('old', NOW - 20 * 60_000)], { now: NOW, encryptedRoomIds: new Set() })).toEqual([]);
   });
+
+  it('sends nothing already due, so the gateway doesn’t fire it a second time', () => {
+    const list = remindersForGateway(
+      [
+        { id: 'fired', roomId: '!open', eventId: '$m', remindAt: NOW - 60_000, preview: 'already pushed' },
+        { id: 'ahead', roomId: '!open', eventId: '$n', remindAt: NOW + 60_000, preview: 'still to come' },
+      ],
+      // Starts in 5 minutes: its reminder was due 10 minutes ago.
+      [event('soon', NOW + 5 * 60_000)],
+      { now: NOW, encryptedRoomIds: new Set() }
+    );
+    expect(list.map((r) => r.id)).toEqual(['message:ahead']);
+  });
 });
