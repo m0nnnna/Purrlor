@@ -50,6 +50,20 @@ RSVPs are read from the member **state events** rather than the SDK's `RoomMembe
 member event changes, the SDK emits the state change before updating those objects, so anything
 reacting to the change would see the RSVP from before (the end-to-end test caught this).
 
+## Month view, exporting, and announcing
+
+- **Month view.** Events has a List / Month switch. The month is a grid of whole weeks (starting on
+  your locale's first day); an event sits on the day it starts, and a day you pick shows its events'
+  cards beneath. It reads every event, past ones included (`matrix/calendarMonth.ts`).
+- **.ics.** Each event has **Add to calendar**, and the header **Export** downloads every upcoming
+  event, as an iCalendar file (`matrix/calendarExport.ts`) for Google Calendar, Apple Calendar,
+  Outlook and the like. It's a file to import, not a subscription: a subscription would need a
+  public URL serving events that are private to the Space. An event held in a channel gets the
+  channel as its location; one with no end is an hour, as the calendar counts it.
+- **Announcing.** Creating an event can post a notice in a channel (`matrix/calendarNotice.ts`): the
+  event's channel by default, any channel, or none. It's an `m.notice`, like a bot's, so nobody is
+  pinged. If the notice fails the event is still made. Editing an event announces nothing.
+
 ## Reminders
 
 Reminders come up in whichever Purrlor tab is open when they're due. With background push set up,

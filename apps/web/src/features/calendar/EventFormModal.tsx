@@ -4,6 +4,7 @@ import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { createCalendarEvent, updateCalendarEvent, type CalendarEvent } from '../../matrix/calendar';
 import { spaceChannels } from '../../matrix/channelPermissions';
+import { announceEvent } from '../../matrix/calendarNotice';
 
 /** `datetime-local` wants local time as YYYY-MM-DDTHH:mm. */
 function toLocalInput(ms: number): string {
@@ -28,6 +29,9 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
   const [end, setEnd] = useState(event?.end ? toLocalInput(event.end) : '');
   const [channelId, setChannelId] = useState(event?.channelId ?? '');
   const [location, setLocation] = useState(event?.location ?? '');
+  // Where to tell people about a new event: the channel it's in, unless changed. Not offered when editing.
+  const [announceIn, setAnnounceIn] = useState<string | undefined>(undefined);
+  const announceChannelId = announceIn ?? channelId;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -45,7 +49,11 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
     const input = { title, description, start: startMs, end: endMs, channelId: channelId || undefined, location: channelId ? undefined : location };
     try {
       if (event) await updateCalendarEvent(mx, space, event.id, input);
-      else await createCalendarEvent(mx, space, input);
+      else {
+        await createCalendarEvent(mx, space, input);
+        // A failed notice shouldn't undo the event: it's made, and people can still find it in Events.
+        if (announceChannelId) await announceEvent(mx, announceChannelId, input).catch((err: unknown) => console.warn('Couldn’t announce the event', err));
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t save the event');
@@ -90,6 +98,25 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
           <label className="nu-field">
             Location (optional)
             <input className="nu-field__input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="A link, an address…" />
+          </label>
+        )}
+        {!event && (
+          <label className="nu-field">
+            Announce in a channel (optional)
+            <select
+              className="nu-field__input"
+              data-nu-role="calendar-event-announce"
+              value={announceChannelId}
+              onChange={(e) => setAnnounceIn(e.target.value)}
+            >
+              <option value="">Don’t announce</option>
+              {channels.map((channel) => (
+                <option key={channel.roomId} value={channel.roomId}>
+                  #{channel.name}
+                </option>
+              ))}
+            </select>
+            <span className="nu-field__hint">Posts a quiet notice there that doesn’t notify anyone.</span>
           </label>
         )}
         <label className="nu-field">
