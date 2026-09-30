@@ -28,6 +28,23 @@ It runs at start and whenever a Space's roles, members or channels change, or a 
 levels or settings do. A change lands when someone able to make it next has Purrlor open; with
 several admins online, they all compute the same result.
 
+### Paced for big Spaces
+
+The first run over an existing Space can mean one power-levels write per channel, and several
+admins' clients would each make it. So the pass (`governSpaces`) is paced:
+
+- **One writer.** Everyone able to change a channel's power levels works out the same order
+  (`writerRank`: highest level first, then user ID). Before writing, a client waits 20 s per place
+  ahead of it (at most 60 s), then looks again and only touches channels that still need it. With
+  several admins online, the first writes and the rest find nothing left to do.
+- **No burst.** Channels go one at a time with 400 ms between writes. A `429 M_LIMIT_EXCEEDED` is
+  waited out for as long as the server asks (up to a minute, three tries) instead of dropping the
+  write (`matrix/rateLimit.ts`).
+- **A readable audit log.** The sync stamps its write with `xyz.nekous.role_sync` (the time). The
+  audit log tells those writes from edits by hand (an edit carries the old stamp along unchanged)
+  and folds the same change across a Space's channels into one line: "Alice applied the Space's
+  roles: Bob is now a moderator · 12 channels".
+
 **Known limit:** there are no channel-only moderators. Promote someone in one channel and the next
 pass takes it back unless they're a moderator in the Space.
 

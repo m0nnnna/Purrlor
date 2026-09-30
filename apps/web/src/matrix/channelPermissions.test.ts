@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { moderatorsOnlyChanges, powerLevelsForPosting, syncedChannelUsers } from './channelPermissions';
+import { describe, expect, it, vi } from 'vitest';
+import type { MatrixClient, Room } from 'matrix-js-sdk';
+import { governSpaces, moderatorsOnlyChanges, powerLevelsForPosting, syncedChannelUsers, writerRank } from './channelPermissions';
 
 describe('powerLevelsForPosting', () => {
   it('raises posting to moderators but keeps reactions open', () => {
@@ -61,5 +62,78 @@ describe('moderatorsOnlyChanges', () => {
   it('never removes someone outside the Space, or anyone listed to keep', () => {
     expect(moderatorsOnlyChanges(members, ['@mod'], ['@mod', '@member', '@bot'], ['@bot', '@member'])).toEqual({ invite: [], remove: [] });
     expect(moderatorsOnlyChanges(members, ['@mod'], ['@mod'])).toEqual({ invite: [], remove: [] });
+  });
+});
+
+describe('writerRank', () => {
+  it('orders everyone able to write by level, then user ID, the same on every client', () => {
+    const levels = { '@zed': 100, '@amy': 100, '@mod': 50, '@me': 100 };
+    expect(writerRank(levels, 100, '@amy')).toBe(0);
+    expect(writerRank(levels, 100, '@me')).toBe(1);
+    expect(writerRank(levels, 100, '@zed')).toBe(2);
+    expect(writerRank(levels, 50, '@mod')).toBe(3);
+  });
+});
+
+/** Just enough of a Room for the sync: state events by type and key. */
+function fakeRoom(roomId: string, state: Record<string, Record<string, Record<string, unknown>>>, space = false): Room {
+  const event = (type: string, key: string) =>
+    state[type]?.[key] ? { getContent: () => state[type][key], getStateKey: () => key, getSender: () => '@me' } : null;
+  return {
+    roomId,
+    isSpaceRoom: () => space,
+    getMyMembership: () => 'join',
+    getJoinedMembers: () => Object.keys(state['m.room.member'] ?? {}).map((userId) => ({ userId })),
+    currentState: {
+      getStateEvents: (type: string, key?: string) =>
+        key === undefined ? Object.keys(state[type] ?? {}).map((k) => event(type, k)) : event(type, key),
+    },
+  } as unknown as Room;
+}
+
+describe('governSpaces', () => {
+  const space = fakeRoom(
+    '!space',
+    {
+      'm.room.power_levels': { '': { users: { '@me': 100, '@amy': 100, '@mod': 50 } } },
+      'm.space.child': { '!a': { via: ['x'] }, '!b': { via: ['x'] }, '!c': { via: ['x'] } },
+    },
+    true
+  );
+  const channel = (id: string, users: Record<string, number>) => fakeRoom(id, { 'm.room.power_levels': { '': { users } } });
+  const setup = (rooms: Room[]) => {
+    const sendStateEvent = vi.fn(async (..._args: unknown[]) => ({}));
+    const mx = {
+      getUserId: () => '@me',
+      getRoom: (id: string) => [space, ...rooms].find((r) => r.roomId === id) ?? null,
+      getRooms: () => [space, ...rooms],
+      sendStateEvent,
+    } as unknown as MatrixClient;
+    return { mx, sendStateEvent };
+  };
+
+  it('waits its turn behind admins ahead of it, paces its writes, and skips channels already in line', async () => {
+    const { mx, sendStateEvent } = setup([
+      channel('!a', { '@me': 100, '@amy': 100 }),
+      channel('!b', { '@me': 100, '@amy': 100, '@mod': 50 }),
+      channel('!c', { '@me': 100, '@amy': 100 }),
+    ]);
+    const wait = vi.fn(async (_ms: number) => {});
+    await governSpaces(mx, undefined, { gapMs: 400, staggerMs: 20_000, wait });
+
+    // @amy sorts before @me among the admins: one turn's wait, then a gap between the two writes.
+    expect(wait.mock.calls.map(([ms]) => ms)).toEqual([20_000, 400]);
+    expect(sendStateEvent.mock.calls.map(([roomId]) => roomId)).toEqual(['!a', '!c']);
+    const content = (sendStateEvent.mock.calls[0] as unknown[])[2] as Record<string, unknown>;
+    expect(content.users).toEqual({ '@me': 100, '@amy': 100, '@mod': 50 });
+    expect(typeof content['xyz.nekous.role_sync']).toBe('number');
+  });
+
+  it('writes nothing, and waits for nothing, when every channel is already in line', async () => {
+    const { mx, sendStateEvent } = setup([channel('!a', { '@me': 100, '@amy': 100, '@mod': 50 })]);
+    const wait = vi.fn(async (_ms: number) => {});
+    await governSpaces(mx, undefined, { wait });
+    expect(wait).not.toHaveBeenCalled();
+    expect(sendStateEvent).not.toHaveBeenCalled();
   });
 });
