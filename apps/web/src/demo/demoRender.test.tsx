@@ -7,6 +7,8 @@ import { ChannelList } from '../features/channels/ChannelList';
 import { FeedView } from '../features/feed/FeedView';
 import { GlobalFeedView } from '../features/feed/GlobalFeedView';
 import { ProfileView } from '../features/feed/ProfileView';
+import { CalendarView } from '../features/calendar/CalendarView';
+import { SpaceReportsSettings } from '../features/servers/SpaceReportsSettings';
 import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
@@ -301,5 +303,42 @@ describe('The social side against the demo world', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(store.get(socialSpaceIdAtom)).toBeNull();
     expect(store.get(globalFeedOpenAtom)).toBe(true);
+  });
+});
+
+describe('The sample Space’s moderation, calendar and webhook', () => {
+  it('has reports waiting in the queue, one of them about a post', async () => {
+    const mx = createDemoClient();
+    render(
+      <JotaiProvider>
+        <MatrixClientContext.Provider value={mx}>
+          <SpaceReportsSettings space={mx.getRoom(DEMO_ROOM_IDS.cafe)!} />
+        </MatrixClientContext.Provider>
+      </JotaiProvider>
+    );
+    const reports = await screen.findAllByText(/Pixel|Nibbles/, { selector: 'strong' });
+    expect(reports).toHaveLength(2);
+    expect(screen.getByText(/Posting spoilers/)).toBeInTheDocument();
+    expect(screen.getByText(/wrote a post/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to post' })).toBeInTheDocument();
+  });
+
+  it('has two events on the calendar', async () => {
+    const mx = createDemoClient();
+    render(
+      <JotaiProvider>
+        <MatrixClientContext.Provider value={mx}>
+          <CalendarView space={mx.getRoom(DEMO_ROOM_IDS.cafe)!} />
+        </MatrixClientContext.Provider>
+      </JotaiProvider>
+    );
+    expect(await screen.findByRole('heading', { name: 'Movie night' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Game night' })).toBeInTheDocument();
+  });
+
+  it('has a webhook on #general, and a message it posted under its own name', () => {
+    const general = createDemoClient().getRoom(DEMO_ROOM_IDS.general)!;
+    expect(general.currentState.getStateEvents('xyz.nekous.webhook')).toHaveLength(1);
+    expect(general.getLiveTimeline().getEvents().some((e) => e.getContent().body === 'Build 42 passed ✅')).toBe(true);
   });
 });
