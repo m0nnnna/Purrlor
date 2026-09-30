@@ -52,13 +52,16 @@ reacting to the change would see the RSVP from before (the end-to-end test caugh
 
 ## Reminders
 
-Matrix has no scheduling a client can use, so reminders come up in whichever Purrlor tab is open
-when they're due, or the next time one opens. That's late rather than never.
+Reminders come up in whichever Purrlor tab is open when they're due. With background push set up,
+the push gateway also fires them as Web Push, so they arrive with no tab open
+(docs/push-notifications.md, "Reminders"). Without it, a reminder waits for the next tab that
+opens: late rather than never.
 
 - **Message reminders**: a message's bell → In 20 minutes / 1 hour / 3 hours / Tomorrow at 9:00.
   They're kept in account data (`xyz.nekous.reminders`: `{ items: [{ id, roomId, eventId,
   remindAt, preview }] }`), so every device knows about them. The first device to show one removes
-  it for all.
+  it for all. A message in an encrypted room is saved with no preview: account data isn't
+  encrypted.
 - **Event reminders**: 15 minutes before an event you're going to. Nothing is stored for these;
   they're worked out from your RSVPs. Each device remembers which it has shown
   (`nekous_event_reminders_shown` in local storage). None is shown for an event more than 10

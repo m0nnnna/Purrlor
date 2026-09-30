@@ -39,6 +39,11 @@ export function getSubscription(pushkey: string): Entry | undefined {
   return subscriptionsByPushKey.get(pushkey);
 }
 
+/** Every browser an account has registered, by pushkey — where its reminders go. */
+export function subscriptionsOf(owner: string): { pushkey: string; subscription: PushSubscription }[] {
+  return [...subscriptionsByPushKey].filter(([, entry]) => entry.owner === owner).map(([pushkey, entry]) => ({ pushkey, subscription: entry.subscription }));
+}
+
 /** For a pushkey the push service reports gone (404/410): forgotten regardless of owner. */
 export function deleteSubscription(pushkey: string): void {
   subscriptionsByPushKey.delete(pushkey);

@@ -6,6 +6,7 @@ import { Icon } from '../../components/Icon';
 import { ReportDialog } from '../feed/ReportDialog';
 import { Menu, MenuItem } from '../../components/Menu';
 import { addReminder, reminderChoices } from '../../matrix/reminders';
+import { isEncryptedRoom } from '../../matrix/encryption';
 import { webhookProfile } from '../../matrix/webhooks';
 import { readVoiceServerConfig } from '../../matrix/voice';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
@@ -496,7 +497,8 @@ function MessageRow({
                 key={choice.label}
                 role="timeline-remind-choice"
                 onSelect={() =>
-                  void addReminder(mx, { roomId: room.roomId, eventId, remindAt: choice.at, preview: previewTextFor(event).slice(0, 140) }).catch(
+                  // Account data isn't encrypted: an encrypted room's words stay out of it.
+                  void addReminder(mx, { roomId: room.roomId, eventId, remindAt: choice.at, preview: isEncryptedRoom(room) ? '' : previewTextFor(event).slice(0, 140) }).catch(
                     (err: unknown) => console.warn('Couldn’t set the reminder', err)
                   )
                 }

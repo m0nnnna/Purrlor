@@ -23,7 +23,9 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title || 'Purrlor', {
       body: data.body || '',
       icon: '/favicon.ico',
-      tag: data.roomId || undefined, // collapses repeat notifications from the same room
+      // A reminder brings its own tag, the one an open tab shows it under, so the two replace each
+      // other; anything else collapses repeat notifications from the same room.
+      tag: data.tag || data.roomId || undefined,
       data: { roomId: data.roomId },
     })
   );

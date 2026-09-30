@@ -138,11 +138,15 @@ services:
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
       - VAPID_SUBJECT=${VAPID_SUBJECT}
       - PORT=3002
+      # Reminders it fires as Web Push (services/push-gateway/src/reminders.ts), kept across restarts.
+      - REMINDERS_FILE=/data/reminders.json
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - NO_PROXY=${OUTBOUND_NO_PROXY:-}
       - NODE_USE_ENV_PROXY=1
+    volumes:
+      - push-gateway-data:/data
     networks:
       - purrlor-voice
 
@@ -250,3 +254,4 @@ networks:
 volumes:
   matrix-db:
   matrix-media:
+  push-gateway-data:

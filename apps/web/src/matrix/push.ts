@@ -8,7 +8,7 @@ import { getOpenIdTokenCached } from './openIdToken';
  * shape/cast convention as everywhere else in this codebase that needs a event type the SDK's
  * own typed maps don't know about (see voice.ts's `as any` on sendStateEvent).
  */
-const PUSH_GATEWAY_ACCOUNT_DATA_EVENT = 'xyz.nekous.push_gateway';
+export const PUSH_GATEWAY_ACCOUNT_DATA_EVENT = 'xyz.nekous.push_gateway';
 const APP_ID = 'xyz.nekous.webpush';
 const PUSHKEY_STORAGE_KEY = 'nekous_push_pushkey';
 

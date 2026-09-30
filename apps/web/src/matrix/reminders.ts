@@ -4,8 +4,9 @@ import { readFreshAccountData } from './freshAccountData';
 /**
  * "Remind me about this message", kept in account data (`xyz.nekous.reminders`) so every device
  * knows about it and the first one open when it's due shows it (ReminderWatcher.tsx), then
- * removes it for all of them. Matrix has no server-side scheduling a client can use, so a reminder
- * comes up when a Purrlor tab is open at or after its time — late rather than never.
+ * removes it for all of them. With a push gateway set up, the same reminders also reach you as Web
+ * Push with no tab open (reminderPush.ts); without one, a reminder comes up when a Purrlor tab is
+ * open at or after its time — late rather than never.
  *
  * Calendar events you're going to remind you too, 15 minutes before they start; those aren't
  * stored, they're worked out from your RSVPs (calendar.ts).

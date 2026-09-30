@@ -3,7 +3,8 @@ import cors from 'cors';
 import webpush from 'web-push';
 import { validateOpenIdToken } from './openid.js';
 import { describePostActivity } from './postActivity.js';
-import { claimSubscription, deleteSubscription, getSubscription, releaseSubscription } from './subscriptions.js';
+import { loadReminders, parseReminders, setReminders, takeDue } from './reminders.js';
+import { claimSubscription, deleteSubscription, getSubscription, releaseSubscription, subscriptionsOf } from './subscriptions.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -18,6 +19,11 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
 }
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+// Where reminders are kept across restarts (reminders.ts). Unset: memory only.
+loadReminders(process.env.REMINDERS_FILE || undefined);
+/** How often due reminders are looked for. */
+const REMINDER_SWEEP_MS = 30_000;
 
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '*').split(',').map((s) => s.trim());
 
@@ -97,6 +103,55 @@ app.delete('/subscribe/:pushkey', async (req, res) => {
   res.status(204).end();
 });
 
+/**
+ * Replaces the caller's reminders with this list (reminders.ts). The client sends its whole list
+ * whenever it changes, and on start, so nothing here needs to track individual changes.
+ */
+app.put('/reminders', async (req, res) => {
+  const owner = await callerOf(req.body);
+  if (!owner) {
+    res.status(401).json({ error: 'A valid openid_token is required', code: 'auth_required' });
+    return;
+  }
+  setReminders(owner, parseReminders(req.body?.reminders));
+  res.status(204).end();
+});
+
+/**
+ * Sends one Web Push message to a subscription. A subscription the push service says is gone for
+ * good (404/410: browser uninstalled, storage cleared) is forgotten and reported back; anything
+ * else (a transient network or 5xx error) is logged and left for the next message.
+ */
+async function deliver(pushkey: string, subscription: webpush.PushSubscription, payload: string): Promise<'sent' | 'gone' | 'failed'> {
+  try {
+    await webpush.sendNotification(subscription, payload);
+    return 'sent';
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode === 404 || statusCode === 410) {
+      deleteSubscription(pushkey);
+      return 'gone';
+    }
+    console.error(`Failed to deliver push to ${pushkey}`, err);
+    return 'failed';
+  }
+}
+
+/** Fires every reminder that's due, to each browser its account has registered. */
+async function sweepReminders(): Promise<void> {
+  for (const { owner, reminder } of takeDue()) {
+    const payload = JSON.stringify({
+      title: reminder.title,
+      body: reminder.body,
+      roomId: reminder.roomId,
+      eventId: reminder.eventId,
+      tag: reminder.id,
+    });
+    await Promise.all(subscriptionsOf(owner).map(({ pushkey, subscription }) => deliver(pushkey, subscription, payload)));
+  }
+}
+setInterval(() => void sweepReminders().catch((err) => console.error('Reminder sweep failed', err)), REMINDER_SWEEP_MS);
+
 type NotifyDevice = {
   app_id: string;
   pushkey: string;
@@ -171,22 +226,8 @@ app.post('/_matrix/push/v1/notify', async (req, res) => {
       // whose it is (data.user_id, set by the web client) must match the subscription's owner.
       const claimedUser = device.data?.user_id;
       if (typeof claimedUser === 'string' && claimedUser !== entry.owner) return;
-      const subscription = entry.subscription;
-      try {
-        await webpush.sendNotification(subscription, payload);
-      } catch (err) {
-        const statusCode = (err as { statusCode?: number }).statusCode;
-        // 404/410: the push service (e.g. Chrome's FCM endpoint) confirms this subscription is
-        // permanently gone (browser uninstalled, storage cleared, ...) — anything else (a
-        // transient network/5xx error) is left alone to retry on the next real event instead of
-        // dropping a pusher over a blip.
-        if (statusCode === 404 || statusCode === 410) {
-          deleteSubscription(device.pushkey);
-          rejected.push(device.pushkey);
-        } else {
-          console.error(`Failed to deliver push to ${device.pushkey}`, err);
-        }
-      }
+      // A pushkey the push service says is gone is reported back, so the homeserver stops trying it.
+      if ((await deliver(device.pushkey, entry.subscription, payload)) === 'gone') rejected.push(device.pushkey);
     })
   );
 
