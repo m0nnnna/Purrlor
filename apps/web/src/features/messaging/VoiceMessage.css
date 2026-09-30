@@ -42,6 +42,8 @@
   align-items: center;
   gap: 2px;
   height: 28px;
+  /* On a narrow screen the player shrinks below what even MAX_BARS needs. */
+  overflow: hidden;
   cursor: pointer;
 }
 
@@ -52,7 +54,7 @@
 
 .nu-voice-message__bar {
   flex: 1;
-  min-width: 2px;
+  min-width: 1px;
   border-radius: var(--nu-radius-full);
   background: var(--nu-color-border);
 }

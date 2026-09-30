@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import { Icon } from '../../components/Icon';
 import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { downsamplePeaks } from '../../matrix/waveform';
 import { formatElapsed } from './voiceRecording';
 import './VoiceMessage.css';
 
@@ -20,6 +21,16 @@ type VoiceMessageProps = {
 /** Bars are drawn from a fixed-height container; each bar's height is this fraction of the
  *  container at minimum, so even a silent bucket still reads as a bar rather than vanishing. */
 const MIN_BAR_HEIGHT_FRACTION = 0.08;
+
+/** As many bars as the 320px player has room for (2px bars, 2px gaps). Waveforms usually carry
+ *  ~100 points, which drawn one bar each ran past the end of the player. */
+const MAX_BARS = 48;
+
+/** Merges a longer waveform down to MAX_BARS, keeping each group's peak. */
+function fitWaveform(waveform: number[]): number[] {
+  if (waveform.length <= MAX_BARS) return waveform;
+  return downsamplePeaks(waveform.map((peak) => peak / 1024), MAX_BARS);
+}
 
 /**
  * Compact player for `m.audio` messages that carry `org.matrix.msc3245.voice` — a play/pause
@@ -42,7 +53,7 @@ export function VoiceMessage({ body, url, file, mimetype, durationMs, waveform }
   }, [src]);
 
   const totalDurationMs = knownDurationMs ?? durationMs ?? 0;
-  const bars = waveform && waveform.length > 0 ? waveform : new Array(40).fill(0);
+  const bars = waveform && waveform.length > 0 ? fitWaveform(waveform) : new Array(40).fill(0);
   const progress = totalDurationMs > 0 ? Math.min(1, currentTimeMs / totalDurationMs) : 0;
   const progressBarIndex = Math.floor(progress * bars.length);
 
