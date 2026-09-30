@@ -41,3 +41,34 @@ test('react to a message', async ({ page }) => {
       )
   );
 });
+
+test('the composer keeps keyboard focus: on opening a channel, after an emoji, after attaching a file', async ({ page }) => {
+  const alice = await createUser('alice');
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, []);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  const input = role(page, 'composer-input');
+  await expect(input).toBeFocused();
+
+  // Typed straight away, no click into the box first.
+  await page.keyboard.type('typed on arrival');
+  await page.keyboard.press('Enter');
+  await expect(message(page, 'typed on arrival')).toBeVisible();
+
+  await page.keyboard.type('with emoji ');
+  await role(page, 'emoji-emote-picker-toggle').click();
+  await role(page, 'emoji-picker-item').first().click();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(message(page, 'with emoji')).toBeVisible();
+
+  await role(page, 'composer-file-input').setInputFiles({ name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('hi') });
+  await expect(role(page, 'composer-attachment')).toBeVisible();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Enter');
+  await eventually(
+    () => latestEvents(alice, channelId),
+    (evs) => evs.some((e) => e.type === 'm.room.message' && e.content.body === 'note.txt')
+  );
+});

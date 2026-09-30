@@ -222,7 +222,7 @@ export function MainPane() {
       <TopicBanner room={room} />
       <MessageTimeline roomId={room.roomId} onReply={setReplyingTo} />
       <TypingIndicator roomId={room.roomId} />
-      <Composer roomId={room.roomId} replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
+      <Composer roomId={room.roomId} autoFocus replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
       {showPinned && <PinnedMessagesPanel room={room} onClose={() => setShowPinned(false)} />}
       {showSearch && <MessageSearchModal roomId={room.roomId} onClose={() => setShowSearch(false)} />}
       {showThreads && <ThreadsOverviewModal room={room} onClose={() => setShowThreads(false)} />}
