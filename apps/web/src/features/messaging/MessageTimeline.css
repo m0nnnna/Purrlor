@@ -316,7 +316,8 @@
 }
 
 .nu-timeline__message:hover .nu-timeline__message-actions,
-.nu-timeline__message-actions:focus-within {
+.nu-timeline__message-actions:focus-within,
+.nu-timeline__message-actions:has(.nu-reaction-picker--open) {
   opacity: 1;
   pointer-events: auto;
 }

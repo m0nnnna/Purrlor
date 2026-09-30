@@ -6,7 +6,9 @@
   position: absolute;
   top: calc(100% + var(--nu-space-1));
   right: 0;
-  width: 200px;
+  /* Fits its six columns: a fixed 200px was 14px short, and the grid's scroll box clipped the
+     last column. */
+  width: max-content;
   background: var(--nu-color-bg-elevated);
   border: 1.5px solid var(--nu-color-border);
   border-radius: var(--nu-radius-lg);

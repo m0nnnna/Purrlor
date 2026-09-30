@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Room } from 'matrix-js-sdk';
 import { Icon } from '../../components/Icon';
 import { EmojiPicker } from '../../components/EmojiPicker';
@@ -30,15 +30,45 @@ export function ReactionPicker({ room, onPick }: { room?: Room; onPick: (key: st
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>('quick');
   const emotes = useRoomEmotes(room);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const pick = (key: string, shortcode?: string) => {
+  const close = () => {
     setOpen(false);
     setPanel('quick');
+  };
+
+  const pick = (key: string, shortcode?: string) => {
+    close();
     onPick(key, shortcode);
   };
 
+  // Closes on a click anywhere else or Escape, like Menu.tsx. Without this an open picker outlived
+  // the hover that shows the message toolbar: still open, but invisible.
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = () => {
+      setOpen(false);
+      setPanel('quick');
+    };
+    const onPointer = (evt: PointerEvent) => {
+      if (!rootRef.current?.contains(evt.target as Node)) dismiss();
+    };
+    const onKey = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') dismiss();
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="nu-reaction-picker">
+    // --open keeps the message toolbar showing (MessageTimeline.css): switching to the emoji or
+    // emote panel unmounts the button that had focus, and the new panel may not be under the
+    // pointer, so neither :hover nor :focus-within would.
+    <div className={`nu-reaction-picker${open ? ' nu-reaction-picker--open' : ''}`} ref={rootRef}>
       <button
         type="button"
         className="nu-timeline__message-pin-action nu-reaction-picker__toggle"
