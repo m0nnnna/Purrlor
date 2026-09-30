@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   globalFeedOpenAtom,
+  socialSpaceIdAtom,
   openPostAtom,
   profileUserIdAtom,
   selectedRoomIdAtom,
@@ -79,6 +80,7 @@ export function MainPane() {
   const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
   const spaceView = useAtomValue(selectedSpaceViewAtom);
   const [globalFeedOpen, setGlobalFeedOpen] = useAtom(globalFeedOpenAtom);
+  const [socialSpaceId, setSocialSpaceId] = useAtom(socialSpaceIdAtom);
   const [profileUserId, setProfileUserId] = useAtom(profileUserIdAtom);
   const [openPost, setOpenPost] = useAtom(openPostAtom);
   const room = useRoom(selectedRoomId);
@@ -99,6 +101,11 @@ export function MainPane() {
     setMobileMembersOpen(false);
   }, [selectedRoomId, setMobileMembersOpen]);
 
+  // A Space's Posts inside the social side goes with the social side.
+  useEffect(() => {
+    if (!globalFeedOpen) setSocialSpaceId(null);
+  }, [globalFeedOpen, setSocialSpaceId]);
+
   // Any route to a room — a channel click, a notification, a search result, the call bar — means
   // the user wants that room, not the global feed sitting on top of it.
   useEffect(() => {
@@ -118,8 +125,11 @@ export function MainPane() {
   // over whatever channel happens to still be selected behind them. A profile sits over a feed,
   // and a post's page over either. What's underneath stays mounted, just hidden, so Back lands on
   // the same tab and scroll position instead of reloading the feed from the top.
-  const feedSpace = spaceView === 'feed' && selectedSpaceId ? mx.getRoom(selectedSpaceId) : null;
-  const feed = globalFeedOpen ? 'global' : feedSpace ? 'space' : null;
+  // A Space's Posts opened from the social side's sidebar (socialSpaceIdAtom) stands in for the
+  // global feed there; opened from its channel list, it's the Space's own page.
+  const socialSpace = globalFeedOpen && socialSpaceId ? mx.getRoom(socialSpaceId) : null;
+  const feedSpace = socialSpace ?? (spaceView === 'feed' && selectedSpaceId ? mx.getRoom(selectedSpaceId) : null);
+  const feed = socialSpace ? 'space' : globalFeedOpen ? 'global' : feedSpace ? 'space' : null;
   const calendarSpace = spaceView === 'events' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;
   if (calendarSpace && !profileUserId && !openPost) return <CalendarView key={calendarSpace.roomId} space={calendarSpace} />;
   if (feed || profileUserId || openPost) {
@@ -127,7 +137,9 @@ export function MainPane() {
     return (
       <>
         {feed === 'global' && <GlobalFeedView hidden={covered} />}
-        {feed === 'space' && feedSpace && <FeedView key={feedSpace.roomId} space={feedSpace} hidden={covered} />}
+        {feed === 'space' && feedSpace && (
+          <FeedView key={feedSpace.roomId} space={feedSpace} hidden={covered} onBack={socialSpace ? () => setSocialSpaceId(null) : undefined} />
+        )}
         {profileUserId && <ProfileView key={profileUserId} userId={profileUserId} hidden={!!openPost} />}
         {openPost && <PostPage key={openPost.postId} post={openPost} />}
       </>

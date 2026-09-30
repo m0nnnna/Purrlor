@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
-import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
+import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
 import { ChannelList } from '../features/channels/ChannelList';
 import { FeedView } from '../features/feed/FeedView';
 import { GlobalFeedView } from '../features/feed/GlobalFeedView';
 import { ProfileView } from '../features/feed/ProfileView';
+import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { createDemoClient } from './demoClient';
@@ -278,5 +279,27 @@ describe('The social side against the demo world', () => {
     fireEvent.click(rows()[0]);
     expect(store.get(globalFeedOpenAtom)).toBe(false);
     expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general);
+  });
+
+  it('opens a Space’s Posts in the main pane and keeps the sidebar, and Back returns to the feed', async () => {
+    const { store } = renderWithDemo(
+      <>
+        <ChannelList />
+        <MainPane />
+      </>,
+      { spaceId: null, globalFeed: true }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cat Café/ }));
+    expect(await screen.findByPlaceholderText(/Post something to Cat Café/)).toBeInTheDocument();
+    // Still the social sidebar, not the Space's channel list.
+    expect(screen.getByText('Notifications')).toBeInTheDocument();
+    expect(screen.queryByText('Text channels')).not.toBeInTheDocument();
+    expect(store.get(globalFeedOpenAtom)).toBe(true);
+    expect(store.get(socialSpaceIdAtom)).toBe(DEMO_ROOM_IDS.cafe);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(store.get(socialSpaceIdAtom)).toBeNull();
+    expect(store.get(globalFeedOpenAtom)).toBe(true);
   });
 });

@@ -2,16 +2,7 @@ import type { ReactNode } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import type { Room } from 'matrix-js-sdk';
 import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
-import {
-  globalFeedOpenAtom,
-  openPostAtom,
-  profileUserIdAtom,
-  selectedRoomIdAtom,
-  selectedSpaceIdAtom,
-  selectedSpaceViewAtom,
-  socialViewAtom,
-  type SocialView,
-} from '../../app/state/selection';
+import { openPostAtom, profileUserIdAtom, socialSpaceIdAtom, socialViewAtom, type SocialView } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
 import { Icon, type IconName } from '../../components/Icon';
 import { UnreadBadge } from '../../components/UnreadBadge';
@@ -19,7 +10,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useHasNewPosts } from '../../matrix/hooks/useHasNewPosts';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
 import { useUserProfile } from '../../matrix/hooks/useUserProfile';
-import { useOpenSocial } from './useOpenSocial';
+import { useOpenSocial, useOpenSocialSpace } from './useOpenSocial';
 
 function NavRow({
   active,
@@ -61,29 +52,20 @@ function NavRow({
   );
 }
 
-/** A Space's Posts, with the same "someone posted since you looked" dot as in its channel list. */
-function SpacePostsRow({ space }: { space: Room }) {
+/** A Space's Posts, with the same "someone posted since you looked" dot as in its channel list. It
+ *  opens in the main pane and leaves the sidebar where it is. */
+function SpacePostsRow({ space, active }: { space: Room; active: boolean }) {
   const newPosts = useHasNewPosts(space);
-  const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
-  const setProfileUserId = useSetAtom(profileUserIdAtom);
-  const setSelectedSpaceId = useSetAtom(selectedSpaceIdAtom);
-  const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
-  const setSpaceView = useSetAtom(selectedSpaceViewAtom);
+  const openSpace = useOpenSocialSpace();
   return (
     <NavRow
-      active={false}
+      active={active}
       role="social-nav-space-posts"
       icon={<Avatar name={space.name} mxcUrl={space.getMxcAvatarUrl() ?? undefined} size={20} />}
       label={space.name}
       unread={newPosts}
       badge={<UnreadBadge total={newPosts ? 1 : 0} highlight={0} />}
-      onSelect={() => {
-        setGlobalFeedOpen(false);
-        setProfileUserId(null);
-        setSelectedSpaceId(space.roomId);
-        setSelectedRoomId(null);
-        setSpaceView('feed');
-      }}
+      onSelect={() => openSpace(space.roomId)}
     />
   );
 }
@@ -107,6 +89,7 @@ export function SocialNav() {
   const view = useAtomValue(socialViewAtom);
   const profileUserId = useAtomValue(profileUserIdAtom);
   const postOpen = !!useAtomValue(openPostAtom);
+  const socialSpaceId = useAtomValue(socialSpaceIdAtom);
   const unread = useAtomValue(unreadActivityCountAtom);
   const spaces = useSpaces();
   const openSocial = useOpenSocial();
@@ -141,7 +124,7 @@ export function SocialNav() {
         {VIEWS.map((item) => (
           <NavRow
             key={item.view}
-            active={onPage && view === item.view}
+            active={onPage && !socialSpaceId && view === item.view}
             role={`social-nav-${item.view}`}
             icon={<Icon name={item.icon} size={18} />}
             label={item.label}
@@ -164,7 +147,7 @@ export function SocialNav() {
           <div className="nu-channel-list__category" data-nu-role="social-nav-spaces">
             <div className="nu-channel-list__section-header">Posts in your spaces</div>
             {spaces.map((space) => (
-              <SpacePostsRow key={space.roomId} space={space} />
+              <SpacePostsRow key={space.roomId} space={space} active={onPage && socialSpaceId === space.roomId} />
             ))}
           </div>
         )}
