@@ -45,6 +45,7 @@ import { ReactionPicker } from './ReactionPicker';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
 import { VoiceMessage } from './VoiceMessage';
+import { INITIAL_RENDER_WINDOW, sliceRenderWindow, windowReaching } from './timelineWindow';
 import './MessageTimeline.css';
 
 const HISTORY_PAGE_SIZE = 30;
@@ -623,6 +624,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const bottomRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [atStart, setAtStart] = useState(false);
+  const [renderWindow, setRenderWindow] = useState(INITIAL_RENDER_WINDOW);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   // Where your read receipt sat when you opened the room — captured once per room visit, before
   // this view marks everything read, so the "New" divider stays put while you read past it
@@ -671,6 +673,10 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     return relType !== 'm.replace' && relType !== 'm.thread';
   });
 
+  // Only the latest `renderWindow` messages are drawn; the rest stay loaded and are revealed by
+  // scrolling up (loadMore above).
+  const { shown: shownMessages, hiddenOlder: hiddenOlderCount } = sliceRenderWindow(messages, renderWindow);
+
   useEffect(() => {
     const now = Date.now();
     // A pending jump (from search) targets an exact message, not the bottom — don't fight it
@@ -682,6 +688,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     roomEnteredAtRef.current = now;
     forceBottomUntilRef.current = jumpingHere ? 0 : now + SETTLE_EXTENSION_MS;
     setAtStart(false);
+    setRenderWindow(INITIAL_RENDER_WINDOW);
     setShowJumpToLatest(false);
     const myUserId = mx.getUserId();
     setReadMarkerEventId(myUserId ? mx.getRoom(roomId)?.getEventReadUpTo(myUserId) ?? null : null);
@@ -706,7 +713,13 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const loadMore = async () => {
     const currentRoom = mx.getRoom(roomId);
     const container = containerRef.current;
-    if (!currentRoom || !container || loadingMore || atStart) return;
+    if (!currentRoom || !container || loadingMore) return;
+    // Older messages already loaded but not drawn come first: no request needed.
+    if (hiddenOlderCount > 0) {
+      setRenderWindow((size) => size + HISTORY_PAGE_SIZE);
+      return;
+    }
+    if (atStart) return;
     setLoadingMore(true);
     try {
       await mx.scrollback(currentRoom, HISTORY_PAGE_SIZE);
@@ -763,7 +776,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     if (!container) return;
     captureAnchor();
 
-    if (container.scrollTop < LOAD_MORE_THRESHOLD_PX) {
+    // Scrolls our own settling and anchoring cause aren't a reason to fetch history: only the
+    // reader getting near the top is.
+    if (container.scrollTop < LOAD_MORE_THRESHOLD_PX && Date.now() >= forceBottomUntilRef.current) {
       void loadMore();
     }
 
@@ -800,7 +815,11 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       return;
     }
     const el = containerRef.current?.querySelector(`[data-nu-event-id="${CSS.escape(pendingJump.eventId)}"]`);
-    if (el) {
+    const targetIndex = messages.findIndex((message) => message.getId() === pendingJump.eventId);
+    if (!el && targetIndex >= 0 && targetIndex < hiddenOlderCount) {
+      // Loaded, but older than the drawn window: draw back to it (and a little past) in one step.
+      setRenderWindow(windowReaching(messages.length, targetIndex, HISTORY_PAGE_SIZE));
+    } else if (el) {
       // Jumping within an already-open room never goes through the room-switch reset effect
       // above (roomId hasn't changed), so pinnedToBottomRef is still whatever it was before —
       // left true, the very next resize-driven re-render (an avatar/image finishing its
@@ -818,7 +837,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       setPendingJump(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingJump, roomId, room, messages.length, atStart, loadingMore]);
+  }, [pendingJump, roomId, room, messages.length, renderWindow, atStart, loadingMore]);
 
   useEffect(() => {
     if (!highlightedEventId) return undefined;
@@ -842,7 +861,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   useLayoutEffect(() => {
     keepScrollPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length]);
+  }, [messages.length, renderWindow]);
 
   // Everything else that changes the timeline's rendered height after the fact — an avatar
   // finishing its fetch, an image or video finishing its fetch+decrypt, a link preview arriving.
@@ -869,9 +888,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // The "New" divider goes above the first message after your old read marker — unless
   // everything after it is your own (you replied, so you've obviously seen what came before).
   const myUserId = mx.getUserId();
-  const markerIndex = readMarkerEventId ? messages.findIndex((event) => event.getId() === readMarkerEventId) : -1;
+  const markerIndex = readMarkerEventId ? shownMessages.findIndex((event) => event.getId() === readMarkerEventId) : -1;
   const firstUnreadIndex =
-    markerIndex >= 0 && messages.slice(markerIndex + 1).some((event) => event.getSender() !== myUserId) ? markerIndex + 1 : -1;
+    markerIndex >= 0 && shownMessages.slice(markerIndex + 1).some((event) => event.getSender() !== myUserId) ? markerIndex + 1 : -1;
 
   return (
     <div className="nu-timeline" data-nu-role="timeline" ref={containerRef} onScroll={handleScroll}>
@@ -881,9 +900,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
         </div>
       )}
       <div className="nu-timeline__content" ref={contentRef}>
-        {atStart && <ChannelWelcome room={room} />}
-        {messages.map((event, index) => {
-          const prevEvent = messages[index - 1];
+        {atStart && hiddenOlderCount === 0 && <ChannelWelcome room={room} />}
+        {shownMessages.map((event, index) => {
+          const prevEvent = shownMessages[index - 1];
           const newDay = !prevEvent || !isSameDay(prevEvent.getTs(), event.getTs());
           const isFirstUnread = index === firstUnreadIndex;
           const isGrouped =

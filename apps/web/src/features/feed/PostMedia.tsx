@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
 import { Lightbox } from '../../components/Lightbox';
+import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
 import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import { attachmentMxc, type PostAttachment } from '../../matrix/postMedia';
 import './PostMedia.css';
@@ -14,6 +15,7 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
   // An encrypted attachment is fetched and decrypted here with the key from the post itself.
   const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype: attachment.info.mimetype });
   const [open, setOpen] = useState(false);
+  const videoRef = usePauseWhenOffscreen();
   // One item keeps its own shape (reserved up front from w/h, so nothing jumps when it loads);
   // in a grid every cell is square and the media is cropped to fill it.
   const style = single ? ratioStyle(attachment) : undefined;
@@ -25,15 +27,16 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
   if (attachment.kind === 'video') {
     return (
       <div className="nu-post-media__item" style={style}>
-        {/* WebM/MP4 posts are often GIF replacements; muted + loop keeps that feel, and the
-            controls are there for anything with sound. */}
+        {/* Nothing autoplays: it plays, with its sound, when the reader presses play, and stops
+            when it's off screen (including when the whole feed is hidden under a chat). Loops, since
+            many are GIF replacements. */}
         <video
+          ref={videoRef}
           className="nu-post-media__video"
           data-nu-role="post-media-video"
           src={src}
           controls
           loop
-          muted
           playsInline
           preload="metadata"
         />

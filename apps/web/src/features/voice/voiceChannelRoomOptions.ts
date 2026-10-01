@@ -9,7 +9,7 @@
  *
  * Ported verbatim from cinny-voice.
  */
-import type { AudioCaptureOptions, Room, RoomOptions } from 'livekit-client';
+import type { AudioCaptureOptions, LocalParticipant, Room, RoomOptions, ScreenShareCaptureOptions } from 'livekit-client';
 
 export const SCREEN_SHARE_CODEC = 'h264' as const;
 
@@ -26,6 +26,79 @@ export const SCREEN_SHARE_AUDIO_OPTIONS: AudioCaptureOptions = {
   noiseSuppression: false,
   autoGainControl: false,
 };
+
+/**
+ * What the browser is asked to capture. LiveKit's own default is 1080p at 30 fps, which capped every
+ * share at 30 fps however high the encoder below was allowed to go; this asks for 60. The
+ * `motion` content hint tells the encoder to hold the frame rate when the connection or the CPU
+ * is short, and give up sharpness first (the browser's default for a screen is the other way
+ * round: it keeps text crisp and drops frames, which looks like a slideshow in a game or video).
+ */
+export const SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
+  audio: SCREEN_SHARE_AUDIO_OPTIONS,
+  resolution: { width: 1920, height: 1080, frameRate: 60 },
+  contentHint: 'motion',
+};
+
+/**
+ * The options for one share. `appAudioOnly` shares only the chosen window's own sound and never
+ * the whole computer's: the picker opens on windows, system audio is not offered at all
+ * (`systemAudio: 'exclude'`), and the browser is asked for window audio (see APP_AUDIO_HINTS).
+ * Where a browser can't capture one window's audio, the share simply has none: it never falls back
+ * to everything. Without it, the picker may offer the system's sound as well, as before.
+ */
+export function screenShareCaptureOptions(appAudioOnly: boolean): ScreenShareCaptureOptions {
+  return appAudioOnly
+    ? { ...SCREEN_SHARE_CAPTURE, systemAudio: 'exclude', video: { displaySurface: 'window' } }
+    : { ...SCREEN_SHARE_CAPTURE, systemAudio: 'include' };
+}
+
+/** LiveKit doesn't pass this newer getDisplayMedia option on, so withDisplayMediaHints adds it. */
+export const APP_AUDIO_HINTS = { windowAudio: 'window' } as const;
+
+/**
+ * Runs `run` with extra options merged into every `navigator.mediaDevices.getDisplayMedia` call it
+ * makes, then puts the real function back (also when `run` fails or the person cancels the picker).
+ * For options the browser knows but LiveKit's capture options have no field for.
+ */
+export async function withDisplayMediaHints<T>(hints: object, run: () => Promise<T>): Promise<T> {
+  const devices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+  if (!devices?.getDisplayMedia) return run();
+  const original = devices.getDisplayMedia;
+  devices.getDisplayMedia = function (this: MediaDevices, constraints?: DisplayMediaStreamOptions) {
+    return original.call(devices, { ...constraints, ...hints } as DisplayMediaStreamOptions);
+  };
+  try {
+    return await run();
+  } finally {
+    devices.getDisplayMedia = original;
+  }
+}
+
+/** Starts a screen share with the capture options above. */
+export function startScreenShare(participant: LocalParticipant, appAudioOnly: boolean): Promise<unknown> {
+  const run = () => participant.setScreenShareEnabled(true, screenShareCaptureOptions(appAudioOnly));
+  return appAudioOnly ? withDisplayMediaHints(APP_AUDIO_HINTS, run) : run();
+}
+
+const APP_AUDIO_ONLY_KEY = 'nekous_screen_share_app_audio_only';
+
+/** Whether shares are set to carry only the shared window's audio (remembered per browser). */
+export function readAppAudioOnly(): boolean {
+  try {
+    return localStorage.getItem(APP_AUDIO_ONLY_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function saveAppAudioOnly(on: boolean): void {
+  try {
+    localStorage.setItem(APP_AUDIO_ONLY_KEY, String(on));
+  } catch {
+    // Not remembered this time; it still applies now.
+  }
+}
 
 /** Optional cap (bps) so a weak server (no GPU, limited CPU) isn't overloaded by packet crypto. Undefined = no cap. */
 export const SERVER_MAX_BITRATE_CAP: number | undefined = undefined; // e.g. 20_000_000 if server is the bottleneck
