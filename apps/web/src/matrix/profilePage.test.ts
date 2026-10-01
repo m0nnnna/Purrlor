@@ -39,7 +39,12 @@ describe('parseProfilePage', () => {
       { id: 't', type: 'text', title: 'About', body: 'hello :cat:', formatted: 'hello <img data-mx-emoticon src="mxc://a/b">' },
       { id: 'l', type: 'links', items: [{ label: 'Art', url: 'https://example.art/', emote: MXC, color: '#ff00aa' }] },
       { id: 'i', type: 'image', url: MXC, caption: 'me', link: 'https://example.org/' },
-      { id: 'g', type: 'gallery', images: [{ url: MXC }, { url: MXC, caption: 'two' }] },
+      {
+        id: 'g',
+        type: 'gallery',
+        ratings: false,
+        albums: [{ id: 'a1', title: 'Photos', pieces: [{ url: MXC, tags: [], rating: 'general' }, { url: MXC, description: 'two', tags: ['x'], rating: 'general' }] }],
+      },
       { id: 's', type: 'song', url: 'https://youtu.be/dQw4w9WgXcQ' },
       {
         id: 'p',
@@ -131,26 +136,27 @@ describe('parseProfilePage', () => {
     const linksBlock = page({ blocks: [{ id: 'l', type: 'links', items: links }] })?.blocks[0];
     expect(linksBlock?.type === 'links' && linksBlock.items).toHaveLength(LIMITS.links);
 
+    // An older gallery (a flat list of images) becomes one album, cut to the album limit.
     const images = Array.from({ length: 50 }, () => ({ url: MXC }));
     const gallery = page({ blocks: [{ id: 'g', type: 'gallery', images }] })?.blocks[0];
-    expect(gallery?.type === 'gallery' && gallery.images).toHaveLength(LIMITS.galleryImages);
+    expect(gallery?.type === 'gallery' && gallery.albums).toHaveLength(1);
+    expect(gallery?.type === 'gallery' && gallery.albums[0].pieces).toHaveLength(LIMITS.albumPieces);
   });
 
-  it('stops adding images once the page has 20, counting the background', () => {
-    const gallery = (id: string) => ({ id, type: 'gallery', images: Array.from({ length: 12 }, () => ({ url: MXC })) });
+  it('stops adding image blocks once the page has 20, counting the background; galleries load lazily and are not counted', () => {
+    const image = (id: string) => ({ id, type: 'image', url: MXC });
     const result = page({
       style: { background: { kind: 'image', url: MXC } },
       blocks: [
-        gallery('a'),
-        { id: 'i', type: 'image', url: MXC },
-        gallery('b'),
-        { id: 'j', type: 'image', url: MXC },
+        ...Array.from({ length: 19 }, (_, i) => image(`i${i}`)),
+        { id: 'g', type: 'gallery', images: [{ url: MXC }] },
+        image('over'),
         { id: 't', type: 'text', body: 'still here' },
       ],
     });
-    const counts = result?.blocks.map((block) => (block.type === 'gallery' ? block.images.length : block.type));
-    // 1 background + 12 + 1 + 6 = 20; the last image block goes, the text stays.
-    expect(counts).toEqual([12, 'image', 6, 'text']);
+    const kinds = result?.blocks.map((block) => block.type);
+    // 1 background + 19 = 20; the gallery still fits, the next image block goes, the text stays.
+    expect(kinds).toEqual([...Array(19).fill('image'), 'gallery', 'text']);
   });
 
   it('gives blocks unique, safe IDs', () => {
@@ -174,6 +180,7 @@ describe('parseProfilePage', () => {
           { id: 'a', type: 'text', body: '   ' },
           { id: 'b', type: 'links', items: [] },
           { id: 'c', type: 'gallery', images: [] },
+          { id: 'c2', type: 'gallery', albums: [{ id: 'x', title: 'Empty', pieces: [] }] },
           { id: 'd', type: 'spaces', spaces: [{ roomId: 'not a room', name: 'x' }] },
           { id: 'e', type: 'song', url: 'ftp://example.org/song.mp3' },
         ],
@@ -249,9 +256,10 @@ describe('music blocks', () => {
   });
 
   it('does not count tracks toward the 20 images', () => {
-    const images = Array.from({ length: 12 }, () => ({ url: MXC }));
-    const result = page({ blocks: [{ id: 'm', type: 'music', tracks: [track()] }, { id: 'g', type: 'gallery', images }] })?.blocks;
-    expect(result?.[1].type === 'gallery' && result[1].images).toHaveLength(12);
+    const image = (id: string) => ({ id, type: 'image', url: MXC });
+    const images = Array.from({ length: 20 }, (_, i) => image(`i${i}`));
+    const result = page({ blocks: [{ id: 'm', type: 'music', tracks: [track()] }, ...images] })?.blocks;
+    expect(result).toHaveLength(21);
   });
 
   it('drops a music block with no usable tracks', () => {

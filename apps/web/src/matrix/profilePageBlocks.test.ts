@@ -41,8 +41,8 @@ describe('the social blocks', () => {
   });
 });
 
-describe('the artist blocks', () => {
-  it('keeps albums of rated pieces with cleaned tags, and drops what is not one', () => {
+describe('the gallery block', () => {
+  it('reads the older art block as a gallery with ratings on, keeping albums of rated pieces with cleaned tags', () => {
     const block = page({
       blocks: [
         {
@@ -64,7 +64,9 @@ describe('the artist blocks', () => {
           ],
         },
       ],
-    })?.blocks[0] as Of<'art'>;
+    })?.blocks[0] as Of<'gallery'>;
+    expect(block.type).toBe('gallery');
+    expect(block.ratings).toBe(true);
     expect(block.albums).toHaveLength(1);
     expect(block.albums[0].pieces).toEqual([
       { url: MXC, title: 'Cat', description: 'a cat', tags: ['cats', 'ink'], rating: 'mature' },
@@ -72,7 +74,7 @@ describe('the artist blocks', () => {
     ]);
   });
 
-  it('caps art pieces across a page', () => {
+  it('caps gallery pieces across a page', () => {
     const album = (id: string, count: number) => ({ id, title: id, pieces: Array.from({ length: count }, () => ({ url: MXC })) });
     const blocks = page({
       blocks: [
@@ -80,9 +82,9 @@ describe('the artist blocks', () => {
         { id: 'b', type: 'art', albums: [album('z', LIMITS.albumPieces)] },
         { id: 'c', type: 'art', albums: [album('w', 5)] },
       ],
-    })?.blocks as Of<'art'>[];
+    })?.blocks as Of<'gallery'>[];
     const total = blocks.reduce((sum, block) => sum + block.albums.reduce((n, a) => n + a.pieces.length, 0), 0);
-    expect(total).toBe(LIMITS.artPieces);
+    expect(total).toBe(LIMITS.galleryPieces);
     expect(blocks.map((block) => block.id)).toEqual(['a', 'b']);
   });
 
@@ -98,8 +100,37 @@ describe('the artist blocks', () => {
           ],
         },
       ],
-    })?.blocks[0] as Of<'art'>;
+    })?.blocks[0] as Of<'gallery'>;
     expect(new Set(block.albums.map((album) => album.id)).size).toBe(2);
+  });
+
+  it('keeps ratings only when the gallery asks for them', () => {
+    const albums = [{ id: 'x', title: 'X', pieces: [{ url: MXC, rating: 'mature', tags: ['ink'] }] }];
+    const rated = page({ blocks: [{ id: 'g', type: 'gallery', ratings: true, albums }] })?.blocks[0] as Of<'gallery'>;
+    expect(rated.ratings).toBe(true);
+    expect(rated.albums[0].pieces[0].rating).toBe('mature');
+    const plain = page({ blocks: [{ id: 'g', type: 'gallery', albums }] })?.blocks[0] as Of<'gallery'>;
+    expect(plain.ratings).toBe(false);
+    expect(plain.albums[0].pieces[0]).toEqual({ url: MXC, tags: ['ink'], rating: 'general' });
+    const stringy = page({ blocks: [{ id: 'g', type: 'gallery', ratings: 'yes', albums }] })?.blocks[0] as Of<'gallery'>;
+    expect(stringy.ratings).toBe(false);
+  });
+
+  it('reads an older gallery of flat images as one album, captions becoming descriptions', () => {
+    const block = page({
+      blocks: [{ id: 'g', type: 'gallery', title: 'Holiday', images: [{ url: MXC, caption: 'beach' }, { url: 'https://evil.example/x.png' }, { url: MXC }] }],
+    })?.blocks[0] as Of<'gallery'>;
+    expect(block.ratings).toBe(false);
+    expect(block.albums).toEqual([
+      {
+        id: 'a0',
+        title: 'Holiday',
+        pieces: [
+          { url: MXC, description: 'beach', tags: [], rating: 'general' },
+          { url: MXC, tags: [], rating: 'general' },
+        ],
+      },
+    ]);
   });
 
   it('keeps a commissions block, which carries only a title', () => {

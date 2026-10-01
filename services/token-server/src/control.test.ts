@@ -181,6 +181,7 @@ describe('albumMedia', () => {
       { id: 'art', type: 'art', albums: [{ id: 'a1', title: 'Fan Art', pieces: [{ url: 'mxc://s/p1' }, { url: 'mxc://s/p2', rating: 'mature' }] }, { id: 'a2', title: 'Other', pieces: [{ url: 'mxc://s/p3' }] }] },
       { id: 'mix', type: 'music', title: 'Demos', tracks: [{ url: 'mxc://s/t1', mimetype: 'audio/mpeg', title: 'x' }] },
       { id: 'g', type: 'gallery', title: 'Photos', images: [{ url: 'mxc://s/i1' }] },
+      { id: 'ga', type: 'gallery', ratings: true, albums: [{ id: 'sk', title: 'Sketches', pieces: [{ url: 'mxc://s/s1' }, { url: 'mxc://s/s2', rating: 'mature' }] }] },
     ],
   };
 
@@ -189,6 +190,7 @@ describe('albumMedia', () => {
     assert.deepEqual(albumMedia(page, 'a2')[0].urls, ['mxc://s/p3']);
     assert.deepEqual(albumMedia(page, 'Demos')[0].urls, ['mxc://s/t1']);
     assert.deepEqual(albumMedia(page, 'g')[0].urls, ['mxc://s/i1']);
+    assert.deepEqual(albumMedia(page, 'sketches'), [{ label: 'album "Sketches"', urls: ['mxc://s/s1', 'mxc://s/s2'] }]);
     assert.deepEqual(albumMedia(page, 'nothing'), []);
     assert.deepEqual(albumMedia(undefined, 'Fan Art'), []);
   });

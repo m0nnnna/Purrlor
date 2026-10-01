@@ -107,14 +107,14 @@ export function albumMedia(content: Record<string, unknown> | undefined, name: s
     (typeof item.id === 'string' && item.id.toLowerCase() === wanted) || (typeof item.title === 'string' && item.title.trim().toLowerCase() === wanted);
   const found: { label: string; urls: string[] }[] = [];
   for (const block of content.blocks.filter(isRecord)) {
-    if (block.type === 'art' && Array.isArray(block.albums)) {
+    if ((block.type === 'art' || block.type === 'gallery') && Array.isArray(block.albums)) {
       for (const album of block.albums.filter(isRecord)) {
         if (!matches(album)) continue;
-        const urls = pageMedia({ blocks: [{ type: 'art', albums: [album] }] }, { includeMature: true });
+        const urls = pageMedia({ blocks: [{ type: 'gallery', albums: [album] }] }, { includeMature: true });
         found.push({ label: `album "${String(album.title ?? album.id)}"`, urls: [...urls] });
       }
     } else if ((block.type === 'gallery' || block.type === 'music') && matches(block)) {
-      found.push({ label: `${block.type} "${String(block.title ?? block.id)}"`, urls: [...pageMedia({ blocks: [block] })] });
+      found.push({ label: `${block.type} "${String(block.title ?? block.id)}"`, urls: [...pageMedia({ blocks: [block] }, { includeMature: true })] });
     }
   }
   return found.filter((match) => match.urls.length > 0);

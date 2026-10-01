@@ -4,7 +4,7 @@ import { createContext } from 'react';
 import { parseProfilePage, type ProfilePage } from '../../matrix/profilePage';
 import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
-import { visiblePieces } from './ArtBlock';
+import { visiblePieces } from './GalleryBlock';
 
 const viewer = vi.hoisted(() => ({ signedIn: false }));
 vi.mock('../../matrix/hooks/useSignedIn', () => ({ useSignedIn: () => viewer.signedIn }));
@@ -32,7 +32,8 @@ const qa = (container: HTMLElement, role: string) => Array.from(container.queryS
 const art = pageOf([
   {
     id: 'a',
-    type: 'art',
+    type: 'gallery',
+    ratings: true,
     title: 'My art',
     albums: [
       {
@@ -47,7 +48,7 @@ const art = pageOf([
   },
 ]);
 
-describe('the art gallery', () => {
+describe('the gallery with ratings on', () => {
   it('hides Mature pieces from someone signed out, and says so', () => {
     const { container } = render(<PageBlocks blocks={art.blocks} />);
     expect(qa(container, 'art-piece').map((piece) => piece.getAttribute('data-nu-rating'))).toEqual(['general']);
@@ -70,18 +71,18 @@ describe('the art gallery', () => {
 
   it('keeps an album that is all Mature out of the page for someone who has not said, cover included', () => {
     const page = pageOf([
-      { id: 'a', type: 'art', albums: [{ id: 'x', title: 'All mature', pieces: [{ url: MXC('m1'), rating: 'mature' }] }] },
+      { id: 'a', type: 'gallery', ratings: true, albums: [{ id: 'x', title: 'All mature', pieces: [{ url: MXC('m1'), rating: 'mature' }] }] },
     ]);
     const { container } = render(<PageBlocks blocks={page.blocks} />);
     expect(container.textContent).toBe('');
-    expect(visiblePieces(page.blocks[0].type === 'art' ? page.blocks[0].albums[0] : (undefined as never), false)).toEqual([]);
+    expect(visiblePieces(page.blocks[0].type === 'gallery' ? page.blocks[0].albums[0] : (undefined as never), false)).toEqual([]);
   });
 
   it('puts pieces on the page only once its album is open', () => {
     const page = pageOf([
       {
         id: 'a',
-        type: 'art',
+        type: 'gallery',
         albums: [
           { id: 'x', title: 'One', pieces: [{ url: MXC('p1') }] },
           { id: 'y', title: 'Two', pieces: [{ url: MXC('p2') }] },
@@ -92,6 +93,16 @@ describe('the art gallery', () => {
     expect(qa(container, 'art-piece')).toHaveLength(0);
     fireEvent.click(qa(container, 'art-album')[0].querySelector('button') as Element);
     expect(qa(container, 'art-piece')).toHaveLength(1);
+  });
+});
+
+describe('the gallery without ratings', () => {
+  it('shows a lone album open, with no header to fold it away, and every piece unblurred', () => {
+    const page = pageOf([{ id: 'a', type: 'gallery', albums: [{ id: 'x', title: 'Only', pieces: [{ url: MXC('p1') }, { url: MXC('p2'), rating: 'mature' }] }] }]);
+    const { container } = render(<PageBlocks blocks={page.blocks} />);
+    expect(qa(container, 'art-piece')).toHaveLength(2);
+    expect(container.querySelector('.nu-profile-page__album-head')).toBeNull();
+    expect(container.querySelector('.nu-profile-page__piece-image--blurred')).toBeNull();
   });
 });
 

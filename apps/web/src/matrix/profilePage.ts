@@ -97,13 +97,15 @@ export type PageStyle = {
 };
 
 export type PageLink = { label: string; url: string; emote?: string; color?: string };
-export type PageImage = { url: string; caption?: string };
 
 export type PageBlock =
   | { id: string; type: 'text'; title?: string; body: string; formatted?: string }
   | { id: string; type: 'links'; title?: string; items: PageLink[] }
   | { id: string; type: 'image'; url: string; caption?: string; link?: string }
-  | { id: string; type: 'gallery'; title?: string; images: PageImage[] }
+  /** Albums of pieces, each with a caption and tags. With `ratings` on, a piece can be rated Mature.
+   *  This is the one gallery block: the older flat gallery (`images`) reads as a single album, and
+   *  the older `art` block reads as a gallery with ratings on. */
+  | { id: string; type: 'gallery'; title?: string; albums: ArtAlbum[]; ratings: boolean }
   | { id: string; type: 'song'; title?: string; url: string }
   | { id: string; type: 'spaces'; title?: string; spaces: PageSpace[] }
   | { id: string; type: 'divider'; style: DividerStyle; emote?: string }
@@ -111,8 +113,6 @@ export type PageBlock =
   | { id: string; type: 'friends'; title?: string; users: string[] }
   /** Visitors' messages, kept in the profile room (matrix/guestbook.ts). The owner's rules are here. */
   | { id: string; type: 'guestbook'; title?: string; who: GuestbookWho; slowmode: number; blockedWords: string[] }
-  /** An artist's albums of pieces, each with a rating and tags. */
-  | { id: string; type: 'art'; title?: string; albums: ArtAlbum[] }
   /** Commission status, price sheet and queue, drawn from their own state events (matrix/commissions.ts). */
   | { id: string; type: 'commissions'; title?: string }
   /** Audio the owner uploaded, played by the page's own player. Nothing loads until play. */
@@ -134,9 +134,8 @@ export type ProfilePage = { version: number; style: PageStyle; blocks: PageBlock
 
 export const LIMITS = {
   blocks: 40,
-  /** Background, image blocks and gallery images together, so a page stays light to load. */
+  /** Background and image blocks together, so a page stays light to load. */
   images: 20,
-  galleryImages: 12,
   links: 12,
   spaces: 8,
   /** The Top 8. */
@@ -147,9 +146,9 @@ export const LIMITS = {
   guestbookSlowmode: 3600,
   albums: 12,
   albumPieces: 24,
-  /** Pieces across a page's art blocks. They load only when their album is opened, so they don't
-   *  count toward `images`. */
-  artPieces: 60,
+  /** Pieces across a page's gallery blocks. They load only when their album is opened, so they
+   *  don't count toward `images`. */
+  galleryPieces: 60,
   /** Tracks across a page's music blocks. They load only when played, so they don't count toward `images`. */
   tracks: 20,
   trackTitle: 100,
@@ -337,6 +336,35 @@ function readAlbum(raw: unknown, index: number): ArtAlbum | undefined {
   return { id, title, ...(description && { description }), pieces };
 }
 
+/** A gallery block's albums, from `albums` or, in an older gallery, from its flat `images` (one
+ *  album, the captions becoming descriptions). Without `ratings` every piece is General. */
+function readAlbums(raw: Record<string, unknown>, ratings: boolean): ArtAlbum[] {
+  let albums: ArtAlbum[];
+  if (Array.isArray(raw.albums)) {
+    albums = raw.albums.map(readAlbum).filter((album): album is ArtAlbum => !!album);
+  } else {
+    const pieces = (Array.isArray(raw.images) ? raw.images : [])
+      .map((image): ArtPiece | undefined => {
+        if (!isRecord(image)) return undefined;
+        const url = readMxc(image.url);
+        const description = readLine(image.caption, LIMITS.caption);
+        return url ? { url, ...(description && { description }), tags: [], rating: 'general' } : undefined;
+      })
+      .filter((piece): piece is ArtPiece => !!piece)
+      .slice(0, LIMITS.albumPieces);
+    albums = pieces.length > 0 ? [{ id: 'a0', title: readLine(raw.title, LIMITS.title) ?? 'Photos', pieces }] : [];
+  }
+  const seen = new Set<string>();
+  return albums
+    .map((album) => {
+      let id = album.id;
+      while (seen.has(id)) id = `${id}_`;
+      seen.add(id);
+      return { ...album, id, ...(!ratings && { pieces: album.pieces.map((piece): ArtPiece => ({ ...piece, rating: 'general' })) }) };
+    })
+    .slice(0, LIMITS.albums);
+}
+
 /** An audio type from the allowlist, lower-cased and without parameters (`audio/ogg; codecs=opus`). */
 export function readAudioType(value: unknown): MusicAudioType | undefined {
   if (typeof value !== 'string' || value.length > 100) return undefined;
@@ -388,17 +416,12 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
       const link = readHttpsUrl(raw.link);
       return { id, type: 'image', url, ...(caption && { caption }), ...(link && { link }) };
     }
-    case 'gallery': {
-      const images = (Array.isArray(raw.images) ? raw.images : [])
-        .map((image): PageImage | undefined => {
-          if (!isRecord(image)) return undefined;
-          const url = readMxc(image.url);
-          const caption = readLine(image.caption, LIMITS.caption);
-          return url ? { url, ...(caption && { caption }) } : undefined;
-        })
-        .filter((image): image is PageImage => !!image)
-        .slice(0, LIMITS.galleryImages);
-      return images.length > 0 ? { id, type: 'gallery', ...withTitle(raw), images } : undefined;
+    case 'gallery':
+    case 'art': {
+      // `art` is what a gallery with ratings was called before the two blocks became one.
+      const ratings = raw.type === 'art' || raw.ratings === true;
+      const albums = readAlbums(raw, ratings);
+      return albums.length > 0 ? { id, type: 'gallery', ...withTitle(raw), albums, ratings } : undefined;
     }
     case 'song': {
       const url = readHttpsUrl(raw.url);
@@ -434,20 +457,6 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
         blockedWords,
       };
     }
-    case 'art': {
-      const seen = new Set<string>();
-      const albums = (Array.isArray(raw.albums) ? raw.albums : [])
-        .map(readAlbum)
-        .filter((album): album is ArtAlbum => !!album)
-        .map((album) => {
-          let id = album.id;
-          while (seen.has(id)) id = `${id}_`;
-          seen.add(id);
-          return { ...album, id };
-        })
-        .slice(0, LIMITS.albums);
-      return albums.length > 0 ? { id, type: 'art', ...withTitle(raw), albums } : undefined;
-    }
     case 'commissions':
       return { id, type: 'commissions', ...withTitle(raw) };
     case 'music': {
@@ -462,12 +471,14 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
   }
 }
 
-function artPieceCount(block: PageBlock): number {
-  return block.type === 'art' ? block.albums.reduce((count, album) => count + album.pieces.length, 0) : 0;
+type GalleryBlock = Extract<PageBlock, { type: 'gallery' }>;
+
+function galleryPieceCount(block: GalleryBlock): number {
+  return block.albums.reduce((count, album) => count + album.pieces.length, 0);
 }
 
-/** An art block cut down to `room` pieces, dropping albums that end up empty. */
-function limitArtPieces(block: Extract<PageBlock, { type: 'art' }>, room: number): Extract<PageBlock, { type: 'art' }> | undefined {
+/** A gallery block cut down to `room` pieces, dropping albums that end up empty. */
+function limitGalleryPieces(block: GalleryBlock, room: number): GalleryBlock | undefined {
   let left = room;
   const albums: ArtAlbum[] = [];
   for (const album of block.albums) {
@@ -480,9 +491,7 @@ function limitArtPieces(block: Extract<PageBlock, { type: 'art' }>, room: number
 }
 
 function blockImageCount(block: PageBlock): number {
-  if (block.type === 'image') return 1;
-  if (block.type === 'gallery') return block.images.length;
-  return 0;
+  return block.type === 'image' ? 1 : 0;
 }
 
 /**
@@ -494,7 +503,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
   const seen = new Set<string>();
   const blocks: PageBlock[] = [];
   let images = backgroundImages;
-  let artPieces = 0;
+  let galleryPieces = 0;
   let tracks = 0;
   for (const [index, item] of raw.entries()) {
     if (blocks.length >= LIMITS.blocks) break;
@@ -506,14 +515,10 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
     const room = LIMITS.images - images;
     if (block.type === 'image' && room < 1) continue;
     if (block.type === 'gallery') {
-      if (room < 1) continue;
-      block = { ...block, images: block.images.slice(0, room) };
-    }
-    if (block.type === 'art') {
-      const limited = limitArtPieces(block, LIMITS.artPieces - artPieces);
+      const limited = limitGalleryPieces(block, LIMITS.galleryPieces - galleryPieces);
       if (!limited) continue;
       block = limited;
-      artPieces += artPieceCount(block);
+      galleryPieces += galleryPieceCount(block);
     }
     if (block.type === 'music') {
       if (tracks >= LIMITS.tracks) continue;

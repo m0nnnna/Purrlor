@@ -226,34 +226,6 @@ function ImageEditor({ block, onChange, imagesLeft }: EditorProps<'image'>) {
   );
 }
 
-function GalleryEditor({ block, onChange, imagesLeft }: EditorProps<'gallery'>) {
-  const room = Math.min(imagesLeft, LIMITS.galleryImages - block.images.length);
-  return (
-    <>
-      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
-      <div className="nu-page-editor__thumbs">
-        {block.images.map((image, index) => (
-          <ImageThumb
-            key={`${image.url}-${index}`}
-            mxc={image.url}
-            onRemove={() => onChange({ ...block, images: block.images.filter((_, i) => i !== index) })}
-          />
-        ))}
-      </div>
-      <ImagePicker
-        label="Add images…"
-        multiple
-        max={room}
-        disabled={room < 1}
-        onUploaded={(urls) => onChange({ ...block, images: [...block.images, ...urls.map((url) => ({ url }))] })}
-      />
-      <span className="nu-field__hint">
-        {block.images.length} of {LIMITS.galleryImages}
-      </span>
-    </>
-  );
-}
-
 function SongEditor({ block, onChange }: EditorProps<'song'>) {
   const unplayable = !!readHttpsUrl(block.url) && !parseWatchUrl(block.url);
   return (
@@ -439,7 +411,17 @@ function GuestbookEditor({ block, onChange }: EditorProps<'guestbook'>) {
 
 const RATING_LABELS: Record<ArtRating, string> = { general: 'General', mature: 'Mature (18+)' };
 
-function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange: (piece: ArtPiece) => void; onRemove: () => void }) {
+function PieceEditor({
+  piece,
+  ratings,
+  onChange,
+  onRemove,
+}: {
+  piece: ArtPiece;
+  ratings: boolean;
+  onChange: (piece: ArtPiece) => void;
+  onRemove: () => void;
+}) {
   return (
     <fieldset className="nu-page-editor__subitem">
       <div className="nu-page-editor__row">
@@ -450,7 +432,7 @@ function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange:
         </label>
       </div>
       <label className="nu-field">
-        Short description (optional)
+        Caption (optional)
         <input className="nu-field__input" value={piece.description ?? ''} maxLength={LIMITS.caption} onChange={(evt) => onChange({ ...piece, description: evt.target.value || undefined })} />
       </label>
       <div className="nu-page-editor__row">
@@ -464,6 +446,7 @@ function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange:
             }
           />
         </label>
+        {ratings && (
         <label className="nu-field">
           Rating
           <select className="nu-field__input" value={piece.rating} onChange={(evt) => onChange({ ...piece, rating: evt.target.value as ArtRating })} data-nu-role="page-editor-art-rating">
@@ -474,6 +457,7 @@ function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange:
             ))}
           </select>
         </label>
+        )}
       </div>
       <button type="button" className="nu-page-editor__inline-button" onClick={onRemove}>
         Remove this piece
@@ -482,17 +466,38 @@ function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange:
   );
 }
 
-function ArtEditor({ block, onChange }: EditorProps<'art'>) {
+function GalleryEditor({ block, onChange }: EditorProps<'gallery'>) {
   const total = block.albums.reduce((count, album) => count + album.pieces.length, 0);
   const setAlbum = (index: number, album: ArtAlbum) => onChange({ ...block, albums: block.albums.map((a, i) => (i === index ? album : a)) });
   return (
     <>
       <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <label className="nu-field__checkbox-row">
+        <input
+          type="checkbox"
+          checked={block.ratings}
+          data-nu-role="page-editor-gallery-ratings"
+          onChange={(evt) =>
+            onChange({
+              ...block,
+              ratings: evt.target.checked,
+              // Turning ratings off rates everything General again, so nothing stays hidden by a setting that's gone.
+              ...(!evt.target.checked && {
+                albums: block.albums.map((album) => ({ ...album, pieces: album.pieces.map((piece): ArtPiece => ({ ...piece, rating: 'general' })) })),
+              }),
+            })
+          }
+        />
+        Let me rate pieces as Mature
+      </label>
       <p className="nu-field__hint">
-        Pieces rated Mature are blurred until clicked for signed-in visitors, and never shown to anyone signed out. Everyone here is 18 or over, but 18+ content needs a content warning. {total} of {LIMITS.artPieces} pieces.
+        {block.ratings
+          ? 'Pieces rated Mature are blurred until clicked for signed-in visitors, and never shown to anyone signed out. Everyone here is 18 or over, but 18+ content needs a content warning. '
+          : ''}
+        {total} of {LIMITS.galleryPieces} pieces.
       </p>
       {block.albums.map((album, index) => (
-        <fieldset key={album.id} className="nu-page-editor__subitem" data-nu-role="page-editor-art-album">
+        <fieldset key={album.id} className="nu-page-editor__subitem" data-nu-role="page-editor-gallery-album">
           <label className="nu-field">
             Album title
             <input className="nu-field__input" value={album.title} maxLength={LIMITS.title} onChange={(evt) => setAlbum(index, { ...album, title: evt.target.value })} />
@@ -505,6 +510,7 @@ function ArtEditor({ block, onChange }: EditorProps<'art'>) {
             <PieceEditor
               key={`${piece.url}-${pieceIndex}`}
               piece={piece}
+              ratings={block.ratings}
               onChange={(next) => setAlbum(index, { ...album, pieces: album.pieces.map((p, i) => (i === pieceIndex ? next : p)) })}
               onRemove={() => setAlbum(index, { ...album, pieces: album.pieces.filter((_, i) => i !== pieceIndex) })}
             />
@@ -512,8 +518,8 @@ function ArtEditor({ block, onChange }: EditorProps<'art'>) {
           <ImagePicker
             label="Add pieces…"
             multiple
-            max={Math.min(LIMITS.albumPieces - album.pieces.length, LIMITS.artPieces - total)}
-            disabled={album.pieces.length >= LIMITS.albumPieces || total >= LIMITS.artPieces}
+            max={Math.min(LIMITS.albumPieces - album.pieces.length, LIMITS.galleryPieces - total)}
+            disabled={album.pieces.length >= LIMITS.albumPieces || total >= LIMITS.galleryPieces}
             onUploaded={(urls) => setAlbum(index, { ...album, pieces: [...album.pieces, ...urls.map((url): ArtPiece => ({ url, tags: [], rating: 'general' }))] })}
           />
           <button type="button" className="nu-page-editor__inline-button" onClick={() => onChange({ ...block, albums: block.albums.filter((_, i) => i !== index) })}>
@@ -577,8 +583,6 @@ function Fields({
       return <FriendsEditor block={block} onChange={onChange} {...shared} />;
     case 'guestbook':
       return <GuestbookEditor block={block} onChange={onChange} {...shared} />;
-    case 'art':
-      return <ArtEditor block={block} onChange={onChange} {...shared} />;
     case 'commissions':
       return <CommissionsEditor block={block} onChange={onChange} {...shared} />;
     default:

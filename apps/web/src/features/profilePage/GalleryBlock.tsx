@@ -4,7 +4,7 @@ import { useSignedIn } from '../../matrix/hooks/useSignedIn';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import type { ArtAlbum, ArtPiece, PageBlock } from '../../matrix/profilePage';
 
-type ArtBlockType = Extract<PageBlock, { type: 'art' }>;
+type GalleryBlockType = Extract<PageBlock, { type: 'gallery' }>;
 
 /** The pieces this viewer may see: Mature ones only when signed in (every account is 18+, so no further check). */
 export function visiblePieces(album: ArtAlbum, signedIn: boolean): ArtPiece[] {
@@ -41,7 +41,22 @@ function Piece({ piece, onOpen }: { piece: ArtPiece; onOpen: (src: string, alt: 
   );
 }
 
-function Album({ album, signedIn, open, onToggle }: { album: ArtAlbum; signedIn: boolean; open: boolean; onToggle: () => void }) {
+function Album({
+  album,
+  signedIn,
+  open,
+  single,
+  blockTitle,
+  onToggle,
+}: {
+  album: ArtAlbum;
+  signedIn: boolean;
+  open: boolean;
+  /** The block's only album: always open, with no header to fold it away. */
+  single: boolean;
+  blockTitle?: string;
+  onToggle: () => void;
+}) {
   const pieces = visiblePieces(album, signedIn);
   const [tag, setTag] = useState<string>();
   const [lightbox, setLightbox] = useState<{ src: string; alt: string }>();
@@ -54,6 +69,9 @@ function Album({ album, signedIn, open, onToggle }: { album: ArtAlbum; signedIn:
 
   return (
     <section className="nu-profile-page__album" data-nu-role="art-album">
+      {single ? (
+        album.title !== blockTitle && <h4 className="nu-profile-page__album-title">{album.title}</h4>
+      ) : (
       <button type="button" className="nu-profile-page__album-head" aria-expanded={open} onClick={onToggle}>
         {!open && cover && (
           <span className={cover.rating === 'mature' ? 'nu-profile-page__album-cover nu-profile-page__album-cover--blurred' : 'nu-profile-page__album-cover'}>
@@ -67,6 +85,7 @@ function Album({ album, signedIn, open, onToggle }: { album: ArtAlbum; signedIn:
           </span>
         </span>
       </button>
+      )}
       {album.description && <p className="nu-profile-page__album-description">{album.description}</p>}
       {/* Pieces load only once the album is open: a page of art stays light until someone looks. */}
       {open && (
@@ -97,18 +116,22 @@ function Album({ album, signedIn, open, onToggle }: { album: ArtAlbum; signedIn:
   );
 }
 
-/** An artist's albums. Only the open album's pieces load; Mature pieces are hidden when signed out, and blurred until clicked when signed in. */
-export function ArtBlock({ block }: { block: ArtBlockType }) {
+/**
+ * A page's gallery: albums of pieces with captions and tags. Only the open album's pieces load. With
+ * ratings on, Mature pieces are hidden when signed out and blurred until clicked when signed in.
+ */
+export function GalleryBlock({ block }: { block: GalleryBlockType }) {
   const signedIn = useSignedIn();
   const [open, setOpen] = useState<string | undefined>(block.albums.length === 1 ? block.albums[0].id : undefined);
   const albums = block.albums.filter((album) => visiblePieces(album, signedIn).length > 0);
   if (albums.length === 0) return null;
+  const single = albums.length === 1;
   return (
     <>
       {block.title && <h3 className="nu-profile-page__block-title">{block.title}</h3>}
       <div className="nu-profile-page__albums">
         {albums.map((album) => (
-          <Album key={album.id} album={album} signedIn={signedIn} open={open === album.id} onToggle={() => setOpen(open === album.id ? undefined : album.id)} />
+          <Album key={album.id} album={album} signedIn={signedIn} single={single} blockTitle={block.title} open={single || open === album.id} onToggle={() => setOpen(open === album.id ? undefined : album.id)} />
         ))}
       </div>
     </>

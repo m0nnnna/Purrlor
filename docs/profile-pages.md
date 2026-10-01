@@ -71,17 +71,21 @@ Two blocks that depend on other people, so they're checked when the page is draw
   The word list is part of the page, so it's public. Signed-out visitors don't see the guestbook: it
   says "Sign in to read and sign this guestbook", and that's intended.
 
-## Artists: galleries and commissions
+## Galleries and commissions
 
-Two more blocks, for artists.
+A gallery for anyone, and a commissions block for artists.
 
-- **Art gallery** (`art` block). Albums (title, description) of pieces (image, title, short
-  description, up to 6 tags, a rating of **General** or **Mature**). Only an open album's pieces load,
-  so art pieces have their own cap (60 across a page, 24 per album) instead of counting toward the
-  20 images a page shows. Tapping a tag filters an album. **Mature** pieces are blurred until
-  clicked for signed-in people. There's no age setting: every account is 18+ (section 1 of the
-  terms), and 18+ content must carry a content warning. Signed-out visitors never see them (the public API leaves them out of the page and the media route won't
-  serve them), and an album that is all Mature isn't shown to them at all.
+- **Gallery** (`gallery` block): the one block for pictures. Albums (title, description) of pieces
+  (image, title, caption, up to 6 tags). Only an open album's pieces load, so pieces have their own
+  cap (60 across a page, 24 per album, 12 albums) instead of counting toward the 20 images a page
+  shows, and a block with a single album shows it open, with no header. Tapping a tag filters an
+  album. `ratings` is an option on the block (the builder's "Let me rate pieces as Mature"): on, each
+  piece is **General** or **Mature**; off, every piece is General. **Mature** pieces are blurred
+  until clicked for signed-in people. There's no age setting: every account is 18+ (section 1 of the
+  terms), and 18+ content must carry a content warning. Signed-out visitors never see them (the
+  public API leaves them out of the page and the media route won't serve them), and an album that is
+  all Mature isn't shown to them at all. Older pages still read: a flat gallery (`images`) is one
+  album, and an `art` block is a gallery with ratings on. The builder saves the new shape.
 - **Commissions** (`commissions` block, `matrix/commissions.ts`). The block only marks where it goes
   and carries a heading; the rest are state events in the profile room, separate from the page so a
   queue change doesn't rewrite it: `xyz.nekous.commission_status` (open, waitlist or closed, and a
@@ -120,7 +124,7 @@ A page written by another client, or by hand, can be odd but never more than the
 | Numbers | clamped: corners 0–32 px, see-through 0–70%, gradient angle 0–359° |
 | Text | labels and titles one line; text blocks up to 2,000 characters |
 | Blocks | known types only, at most 40, IDs `[A-Za-z0-9_-]` and unique |
-| Images per page | 20 in all (the background counts), 12 per gallery |
+| Images per page | 20 in all (the background counts); gallery pieces are separate, 60 per page |
 | Music tracks | `mxc://` files of an allowed sound type, 20 per page in all, title and artist one line each (100 characters) |
 
 Unknown fields and block types are dropped, not passed through. The renderer

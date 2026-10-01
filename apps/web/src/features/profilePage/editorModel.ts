@@ -65,7 +65,6 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   divider: 'Divider',
   friends: 'Top 8 friends',
   guestbook: 'Guestbook',
-  art: 'Art gallery',
   commissions: 'Commissions',
   music: 'Music',
 };
@@ -86,7 +85,7 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
       case 'image':
         return { id, type, url: '' };
       case 'gallery':
-        return { id, type, images: [] };
+        return { id, type, albums: [], ratings: false };
       case 'song':
         return { id, type, url: '' };
       case 'spaces':
@@ -97,8 +96,6 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
         return { id, type, users: [] };
       case 'guestbook':
         return { id, type, who: 'everyone', slowmode: 0, blockedWords: [] };
-      case 'art':
-        return { id, type, albums: [] };
       case 'commissions':
         return { id, type };
       case 'music':
@@ -132,10 +129,7 @@ export function canAddBlock(page: ProfilePage): boolean {
 /** Images on the page now, the background included, against LIMITS.images. */
 export function imageCount(page: ProfilePage): number {
   const background = page.style.background.kind === 'image' ? 1 : 0;
-  return page.blocks.reduce(
-    (count, block) => count + (block.type === 'image' && block.url ? 1 : block.type === 'gallery' ? block.images.length : 0),
-    background
-  );
+  return page.blocks.reduce((count, block) => count + (block.type === 'image' && block.url ? 1 : 0), background);
 }
 
 /**

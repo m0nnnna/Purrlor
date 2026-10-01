@@ -125,7 +125,9 @@ export function readFollows(state: RawEvent[], owner: string): Set<string> {
  * allows (their own page public, and they follow the owner back), so the answer never carries
  * the user ID of someone who hasn't chosen to be public, or who never chose to be this person's
  * friend. Mature art pieces are left out: they're only for signed-in people, since
- * 18+ content is for accounts (which are all 18+) and not for the open web. Everything else is passed on as stored; the client parses it.
+ * 18+ content is for accounts (which are all 18+) and not for the open web. That goes for a gallery
+ * block's albums as much as the older art block's, whatever the block says about ratings. Everything
+ * else is passed on as stored; the client parses it.
  */
 export function publicPageContent(content: Record<string, unknown>, friendShown: (userId: string) => boolean): Record<string, unknown> {
   if (!Array.isArray(content.blocks)) return content;
@@ -137,7 +139,7 @@ export function publicPageContent(content: Record<string, unknown>, friendShown:
         const users = Array.isArray(block.users) ? block.users.filter((user): user is string => typeof user === 'string' && friendShown(user)) : [];
         return { ...block, users };
       }
-      if (block.type === 'art' && Array.isArray(block.albums)) {
+      if ((block.type === 'art' || block.type === 'gallery') && Array.isArray(block.albums)) {
         const albums = block.albums.map((album) =>
           isRecord(album) && Array.isArray(album.pieces) ? { ...album, pieces: album.pieces.filter((piece) => !isRecord(piece) || piece.rating !== 'mature') } : album
         );
@@ -388,9 +390,6 @@ export function pageMedia(content: Record<string, unknown> | undefined, options:
       case 'image':
         add(block.url);
         break;
-      case 'gallery':
-        records(block.images).forEach((image) => add(image.url));
-        break;
       case 'links':
         records(block.items).forEach((item) => add(item.emote));
         break;
@@ -400,8 +399,12 @@ export function pageMedia(content: Record<string, unknown> | undefined, options:
       case 'divider':
         add(block.emote);
         break;
+      case 'gallery':
       case 'art':
-        // Mature pieces are for signed-in people only (every account is 18+); signed out sees none.
+        // A gallery is albums of pieces (the older art block is the same thing, and an older gallery
+        // is a flat list of images). Mature pieces are for signed-in people only (every account is
+        // 18+); signed out sees none.
+        records(block.images).forEach((image) => add(image.url));
         records(block.albums).forEach((album) =>
           records(album.pieces).forEach((piece) => {
             if (options.includeMature || piece.rating !== 'mature') add(piece.url);

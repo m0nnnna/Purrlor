@@ -36,17 +36,17 @@ describe('editorModel', () => {
     expect(canAddBlock(page)).toBe(false);
   });
 
-  it('counts images, the background included', () => {
+  it('counts images, the background included, but not gallery pieces (they load when their album opens)', () => {
     const page: ProfilePage = {
       ...emptyProfilePage(),
       style: { ...emptyProfilePage().style, background: { kind: 'image', url: 'mxc://s/bg', fit: 'cover' } },
       blocks: [
         { id: 'a', type: 'image', url: 'mxc://s/a' },
         { id: 'b', type: 'image', url: '' },
-        { id: 'c', type: 'gallery', images: [{ url: 'mxc://s/1' }, { url: 'mxc://s/2' }] },
+        { id: 'c', type: 'gallery', ratings: false, albums: [{ id: 'x', title: 'X', pieces: [{ url: 'mxc://s/1', tags: [], rating: 'general' }] }] },
       ],
     };
-    expect(imageCount(page)).toBe(4);
+    expect(imageCount(page)).toBe(2);
   });
 
   it('works out text formatting from the author’s emotes', () => {

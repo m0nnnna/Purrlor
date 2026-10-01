@@ -2,15 +2,14 @@ import { useContext, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
-import { Lightbox } from '../../components/Lightbox';
 import { MatrixClientContext } from '../../matrix/MatrixClientContext';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
-import type { PageBlock, PageImage, PageLink, PageSpace } from '../../matrix/profilePage';
+import type { PageBlock, PageLink, PageSpace } from '../../matrix/profilePage';
 import { renderMessageText } from '../messaging/renderMessageText';
 import { parseWatchUrl } from '../voice/watchTogether';
 import { linkDomain } from './pageStyle';
 import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
-import { ArtBlock } from './ArtBlock';
+import { GalleryBlock } from './GalleryBlock';
 import { CommissionsBlock } from './CommissionsBlock';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
@@ -86,31 +85,6 @@ function ImageBlock({ block }: { block: Block<'image'> }) {
       )}
       {block.caption && <figcaption className="nu-profile-page__caption">{block.caption}</figcaption>}
     </figure>
-  );
-}
-
-function GalleryImage({ image, onOpen }: { image: PageImage; onOpen: (src: string, alt: string) => void }) {
-  const src = useMediaUrl(image.url);
-  if (!src) return <span className="nu-profile-page__gallery-item" />;
-  return (
-    <button type="button" className="nu-profile-page__gallery-item" onClick={() => onOpen(src, image.caption ?? '')}>
-      <img src={src} alt={image.caption ?? ''} loading="lazy" />
-    </button>
-  );
-}
-
-function GalleryBlock({ block }: { block: Block<'gallery'> }) {
-  const [open, setOpen] = useState<{ src: string; alt: string }>();
-  return (
-    <>
-      <BlockTitle title={block.title} />
-      <div className="nu-profile-page__gallery">
-        {block.images.map((image, index) => (
-          <GalleryImage key={index} image={image} onOpen={(src, alt) => setOpen({ src, alt })} />
-        ))}
-      </div>
-      {open && <Lightbox src={open.src} alt={open.alt} onClose={() => setOpen(undefined)} />}
-    </>
   );
 }
 
@@ -245,8 +219,6 @@ function BlockBody({ block }: { block: PageBlock }) {
       return <FriendsBlock block={block} />;
     case 'guestbook':
       return <GuestbookBlock block={block} />;
-    case 'art':
-      return <ArtBlock block={block} />;
     case 'commissions':
       return <CommissionsBlock title={block.title} />;
     default:

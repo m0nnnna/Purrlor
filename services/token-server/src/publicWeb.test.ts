@@ -388,6 +388,31 @@ describe('mature art, signed out', () => {
   });
 });
 
+describe('mature pieces in a gallery block, signed out', () => {
+  const content = {
+    version: 1,
+    blocks: [
+      {
+        type: 'gallery',
+        ratings: true,
+        albums: [{ title: 'A', pieces: [{ url: 'mxc://s/general' }, { url: 'mxc://s/mature', rating: 'mature' }] }],
+        images: [{ url: 'mxc://s/flat' }],
+      },
+    ],
+  };
+
+  it('are left out of the page answer, as in the older art block', () => {
+    const shown = JSON.stringify(publicPageContent(content, () => true));
+    assert.ok(!shown.includes('mxc://s/mature'));
+    assert.ok(shown.includes('mxc://s/general'));
+  });
+
+  it("are never public files, while a gallery's albums and older flat images are", () => {
+    assert.deepEqual([...pageMedia(content)].sort(), ['mxc://s/flat', 'mxc://s/general']);
+    assert.ok(pageMedia(content, { includeMature: true }).has('mxc://s/mature'));
+  });
+});
+
 describe('parseRange', () => {
   it('reads one range of a file', () => {
     assert.deepEqual(parseRange('bytes=0-99', 1000), { start: 0, end: 99 });
