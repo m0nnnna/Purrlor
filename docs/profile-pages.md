@@ -78,12 +78,10 @@ Two more blocks, for artists.
 - **Art gallery** (`art` block). Albums (title, description) of pieces (image, title, short
   description, up to 6 tags, a rating of **General** or **Mature**). Only an open album's pieces load,
   so art pieces have their own cap (60 across a page, 24 per album) instead of counting toward the
-  20 images a page shows. Tapping a tag filters an album. **Mature** pieces are hidden from anyone
-  who hasn't said they're over 18 (Account Settings → Privacy, `xyz.nekous.age_confirmation` in
-  account data, `matrix/ageSetting.ts`) and blurred until clicked for those who have; signed-out
-  visitors never see them (the public API leaves them out of the page and the media route won't
-  serve them), and an album that is all Mature isn't shown at all. The claim isn't
-  verified (the plan's open question).
+  20 images a page shows. Tapping a tag filters an album. **Mature** pieces are blurred until
+  clicked for signed-in people. There's no age setting: every account is 18+ (section 1 of the
+  terms), and 18+ content must carry a content warning. Signed-out visitors never see them (the public API leaves them out of the page and the media route won't
+  serve them), and an album that is all Mature isn't shown to them at all.
 - **Commissions** (`commissions` block, `matrix/commissions.ts`). The block only marks where it goes
   and carries a heading; the rest are state events in the profile room, separate from the page so a
   queue change doesn't rewrite it: `xyz.nekous.commission_status` (open, waitlist or closed, and a

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { parseAlertList, shouldAlertOpening, withAlert } from './commissionAlerts';
-import { parseOver18 } from './ageSetting';
 
 describe('the alert list', () => {
   it('toggles an artist without duplicating them', () => {
@@ -33,14 +32,5 @@ describe('shouldAlertOpening', () => {
     expect(shouldAlertOpening({ ...change, previousStatus: undefined }, ['@artist:s'], '@me:s', now)).toBe(false);
     expect(shouldAlertOpening({ ...change, ts: now - 10 * 60_000 }, ['@artist:s'], '@me:s', now)).toBe(false);
     expect(shouldAlertOpening(change, ['@artist:s'], '@artist:s', now)).toBe(false);
-  });
-});
-
-describe('the over-18 setting', () => {
-  it('is on only for a clear yes', () => {
-    expect(parseOver18({ over18: true })).toBe(true);
-    expect(parseOver18({ over18: 'true' })).toBe(false);
-    expect(parseOver18({})).toBe(false);
-    expect(parseOver18(undefined)).toBe(false);
   });
 });

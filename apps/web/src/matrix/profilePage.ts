@@ -56,7 +56,7 @@ export const GUESTBOOK_WHO = ['everyone', 'following'] as const;
 export type GuestbookWho = (typeof GUESTBOOK_WHO)[number];
 
 /** A piece's content rating. Mature pieces are blurred until clicked, and hidden unless the viewer
- *  has said they're over 18 (matrix/ageSetting.ts). */
+ *  signed in (every account is 18+) and never shown signed out. */
 export const ART_RATINGS = ['general', 'mature'] as const;
 export type ArtRating = (typeof ART_RATINGS)[number];
 

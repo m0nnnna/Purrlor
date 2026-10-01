@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Lightbox } from '../../components/Lightbox';
-import { useOver18 } from '../../matrix/hooks/useOver18';
+import { useSignedIn } from '../../matrix/hooks/useSignedIn';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import type { ArtAlbum, ArtPiece, PageBlock } from '../../matrix/profilePage';
 
 type ArtBlockType = Extract<PageBlock, { type: 'art' }>;
 
-/** The pieces this viewer may see: Mature ones only if they've said they're over 18. */
-export function visiblePieces(album: ArtAlbum, over18: boolean): ArtPiece[] {
-  return album.pieces.filter((piece) => piece.rating !== 'mature' || over18);
+/** The pieces this viewer may see: Mature ones only when signed in (every account is 18+, so no further check). */
+export function visiblePieces(album: ArtAlbum, signedIn: boolean): ArtPiece[] {
+  return album.pieces.filter((piece) => piece.rating !== 'mature' || signedIn);
 }
 
 function Piece({ piece, onOpen }: { piece: ArtPiece; onOpen: (src: string, alt: string) => void }) {
@@ -41,8 +41,8 @@ function Piece({ piece, onOpen }: { piece: ArtPiece; onOpen: (src: string, alt: 
   );
 }
 
-function Album({ album, over18, open, onToggle }: { album: ArtAlbum; over18: boolean; open: boolean; onToggle: () => void }) {
-  const pieces = visiblePieces(album, over18);
+function Album({ album, signedIn, open, onToggle }: { album: ArtAlbum; signedIn: boolean; open: boolean; onToggle: () => void }) {
+  const pieces = visiblePieces(album, signedIn);
   const [tag, setTag] = useState<string>();
   const [lightbox, setLightbox] = useState<{ src: string; alt: string }>();
   // The cover is a piece anyone may see, so a Mature one never fronts an album for a viewer who can't open it.
@@ -87,7 +87,7 @@ function Album({ album, over18, open, onToggle }: { album: ArtAlbum; over18: boo
           </div>
           {hidden > 0 && (
             <p className="nu-field__hint" data-nu-role="art-mature-hidden">
-              {hidden} Mature {hidden === 1 ? 'piece is' : 'pieces are'} hidden unless you’re signed in and have said you’re over 18 (Account Settings → Privacy).
+              {hidden} Mature {hidden === 1 ? 'piece is' : 'pieces are'} hidden unless you’re signed in.
             </p>
           )}
           {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(undefined)} />}
@@ -97,18 +97,18 @@ function Album({ album, over18, open, onToggle }: { album: ArtAlbum; over18: boo
   );
 }
 
-/** An artist's albums. Only the open album's pieces load; Mature pieces are hidden unless you've said you're over 18, then blurred. */
+/** An artist's albums. Only the open album's pieces load; Mature pieces are hidden when signed out, and blurred until clicked when signed in. */
 export function ArtBlock({ block }: { block: ArtBlockType }) {
-  const over18 = useOver18();
+  const signedIn = useSignedIn();
   const [open, setOpen] = useState<string | undefined>(block.albums.length === 1 ? block.albums[0].id : undefined);
-  const albums = block.albums.filter((album) => visiblePieces(album, over18).length > 0);
+  const albums = block.albums.filter((album) => visiblePieces(album, signedIn).length > 0);
   if (albums.length === 0) return null;
   return (
     <>
       {block.title && <h3 className="nu-profile-page__block-title">{block.title}</h3>}
       <div className="nu-profile-page__albums">
         {albums.map((album) => (
-          <Album key={album.id} album={album} over18={over18} open={open === album.id} onToggle={() => setOpen(open === album.id ? undefined : album.id)} />
+          <Album key={album.id} album={album} signedIn={signedIn} open={open === album.id} onToggle={() => setOpen(open === album.id ? undefined : album.id)} />
         ))}
       </div>
     </>

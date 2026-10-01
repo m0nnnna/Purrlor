@@ -6,8 +6,8 @@ import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
 import { visiblePieces } from './ArtBlock';
 
-const over18 = vi.hoisted(() => ({ value: false }));
-vi.mock('../../matrix/hooks/useOver18', () => ({ useOver18: () => over18.value }));
+const viewer = vi.hoisted(() => ({ signedIn: false }));
+vi.mock('../../matrix/hooks/useSignedIn', () => ({ useSignedIn: () => viewer.signedIn }));
 vi.mock('../../matrix/MatrixClientContext', () => ({
   MatrixClientContext: createContext(undefined),
   useMatrixClient: () => {
@@ -20,7 +20,7 @@ vi.mock('../../matrix/hooks/useMediaUrl', () => ({
 
 afterEach(() => {
   cleanup();
-  over18.value = false;
+  viewer.signedIn = false;
   vi.unstubAllGlobals();
 });
 
@@ -48,15 +48,15 @@ const art = pageOf([
 ]);
 
 describe('the art gallery', () => {
-  it('hides Mature pieces from someone who has not said they are over 18, and says so', () => {
+  it('hides Mature pieces from someone signed out, and says so', () => {
     const { container } = render(<PageBlocks blocks={art.blocks} />);
     expect(qa(container, 'art-piece').map((piece) => piece.getAttribute('data-nu-rating'))).toEqual(['general']);
     expect(container.innerHTML).not.toContain('spicy');
     expect(q(container, 'art-mature-hidden')?.textContent).toContain('1 Mature piece is hidden');
   });
 
-  it('blurs Mature pieces for someone who has, until they click', () => {
-    over18.value = true;
+  it('blurs Mature pieces for someone signed in, until they click', () => {
+    viewer.signedIn = true;
     const { container } = render(<PageBlocks blocks={art.blocks} />);
     const pieces = qa(container, 'art-piece');
     expect(pieces).toHaveLength(2);

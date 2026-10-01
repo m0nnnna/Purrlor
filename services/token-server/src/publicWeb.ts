@@ -124,8 +124,8 @@ export function readFollows(state: RawEvent[], owner: string): Set<string> {
  * A stored page as signed-out visitors get it. The Top 8 keeps only the friends `friendShown`
  * allows (their own page public, and they follow the owner back), so the answer never carries
  * the user ID of someone who hasn't chosen to be public, or who never chose to be this person's
- * friend. Mature art pieces are left out: they're only for people who said they're over 18, and
- * nobody signed out has. Everything else is passed on as stored; the client parses it.
+ * friend. Mature art pieces are left out: they're only for signed-in people, since
+ * 18+ content is for accounts (which are all 18+) and not for the open web. Everything else is passed on as stored; the client parses it.
  */
 export function publicPageContent(content: Record<string, unknown>, friendShown: (userId: string) => boolean): Record<string, unknown> {
   if (!Array.isArray(content.blocks)) return content;
@@ -401,7 +401,7 @@ export function pageMedia(content: Record<string, unknown> | undefined, options:
         add(block.emote);
         break;
       case 'art':
-        // Mature pieces are for people who said they're over 18, which nobody signed out has.
+        // Mature pieces are for signed-in people only (every account is 18+); signed out sees none.
         records(block.albums).forEach((album) =>
           records(album.pieces).forEach((piece) => {
             if (options.includeMature || piece.rating !== 'mature') add(piece.url);

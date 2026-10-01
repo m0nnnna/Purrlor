@@ -489,7 +489,7 @@ function ArtEditor({ block, onChange }: EditorProps<'art'>) {
     <>
       <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
       <p className="nu-field__hint">
-        Pieces rated Mature are hidden from anyone who hasn’t said they’re over 18, and blurred until clicked for those who have. {total} of {LIMITS.artPieces} pieces.
+        Pieces rated Mature are blurred until clicked for signed-in visitors, and never shown to anyone signed out. Everyone here is 18 or over, but 18+ content needs a content warning. {total} of {LIMITS.artPieces} pieces.
       </p>
       {block.albums.map((album, index) => (
         <fieldset key={album.id} className="nu-page-editor__subitem" data-nu-role="page-editor-art-album">
