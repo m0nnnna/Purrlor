@@ -3,6 +3,7 @@ import { useMatrixClient, MatrixClientContext } from '../../matrix/MatrixClientC
 import {
   COMMISSION_STATUS_LABELS,
   COMMISSION_STATUSES,
+  hasConsented,
   setCommissionConsent,
   setCommissionStatus,
   slotClientName,
@@ -223,9 +224,9 @@ function SignedInCommissions({ owner }: { owner: { userId: string; roomId?: stri
                 consent={
                   label.mine
                     ? {
-                        agreed: consents.get(slot.id)?.has(me) ?? false,
+                        agreed: !!me && hasConsented(consents, slot, me),
                         onChange: (agree) => {
-                          setCommissionConsent(mx, owner.roomId as string, owner.userId, slot.id, agree).then(reload, (err: unknown) =>
+                          setCommissionConsent(mx, owner.roomId as string, owner.userId, slot, agree).then(reload, (err: unknown) =>
                             setError(err instanceof Error ? err.message : 'Couldn’t save that')
                           );
                         },

@@ -45,6 +45,21 @@ describe('visibleGuestbookEntries', () => {
     const visible = visibleGuestbookEntries(entries, '@owner:s', { ...open, who: 'following' }, ['@friend:s']);
     expect(visible.map((e) => e.eventId)).toEqual(['$1', '$3', '$4']);
   });
+
+  it('leaves out entries sent faster than the slowmode allows, from another client say', () => {
+    // Newest first, as the page loads them. @x signs at 0s, 5s, 20s and 61s under a 60s slowmode.
+    const flood = [
+      entry('$x4', '@x:s', 'four', 61_000),
+      entry('$o2', '@owner:s', 'mine', 30_000),
+      entry('$x3', '@x:s', 'three', 20_000),
+      entry('$o1', '@owner:s', 'mine too', 25_000),
+      entry('$y1', '@y:s', 'hi', 10_000),
+      entry('$x2', '@x:s', 'two', 5_000),
+      entry('$x1', '@x:s', 'one', 0),
+    ];
+    const visible = visibleGuestbookEntries(flood, '@owner:s', { ...open, slowmode: 60 }, []);
+    expect(visible.map((e) => e.eventId)).toEqual(['$x4', '$o2', '$o1', '$y1', '$x1']);
+  });
 });
 
 describe('signing rules', () => {

@@ -178,10 +178,19 @@ export async function setCommissionQueue(mx: MatrixClient, roomId: string, queue
 
 // --- Client consent -------------------------------------------------------------------------------
 
-type RawEvent = { type?: string; sender?: string; content?: { slot_id?: unknown; agree?: unknown } };
+type RawEvent = { type?: string; sender?: string; content?: { slot_id?: unknown; title?: unknown; agree?: unknown } };
 
 /**
- * Who has agreed to be named, as `slotId → user IDs`, from consent events newest first (so a
+ * What a consent is to: one slot as it's titled now. A client agrees to be named on "Sketch for
+ * @me"; if the artist later retitles the slot, or reuses its ID for another piece, the old
+ * agreement doesn't carry over, and the client is asked again.
+ */
+export function consentKey(slotId: string, title: string): string {
+  return `${slotId}\n${title}`;
+}
+
+/**
+ * Who has agreed to be named, as `consentKey → user IDs`, from consent events newest first (so a
  * person's latest word on a slot wins). A consent counts only from the sender it names: the
  * artist can't agree for a client.
  */
@@ -190,13 +199,20 @@ export function readConsents(eventsNewestFirst: RawEvent[]): Map<string, Set<str
   const agreed = new Map<string, Set<string>>();
   for (const event of eventsNewestFirst) {
     const slot = event.content?.slot_id;
-    if (event.type !== COMMISSION_CONSENT_EVENT || typeof slot !== 'string' || !event.sender) continue;
-    const key = `${event.sender}\n${slot}`;
-    if (decided.has(key)) continue;
-    decided.add(key);
-    if (event.content?.agree === true) agreed.set(slot, (agreed.get(slot) ?? new Set()).add(event.sender));
+    const title = event.content?.title;
+    if (event.type !== COMMISSION_CONSENT_EVENT || typeof slot !== 'string' || typeof title !== 'string' || !event.sender) continue;
+    const key = consentKey(slot, title);
+    const decision = `${event.sender}\n${key}`;
+    if (decided.has(decision)) continue;
+    decided.add(decision);
+    if (event.content?.agree === true) agreed.set(key, (agreed.get(key) ?? new Set()).add(event.sender));
   }
   return agreed;
+}
+
+/** Whether `userId` agreed to be named on this slot as it's titled now. */
+export function hasConsented(consents: Map<string, Set<string>>, slot: QueueSlot, userId: string): boolean {
+  return consents.get(consentKey(slot.id, slot.title))?.has(userId) ?? false;
 }
 
 /** What a slot's client is called to this viewer: their ID if they agreed (or it's you, or you're the artist), else "Client". */
@@ -208,7 +224,7 @@ export function slotClientName(
   const client = slot.client;
   if (!client) return { name: 'Client', named: false, mine: false };
   const mine = !!viewer.userId && viewer.userId === client;
-  if (consents.get(slot.id)?.has(client)) return { name: client, named: true, mine };
+  if (hasConsented(consents, slot, client)) return { name: client, named: true, mine };
   // The artist knows who they put there, and you know it's you: neither is shown to anyone else.
   return { name: viewer.isArtist || mine ? client : 'Client', named: false, mine };
 }
@@ -226,12 +242,12 @@ export async function fetchConsents(mx: MatrixClient, roomId: string): Promise<M
   }
 }
 
-/** Agree (or stop agreeing) to be named on a queue slot. Joins the artist's profile room if needed. */
-export async function setCommissionConsent(mx: MatrixClient, roomId: string, ownerId: string, slotId: string, agree: boolean): Promise<void> {
+/** Agree (or stop agreeing) to be named on a queue slot, as titled now. Joins the artist's profile room if needed. */
+export async function setCommissionConsent(mx: MatrixClient, roomId: string, ownerId: string, slot: QueueSlot, agree: boolean): Promise<void> {
   if (mx.getRoom(roomId)?.getMyMembership() !== 'join') {
     await mx.joinRoom(roomId, { viaServers: feedJoinVia(roomId, ownerId) });
   }
-  await mx.sendEvent(roomId, COMMISSION_CONSENT_EVENT as any, { slot_id: slotId, agree } as any);
+  await mx.sendEvent(roomId, COMMISSION_CONSENT_EVENT as any, { slot_id: slot.id, title: slot.title, agree } as any);
 }
 
 // --- Requests -------------------------------------------------------------------------------------

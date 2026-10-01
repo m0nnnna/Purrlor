@@ -21,10 +21,9 @@ async function readFollowsOf(mx: MatrixClient, userId: string): Promise<string[]
   const room = mx.getRoom(profileRoom);
   if (room?.getMyMembership() === 'join') {
     const events = room.currentState.getStateEvents('xyz.nekous.follow') ?? [];
-    return events
-      .map((event) => ({ type: event.getType(), state_key: event.getStateKey() ?? '', content: event.getContent() as Record<string, unknown> }))
-      .filter((event) => event.content?.following === true && event.state_key)
-      .map((event) => event.state_key);
+    return readProfileFollows(
+      events.map((event) => ({ type: event.getType(), state_key: event.getStateKey() ?? '', content: event.getContent() as Record<string, unknown> }))
+    );
   }
   try {
     return readProfileFollows((await mx.roomState(profileRoom)) as { type: string; state_key?: string; content?: Record<string, unknown> }[]);

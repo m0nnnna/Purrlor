@@ -52,15 +52,27 @@ export function readGuestbookEntries(events: RawEvent[]): GuestbookEntry[] {
 
 /**
  * The entries a page shows: nothing that breaks the owner's rules. `ownerFollows` is who the owner
- * follows (for the "people I follow" rule); the owner's own entries always show.
+ * follows (for the "people I follow" rule); the owner's own entries always show. Slowmode is
+ * checked here too, not only in the signer's form: an entry sent sooner after the same person's
+ * last shown one (from another Matrix client, say) is left out, so one person can't flood the page.
  */
 export function visibleGuestbookEntries(entries: GuestbookEntry[], owner: string, rules: GuestbookRules, ownerFollows: string[]): GuestbookEntry[] {
   const followed = new Set(ownerFollows);
-  return entries.filter(
+  const allowed = entries.filter(
     (entry) =>
       (entry.sender === owner || rules.who === 'everyone' || followed.has(entry.sender)) &&
       (entry.sender === owner || !findBlockedWord(entry.body, rules.blockedWords))
   );
+  if (rules.slowmode <= 0) return allowed;
+  const tooSoon = new Set<GuestbookEntry>();
+  const lastShown = new Map<string, number>();
+  for (const entry of [...allowed].sort((a, b) => a.ts - b.ts)) {
+    if (entry.sender === owner) continue;
+    const last = lastShown.get(entry.sender);
+    if (last !== undefined && entry.ts - last < rules.slowmode * 1000) tooSoon.add(entry);
+    else lastShown.set(entry.sender, entry.ts);
+  }
+  return allowed.filter((entry) => !tooSoon.has(entry));
 }
 
 /** Whether `me` may sign right now, and why not. */

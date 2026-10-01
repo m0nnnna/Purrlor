@@ -91,11 +91,57 @@ export const FOLLOWED_EVENT = 'xyz.nekous.followed';
 
 type RawState = { type: string; state_key?: string; content?: Record<string, unknown> };
 
+const FOLLOWED_USER_ID = /^@[a-z0-9._=\-/+]{1,255}:[A-Za-z0-9.\-:[\]]{1,255}$/;
+
+/**
+ * The state key a follow is published under: the followed user's ID without its `@`. A state key
+ * that starts with `@` belongs to that user, and homeservers refuse anyone else setting it
+ * (Continuwuity does in every room version), so `@nibbles:server` as the key could never be written.
+ */
+export function followStateKey(userId: string): string {
+  return userId.replace(/^@/, '');
+}
+
+/** The user a follow's state key names, in either form, or undefined. */
+export function followedUserId(stateKey: string | undefined): string | undefined {
+  if (!stateKey) return undefined;
+  const userId = stateKey.startsWith('@') ? stateKey : `@${stateKey}`;
+  return FOLLOWED_USER_ID.test(userId) ? userId : undefined;
+}
+
 /** Who a profile room's owner follows, from its raw state. */
 export function readProfileFollows(events: RawState[]): string[] {
-  return events
-    .filter((event) => event.type === FOLLOW_STATE_EVENT && !!event.state_key && event.content?.following === true)
-    .map((event) => event.state_key as string);
+  const follows = events
+    .filter((event) => event.type === FOLLOW_STATE_EVENT && event.content?.following === true)
+    .map((event) => followedUserId(event.state_key))
+    .filter((userId): userId is string => !!userId);
+  return [...new Set(follows)];
+}
+
+/**
+ * Publishes the follows in your account data that your profile doesn't show yet. Until follows
+ * were published under `followStateKey`, every publish was refused, so people who followed others
+ * then have them only privately; this puts them on the profile, once, without notifying anyone
+ * again. Does nothing without a profile room.
+ */
+export async function republishFollows(mx: MatrixClient, following: string[]): Promise<number> {
+  const roomId = getOwnProfileRoomId(mx);
+  const room = roomId ? mx.getRoom(roomId) : null;
+  if (!roomId || room?.getMyMembership() !== 'join') return 0;
+  const published = new Set(
+    readProfileFollows(
+      (room.currentState.getStateEvents(FOLLOW_STATE_EVENT) ?? []).map((event) => ({
+        type: event.getType(),
+        state_key: event.getStateKey(),
+        content: event.getContent(),
+      }))
+    )
+  );
+  const missing = following.filter((userId) => FOLLOWED_USER_ID.test(userId) && !published.has(userId));
+  for (const userId of missing) {
+    await mx.sendStateEvent(roomId, FOLLOW_STATE_EVENT as any, { following: true } as any, followStateKey(userId));
+  }
+  return missing.length;
 }
 
 /**
@@ -105,7 +151,7 @@ export function readProfileFollows(events: RawState[]): string[] {
 export async function publishFollow(mx: MatrixClient, userId: string, following: boolean, displayName: string): Promise<void> {
   const roomId = following ? await ensureProfileRoom(mx, displayName) : getOwnProfileRoomId(mx);
   if (!roomId) return;
-  await mx.sendStateEvent(roomId, FOLLOW_STATE_EVENT as any, (following ? { following: true } : {}) as any, userId);
+  await mx.sendStateEvent(roomId, FOLLOW_STATE_EVENT as any, (following ? { following: true } : {}) as any, followStateKey(userId));
   if (!following) return;
   // Tell them. Best-effort: someone who has never posted globally has no profile room to tell.
   const { profileRoom } = await getExtendedProfile(mx, userId);

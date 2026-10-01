@@ -49,6 +49,8 @@ describe('publicMediaUrl', () => {
     expect(publicMediaUrl('https://evil.example/x')).toBeNull();
     expect(publicMediaUrl('mxc://s/../x')).toBeNull();
     expect(publicMediaUrl('mxc://s/a?b=1')).toBeNull();
+    expect(publicMediaUrl('mxc://s);background:url(https:/x')).toBeNull();
+    expect(publicMediaUrl("mxc://s'x/abc")).toBeNull();
   });
 });
 

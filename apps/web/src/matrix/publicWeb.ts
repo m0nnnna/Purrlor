@@ -91,7 +91,8 @@ export const fetchPublicPost = (eventId: string) => getPublic<PublicPostsAnswer>
 
 /** `mxc://server/id` as the public media route (a thumbnail when a size is given), or null. */
 export function publicMediaUrl(mxcUrl: string, width?: number, height?: number): string | null {
-  const match = /^mxc:\/\/([^/\s]+)\/([A-Za-z0-9_-]+)$/.exec(mxcUrl);
+  // The spec's server-name characters only: the result goes into CSS url() for a banner.
+  const match = /^mxc:\/\/([A-Za-z0-9.\-:[\]]{1,255})\/([A-Za-z0-9_-]{1,255})$/.exec(mxcUrl);
   if (!match) return null;
   const size = width || height ? `?width=${Math.round(width ?? height ?? 0)}&height=${Math.round(height ?? width ?? 0)}` : '';
   return `${PUBLIC_API}/media/${encodeURIComponent(match[1])}/${match[2]}${size}`;

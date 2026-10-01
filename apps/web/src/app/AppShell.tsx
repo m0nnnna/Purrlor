@@ -7,6 +7,7 @@ import { MemberList } from '../features/members/MemberList';
 import { DesktopNotifications } from '../features/notifications/DesktopNotifications';
 import { NotificationRules } from '../features/notifications/NotificationRules';
 import { FeedGovernance } from '../features/feed/FeedGovernance';
+import { FollowPublisher } from '../features/feed/FollowPublisher';
 import { ChannelGovernance } from '../features/channels/ChannelGovernance';
 import { ModerationWatcher } from '../features/moderation/ModerationWatcher';
 import { ReminderWatcher } from '../features/reminders/ReminderWatcher';
@@ -93,6 +94,7 @@ export function AppShell() {
       <SpaceAutoJoiner />
       {/* Joins a server-wide room; the demo's sample world has none. */}
       {!isDemoMode() && <EmoteLibraryWatcher />}
+      {!isDemoMode() && <FollowPublisher />}
       <IncomingVerificationListener />
       {recoveryStatus === 'needed' && !recoveryResolved && (
         <RecoveryKeyPrompt onResolved={() => setRecoveryResolved(true)} />

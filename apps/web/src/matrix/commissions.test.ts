@@ -10,6 +10,7 @@ import {
   parseCommissionPrices,
   parseCommissionQueue,
   parseCommissionState,
+  hasConsented,
   readConsents,
   requestMessageBody,
   sendCommissionRequest,
@@ -113,18 +114,25 @@ describe('who agreed to be named', () => {
   const client = '@client:s';
   const slot = { id: 'one', title: 'Sketch', stage: 0, client };
 
+  const consent = (sender: string, agree: boolean, title = 'Sketch') => ({ type: COMMISSION_CONSENT_EVENT, sender, content: { slot_id: 'one', title, agree } });
+
   it('counts a client’s own agreement, and the latest word wins', () => {
-    const newestFirst = [
-      { type: COMMISSION_CONSENT_EVENT, sender: client, content: { slot_id: 'one', agree: false } },
-      { type: COMMISSION_CONSENT_EVENT, sender: client, content: { slot_id: 'one', agree: true } },
-    ];
-    expect(readConsents(newestFirst).get('one')?.has(client) ?? false).toBe(false);
-    expect(readConsents([...newestFirst].reverse()).get('one')?.has(client)).toBe(true);
+    const newestFirst = [consent(client, false), consent(client, true)];
+    expect(hasConsented(readConsents(newestFirst), slot, client)).toBe(false);
+    expect(hasConsented(readConsents([...newestFirst].reverse()), slot, client)).toBe(true);
   });
 
   it('never counts the artist (or anyone else) agreeing for the client', () => {
-    const consents = readConsents([{ type: COMMISSION_CONSENT_EVENT, sender: artist, content: { slot_id: 'one', agree: true } }]);
+    const consents = readConsents([consent(artist, true)]);
     expect(slotClientName(slot, consents, { userId: '@visitor:s', isArtist: false })).toEqual({ name: 'Client', named: false, mine: false });
+  });
+
+  it('asks again when the artist retitles the slot', () => {
+    const consents = readConsents([consent(client, true)]);
+    expect(slotClientName({ ...slot, title: 'Something else entirely' }, consents, { userId: '@visitor:s', isArtist: false }).name).toBe('Client');
+    // An agreement with no title (from before titles were recorded) doesn't count either.
+    const untitled = readConsents([{ type: COMMISSION_CONSENT_EVENT, sender: client, content: { slot_id: 'one', agree: true } }]);
+    expect(hasConsented(untitled, slot, client)).toBe(false);
   });
 
   it('shows the name once agreed, and keeps it from everyone but the artist and the client until then', () => {
@@ -133,7 +141,7 @@ describe('who agreed to be named', () => {
     expect(slotClientName(slot, none, { isArtist: false }).name).toBe('Client');
     expect(slotClientName(slot, none, { userId: artist, isArtist: true })).toEqual({ name: client, named: false, mine: false });
     expect(slotClientName(slot, none, { userId: client, isArtist: false })).toEqual({ name: client, named: false, mine: true });
-    const agreed = readConsents([{ type: COMMISSION_CONSENT_EVENT, sender: client, content: { slot_id: 'one', agree: true } }]);
+    const agreed = readConsents([consent(client, true)]);
     expect(slotClientName(slot, agreed, { userId: '@visitor:s', isArtist: false })).toEqual({ name: client, named: true, mine: false });
   });
 
