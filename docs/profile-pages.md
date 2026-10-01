@@ -185,5 +185,19 @@ images. A music block with no usable tracks is dropped.
 
 The public media route serves a track only while the page is public (above) and only with one of
 those sound types, refuses files over its size limit, and answers range requests, so a player can
-seek (`docs/public-web.md`). The builder doesn't offer the block yet (`BLOCKS_NOT_IN_BUILDER`): the
-uploader and player are the next step.
+seek (`docs/public-web.md`).
+
+**In the builder** ("Add a block" → Music; `BlockEditor.tsx`, `AudioPicker.tsx`,
+`matrix/musicTracks.ts`): "Add tracks…" uploads each file as is (plain, since the page is public) and
+fills in the track: the type (from the file, or its extension when the browser reports none or a
+variant like `audio/mp3`; a file declared as anything but sound is refused), its length (read from the
+file's header), its size, and a title from the file name. Files over the smaller of the homeserver's
+upload limit and the public route's 100 MiB are refused with a message, since they would never play for
+signed-out visitors. Title and artist can be edited, tracks reordered or removed, and the builder
+reminds people to upload only music they have the right to share.
+
+**The player** (`MusicBlock.tsx`): a track list, and once a track is pressed a play and pause button
+per track, a seek bar, and a volume slider (the same remembered volume as Listen Together). Before
+that there is no audio element at all, so a page of music costs no requests to open. Signed out, a
+track plays from the public media route; signed in, from the homeserver like any other page file
+(fetched when it's pressed, not before). A track that ends goes on to the next.

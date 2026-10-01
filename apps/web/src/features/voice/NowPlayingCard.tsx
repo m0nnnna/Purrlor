@@ -3,18 +3,8 @@ import { useVoiceCall } from './voiceCallContext';
 import { useSharedWatchTogether } from './watchTogetherContext';
 import { mediaTitle, sessionMode } from './watchTogether';
 import { MediaPlayer, SharedMediaControls, YoutubePlayer } from './WatchTogetherPlayer';
+import { readListenVolume, saveListenVolume } from './listenVolume';
 import './NowPlayingCard.css';
-
-const VOLUME_KEY = 'nekous_listen_together_volume';
-
-function readVolume(): number {
-  try {
-    const stored = Number(localStorage.getItem(VOLUME_KEY));
-    return Number.isFinite(stored) && stored > 0 && stored <= 1 ? stored : 0.6;
-  } catch {
-    return 0.6;
-  }
-}
 
 /**
  * Listen together's home: a compact card beside the call bar, there whichever channel is open,
@@ -28,7 +18,7 @@ function readVolume(): number {
 export function NowPlayingCard() {
   const session = useSharedWatchTogether();
   const deafened = useVoiceCall()?.deafened ?? false;
-  const [volume, setVolume] = useState(readVolume);
+  const [volume, setVolume] = useState(readListenVolume);
   const [youtubeTitle, setYoutubeTitle] = useState<string>();
   const getInfoRef = useRef<() => { position: number; duration: number }>(() => ({ position: 0, duration: 0 }));
 
@@ -42,11 +32,7 @@ export function NowPlayingCard() {
 
   const changeVolume = (next: number) => {
     setVolume(next);
-    try {
-      localStorage.setItem(VOLUME_KEY, String(next));
-    } catch {
-      // Not remembered this time; it still applies now.
-    }
+    saveListenVolume(next);
   };
 
   return (

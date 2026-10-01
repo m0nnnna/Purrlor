@@ -17,13 +17,17 @@ import {
   type ArtRating,
   type DividerStyle,
   type GuestbookWho,
+  type MusicTrack,
   type PageBlock,
   type PageLink,
   type PageSpace,
 } from '../../matrix/profilePage';
+import { formatBytes } from '../../matrix/postMedia';
 import { parseWatchUrl } from '../voice/watchTogether';
 import { BLOCK_LABELS, findEmote } from './editorModel';
+import { AudioPicker } from './AudioPicker';
 import { ImagePicker, ImageThumb } from './ImagePicker';
+import { formatTime } from '../../matrix/musicTracks';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 type EditorProps<T extends PageBlock['type']> = {
@@ -31,6 +35,8 @@ type EditorProps<T extends PageBlock['type']> = {
   onChange: (block: Block<T>) => void;
   emotes: Emote[];
   imagesLeft: number;
+  /** Tracks the page can still take, across all its music blocks. */
+  tracksLeft: number;
 };
 
 function TitleField({ value, onChange }: { value?: string; onChange: (title: string | undefined) => void }) {
@@ -541,6 +547,65 @@ function GalleryEditor({ block, onChange }: EditorProps<'gallery'>) {
   );
 }
 
+function MusicEditor({ block, onChange, tracksLeft }: EditorProps<'music'>) {
+  const setTrack = (index: number, track: MusicTrack) => onChange({ ...block, tracks: block.tracks.map((t, i) => (i === index ? track : t)) });
+  const move = (index: number, delta: -1 | 1) => {
+    const to = index + delta;
+    if (to < 0 || to >= block.tracks.length) return;
+    const tracks = [...block.tracks];
+    [tracks[index], tracks[to]] = [tracks[to], tracks[index]];
+    onChange({ ...block, tracks });
+  };
+  const room = Math.max(0, tracksLeft);
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <p className="nu-field__hint">
+        Only upload music you have the right to share. Anyone who can see your page can play it, and a track can be taken down on a copyright
+        complaint (see the terms). Nothing plays until a visitor presses play. {block.tracks.length} on this block, {room} more fit on the page.
+      </p>
+      {block.tracks.map((track, index) => (
+        <fieldset key={`${track.url}-${index}`} className="nu-page-editor__subitem" data-nu-role="page-editor-track">
+          <label className="nu-field">
+            Title
+            <input className="nu-field__input" value={track.title} maxLength={LIMITS.trackTitle} onChange={(evt) => setTrack(index, { ...track, title: evt.target.value })} />
+          </label>
+          <label className="nu-field">
+            Artist (optional)
+            <input
+              className="nu-field__input"
+              value={track.artist ?? ''}
+              maxLength={LIMITS.trackTitle}
+              onChange={(evt) => setTrack(index, { ...track, artist: evt.target.value || undefined })}
+            />
+          </label>
+          <div className="nu-page-editor__row">
+            <span className="nu-field__hint">
+              {[track.duration ? formatTime(track.duration) : undefined, track.size ? formatBytes(track.size) : undefined].filter(Boolean).join(' · ')}
+            </span>
+            <button type="button" className="nu-page-editor__icon-button" aria-label="Move track up" disabled={index === 0} onClick={() => move(index, -1)}>
+              ↑
+            </button>
+            <button
+              type="button"
+              className="nu-page-editor__icon-button"
+              aria-label="Move track down"
+              disabled={index === block.tracks.length - 1}
+              onClick={() => move(index, 1)}
+            >
+              ↓
+            </button>
+            <button type="button" className="nu-page-editor__inline-button" onClick={() => onChange({ ...block, tracks: block.tracks.filter((_, i) => i !== index) })}>
+              Remove this track
+            </button>
+          </div>
+        </fieldset>
+      ))}
+      <AudioPicker max={room} disabled={room < 1} onUploaded={(tracks) => onChange({ ...block, tracks: [...block.tracks, ...tracks] })} />
+    </>
+  );
+}
+
 function CommissionsEditor({ block, onChange }: EditorProps<'commissions'>) {
   return (
     <>
@@ -557,13 +622,15 @@ function Fields({
   onChange,
   emotes,
   imagesLeft,
+  tracksLeft,
 }: {
   block: PageBlock;
   onChange: (block: PageBlock) => void;
   emotes: Emote[];
   imagesLeft: number;
+  tracksLeft: number;
 }) {
-  const shared = { emotes, imagesLeft };
+  const shared = { emotes, imagesLeft, tracksLeft };
   switch (block.type) {
     case 'text':
       return <TextEditor block={block} onChange={onChange} {...shared} />;
@@ -583,6 +650,8 @@ function Fields({
       return <FriendsEditor block={block} onChange={onChange} {...shared} />;
     case 'guestbook':
       return <GuestbookEditor block={block} onChange={onChange} {...shared} />;
+    case 'music':
+      return <MusicEditor block={block} onChange={onChange} {...shared} />;
     case 'commissions':
       return <CommissionsEditor block={block} onChange={onChange} {...shared} />;
     default:
@@ -598,6 +667,7 @@ export function BlockEditor({
   last,
   emotes,
   imagesLeft,
+  tracksLeft,
   onToggle,
   onChange,
   onMove,
@@ -609,6 +679,7 @@ export function BlockEditor({
   last: boolean;
   emotes: Emote[];
   imagesLeft: number;
+  tracksLeft: number;
   onToggle: () => void;
   onChange: (block: PageBlock) => void;
   onMove: (delta: -1 | 1) => void;
@@ -642,7 +713,7 @@ export function BlockEditor({
       </div>
       {open && (
         <div className="nu-page-editor__block-fields">
-          <Fields block={block} onChange={onChange} emotes={emotes} imagesLeft={imagesLeft} />
+          <Fields block={block} onChange={onChange} emotes={emotes} imagesLeft={imagesLeft} tracksLeft={tracksLeft} />
         </div>
       )}
     </div>

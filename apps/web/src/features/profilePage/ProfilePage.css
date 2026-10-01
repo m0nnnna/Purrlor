@@ -239,30 +239,6 @@
   opacity: 0.85;
 }
 
-.nu-profile-page__gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: var(--nu-space-2);
-}
-
-.nu-profile-page__gallery-item {
-  appearance: none;
-  display: block;
-  aspect-ratio: 1;
-  padding: 0;
-  border: none;
-  border-radius: calc(var(--page-corners) * 0.5);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--page-text) 10%, transparent);
-  cursor: zoom-in;
-}
-
-.nu-profile-page__gallery-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .nu-profile-page__youtube {
   display: block;
   width: 100%;
@@ -772,4 +748,92 @@
   border-color: var(--page-accent);
   color: var(--page-bg);
   font-weight: 700;
+}
+
+/* Music block (MusicBlock.tsx): a track list and a basic player. */
+.nu-profile-page__tracks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-profile-page__track {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+  width: 100%;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border: 2px solid transparent;
+  border-radius: calc(var(--page-corners) * 0.75);
+  background: transparent;
+  color: var(--page-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.nu-profile-page__track:hover,
+.nu-profile-page__track--active {
+  border-color: var(--page-accent);
+  background: color-mix(in srgb, var(--page-accent) 14%, transparent);
+}
+
+.nu-profile-page__track-icon {
+  flex: none;
+  width: 1.5em;
+  text-align: center;
+  color: var(--page-accent);
+}
+
+.nu-profile-page__track-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.nu-profile-page__track-text strong,
+.nu-profile-page__track-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-profile-page__track-text span {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.nu-profile-page__track-time,
+.nu-profile-page__time {
+  flex: none;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-profile-page__player {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  margin-top: var(--nu-space-3);
+}
+
+.nu-profile-page__seek,
+.nu-profile-page__volume {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: 0.85em;
+}
+
+.nu-profile-page__seek input,
+.nu-profile-page__volume input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--page-accent);
 }

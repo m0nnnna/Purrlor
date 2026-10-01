@@ -69,10 +69,6 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   music: 'Music',
 };
 
-/** Block kinds the page format and parser have but the builder can't make yet (the music block's
- *  uploader and player are still to come), left out of the "Add a block" list. */
-export const BLOCKS_NOT_IN_BUILDER: readonly PageBlockType[] = ['music'];
-
 /** A new, empty block of a kind, at the end of the page. */
 export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
   const id = newBlockId(page.blocks);
@@ -124,6 +120,11 @@ export function updateBlock(page: ProfilePage, next: PageBlock): ProfilePage {
 
 export function canAddBlock(page: ProfilePage): boolean {
   return page.blocks.length < LIMITS.blocks;
+}
+
+/** Tracks across the page's music blocks, against LIMITS.tracks. */
+export function trackCount(page: ProfilePage): number {
+  return page.blocks.reduce((count, block) => count + (block.type === 'music' ? block.tracks.length : 0), 0);
 }
 
 /** Images on the page now, the background included, against LIMITS.images. */

@@ -13,7 +13,7 @@ import {
   unpublishProfilePage,
 } from '../../matrix/profilePageStore';
 import { BlockEditor } from './BlockEditor';
-import { addBlock, BLOCK_LABELS, BLOCKS_NOT_IN_BUILDER, canAddBlock, imageCount, moveBlock, removeBlock, updateBlock, withFormattedText } from './editorModel';
+import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, removeBlock, trackCount, updateBlock, withFormattedText } from './editorModel';
 import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
 import { getOwnProfileRoomId } from '../../matrix/profileFeed';
@@ -73,6 +73,7 @@ export function ProfilePageEditor({
   // The preview is exactly what visitors get: the page through the same checks publishing uses.
   const preview = useMemo(() => parseProfilePage(withFormattedText(page, emotes)), [page, emotes]);
   const imagesLeft = LIMITS.images - imageCount(page);
+  const tracksLeft = LIMITS.tracks - trackCount(page);
 
   const handlePublish = async () => {
     setBusy('publishing');
@@ -183,6 +184,7 @@ export function ProfilePageEditor({
                 last={index === page.blocks.length - 1}
                 emotes={emotes}
                 imagesLeft={imagesLeft}
+                tracksLeft={tracksLeft}
                 onToggle={() => setOpenBlock(openBlock === block.id ? undefined : block.id)}
                 onChange={(next) => edit(updateBlock(page, next))}
                 onMove={(delta) => edit(moveBlock(page, block.id, delta))}
@@ -199,7 +201,7 @@ export function ProfilePageEditor({
                   data-nu-role="page-editor-add-block"
                 >
                   <option value="">Choose…</option>
-                  {(Object.keys(BLOCK_LABELS) as PageBlockType[]).filter((type) => !BLOCKS_NOT_IN_BUILDER.includes(type)).map((type) => (
+                  {(Object.keys(BLOCK_LABELS) as PageBlockType[]).map((type) => (
                     <option key={type} value={type}>
                       {BLOCK_LABELS[type]}
                     </option>
