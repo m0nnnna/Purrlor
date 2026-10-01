@@ -5,7 +5,7 @@
 The current plan is the Claude Docs doc "Purrlor: profile pages and what comes after":
 https://claude.ai/code/artifact/160c8b88-75c8-47c1-a433-1151d29bbfda
 
-Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checklist and open questions may have changed), then do every task assigned to that model, on a new branch off `master`.
+Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checklist and open questions may have changed), then do every task assigned to that model, on a new branch off `master`. Exception: this plan's work builds on the unmerged `profile-pages` branch, so branch off that instead (or commit onto it), and read `docs/profile-pages.md` and `docs/public-web.md` first: they're the contract for the client work.
 
 The plan before it, "Purrlor: what's next", is done apart from its open questions:
 https://claude.ai/code/artifact/277fec85-bdab-431f-bcf6-cbdf368db48b
