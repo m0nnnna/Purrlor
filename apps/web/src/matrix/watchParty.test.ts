@@ -9,7 +9,6 @@ import {
   NOTICE_EVENT_KEY,
   parseWatchParty,
   partyPhase,
-  watchThumbnailUrl,
 } from './watchParty';
 
 const HOUR = 60 * 60 * 1000;
@@ -97,12 +96,6 @@ describe('labels', () => {
     expect(attendanceLabel(4, 'watch')).toBe('4 watching');
     expect(attendanceLabel(3, 'listen')).toBe('3 listening');
     expect(attendanceLabel(0, 'watch')).toBe('Nobody here yet');
-  });
-
-  it('thumbnails only YouTube videos with a sane ID', () => {
-    expect(watchThumbnailUrl(YT)).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg');
-    expect(watchThumbnailUrl('https://example.org/film.mp4')).toBeUndefined();
-    expect(watchThumbnailUrl('https://www.youtube.com/watch?v=a/../../evil')).toBeUndefined();
   });
 });
 

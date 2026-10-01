@@ -61,10 +61,3 @@ export function attendanceLabel(count: number, mode: WatchTogetherMode): string 
   if (count <= 0) return 'Nobody here yet';
   return `${count} ${mode === 'listen' ? 'listening' : 'watching'}`;
 }
-
-/** A YouTube video's thumbnail, for the event card. Anything else has none. */
-export function watchThumbnailUrl(url: string): string | undefined {
-  const parsed = parseWatchUrl(url);
-  if (parsed?.kind !== 'youtube' || !/^[\w-]{6,20}$/.test(parsed.videoId)) return undefined;
-  return `https://i.ytimg.com/vi/${parsed.videoId}/mqdefault.jpg`;
-}

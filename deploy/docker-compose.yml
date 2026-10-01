@@ -117,6 +117,9 @@ services:
       # local copies of sound and video may use (default 1 GiB, in the data volume).
       - PUBLIC_MEDIA_MAX_BYTES=${PUBLIC_MEDIA_MAX_BYTES:-}
       - PUBLIC_MEDIA_CACHE_BYTES=${PUBLIC_MEDIA_CACHE_BYTES:-}
+      # Multiplies the public web's per-address rate limits. Raise it (to 20, say) when a relay in
+      # front hides visitors' addresses, so every visitor arrives from one (docs/public-web.md).
+      - PUBLIC_WEB_RATE_SCALE=${PUBLIC_WEB_RATE_SCALE:-}
       # The admin control socket `purrlor` talks to (docs/admin-control.md). Root-only, never on
       # the network: it's a file in PURRLOR_CONTROL_DIR on the host.
       - CONTROL_SOCKET=/control/purrlor.sock
@@ -236,6 +239,12 @@ services:
       # account. Off here, so names come out exactly as people type them; set
       # MATRIX_NEW_USER_DISPLAYNAME_SUFFIX in .env to bring one back.
       CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ${MATRIX_NEW_USER_DISPLAYNAME_SUFFIX:-}
+      # Largest upload, in bytes: 100 MiB, so a music track fits (Continuwuity's own default is 20 MB).
+      # nginx's client_max_body_size for the homeserver has to match (setup.sh writes 100M).
+      CONTINUWUITY_MAX_REQUEST_SIZE: ${MATRIX_MAX_UPLOAD_BYTES:-104857600}
+      # Never forget media the startup check can't find: with media on its own disk or volume, a
+      # mount that's late or missing must not cost the database its records of every file.
+      CONTINUWUITY_PRUNE_MISSING_MEDIA: 'false'
       # Continuwuity's HTTP client honors the standard variables (verified against a logging proxy:
       # federation lookups arrive as CONNECTs).
       HTTP_PROXY: ${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}

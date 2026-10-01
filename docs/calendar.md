@@ -93,8 +93,8 @@ voice channel is chosen.
   playing (play, pause, seek) always apply. A start more than 2 seconds later is a deliberate
   replacement and wins; a stale message from an older session is dropped. Clients from before
   `startedAt` keep the old rule.
-- **Events page.** A **Watch parties** filter, a badge, a **Join now** button while one is live, and
-  a YouTube video's thumbnail on its card (loaded from `i.ytimg.com` with no referrer).
+- **Events page.** A **Watch parties** filter, a badge, and a **Join now** button while one is live.
+  No video thumbnail: the Events page loads nothing from YouTube.
 
 ## Reminders
 

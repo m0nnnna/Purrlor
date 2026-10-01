@@ -257,7 +257,8 @@
   }
 }
 
-/* Watch parties (matrix/watchParty.ts): a badge by the title and the video's thumbnail. */
+/* Watch parties (matrix/watchParty.ts): a badge by the title. No thumbnail: the Events page
+   loads nothing from YouTube. */
 .nu-calendar__event-badge {
   margin-left: var(--nu-space-2);
   padding: 1px var(--nu-space-2);
@@ -267,14 +268,4 @@
   font-size: 0.7em;
   font-weight: 700;
   vertical-align: middle;
-}
-
-.nu-calendar__event-thumb {
-  display: block;
-  width: 100%;
-  max-width: 320px;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: var(--nu-radius-md);
-  margin: var(--nu-space-2) 0;
 }

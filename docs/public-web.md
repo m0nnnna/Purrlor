@@ -193,3 +193,12 @@ address in place of `127.0.0.1`. The token server believes `X-Forwarded-For` onl
 loopback addresses (`TRUST_PROXY` overrides that, in Express's `trust proxy` syntax). Set
 `PUBLIC_WEB_URL` in `.env` to the app's address (`https://purr.example`) if previews show the wrong
 one; unset, it's taken from each request's `Host`.
+
+The rate limits are per visitor address. If something in front of nginx hides those (a relay that
+forwards plain TCP, so every request arrives from the relay's own address), the limits apply to
+everyone at once. Set `PUBLIC_WEB_RATE_SCALE` in `.env` to multiply them (20 suits a small
+server), then `purrlor restart token-server`. The real fix is a relay that passes visitors'
+addresses on (the PROXY protocol, with nginx's `set_real_ip_from`).
+
+Uploads: the bundled homeserver accepts files up to 100 MiB (`MATRIX_MAX_UPLOAD_BYTES` in `.env`),
+and nginx's homeserver blocks need the same `client_max_body_size 100M`.

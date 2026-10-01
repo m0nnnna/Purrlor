@@ -76,9 +76,15 @@ export type FeedCache = { at: number; rooms: Map<string, ProfileRoom>; byOwner: 
 
 export const mediaIndex = new MediaIndex();
 export const mediaCache = new MediaCache(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'media-cache'), MAX_MEDIA_BYTES, MEDIA_CACHE_BYTES);
+/**
+ * Multiplies the per-address limits below. Behind a relay that hides visitors' addresses (one that
+ * forwards plain TCP, so every request arrives from the relay), every visitor shares one address,
+ * and the limits then cap the whole site: raise it there (docs/public-web.md, "Deploying").
+ */
+const RATE_SCALE = Number(process.env.PUBLIC_WEB_RATE_SCALE) >= 1 ? Number(process.env.PUBLIC_WEB_RATE_SCALE) : 1;
 // Generous for a person browsing (a feed page, its images), tight for a scraper.
-const pageLimiter = new RateLimiter(60, 120);
-const mediaLimiter = new RateLimiter(200, 600);
+const pageLimiter = new RateLimiter(60 * RATE_SCALE, 120 * RATE_SCALE);
+const mediaLimiter = new RateLimiter(200 * RATE_SCALE, 600 * RATE_SCALE);
 
 let feedCache: FeedCache | undefined;
 let feedRefresh: Promise<FeedCache> | undefined;

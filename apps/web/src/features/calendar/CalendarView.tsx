@@ -18,7 +18,7 @@ import {
 } from '../../matrix/calendar';
 import { buildIcs, downloadTextFile, fileNameFor } from '../../matrix/calendarExport';
 import { localDayKey, localeWeekStart, monthGrid } from '../../matrix/calendarMonth';
-import { partyPhase, watchThumbnailUrl } from '../../matrix/watchParty';
+import { partyPhase } from '../../matrix/watchParty';
 import { EventFormModal } from './EventFormModal';
 import { useJoinVoiceChannel } from './useJoinVoiceChannel';
 import './CalendarView.css';
@@ -67,7 +67,6 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
   const [error, setError] = useState<string>();
   const channel = event.channelId ? mx.getRoom(event.channelId) : null;
   const joinVoiceChannel = useJoinVoiceChannel();
-  const thumbnail = event.watch ? watchThumbnailUrl(event.watch.url) : undefined;
   const live = !!event.watch && !!event.channelId && partyPhase(event) === 'live';
 
   const rsvp = (value: Rsvp | undefined) => {
@@ -97,10 +96,6 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
             </span>
           )}
         </h3>
-        {thumbnail && (
-          // A YouTube thumbnail, loaded from YouTube's image host with no referrer, and only for a watch party's card.
-          <img className="nu-calendar__event-thumb" src={thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
-        )}
         {(channel || event.location) && (
           <p className="nu-calendar__event-where">
             {channel ? (

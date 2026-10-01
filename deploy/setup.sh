@@ -1360,8 +1360,9 @@ server {
     ssl_certificate_key $CERT_DIR/privkey.pem;
 
     # Continuwuity's own docs ask for this — its default request-body limit is smaller than
-    # Matrix media uploads typically need.
-    client_max_body_size 20M;
+    # Matrix media uploads typically need. Matches CONTINUWUITY_MAX_REQUEST_SIZE (100 MiB, so a
+    # music track fits) in docker-compose.yml.
+    client_max_body_size 100M;
 
     # Tells other homeservers to federate over 443 rather than 8448. Without it, a server named
     # $MATRIX_DOMAIN is only reachable for federation on 8448 — which Cloudflare's proxy doesn't
@@ -1389,7 +1390,7 @@ server {
     ssl_certificate $CERT_DIR/fullchain.pem;
     ssl_certificate_key $CERT_DIR/privkey.pem;
 
-    client_max_body_size 20M;
+    client_max_body_size 100M;
 
     location / {
         proxy_pass http://$UPSTREAM:8008;
