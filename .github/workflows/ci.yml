@@ -102,3 +102,13 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+
+  # The `purrlor` admin commands against a stand-in for curl, and a syntax check of the install
+  # scripts: no Docker or socket needed (docs/admin.md).
+  shell:
+    name: shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n deploy/purrlor && bash -n deploy/setup.sh
+      - run: bash deploy/test/purrlor-control.test.sh

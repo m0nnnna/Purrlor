@@ -1109,6 +1109,29 @@ EXISTING_ENV_EOF
 fi
 
 # ---------------------------------------------------------------------------
+# Admin control directory
+# ---------------------------------------------------------------------------
+# `purrlor pages`, `takedown`, `reports` and `audit` talk to the token server through a Unix
+# socket in this directory (docs/admin-control.md). Only root may open it: the directory is made
+# 0700 here, and the token server sets the socket's own mode (0600) every time it starts. It's
+# never on the network. /run is emptied at boot, so a tmpfiles.d entry (where the system has one)
+# recreates the directory with the same mode before Docker starts the stack.
+CONTROL_DIR="$(grep '^PURRLOR_CONTROL_DIR=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+CONTROL_DIR="${CONTROL_DIR:-/run/purrlor}"
+case "$CONTROL_DIR" in
+  /?*) ;;
+  *) die "PURRLOR_CONTROL_DIR in .env must be an absolute path (it is '$CONTROL_DIR')." ;;
+esac
+[ ! -L "$CONTROL_DIR" ] || die "$CONTROL_DIR is a symlink; the admin control socket's directory must be a real one. Remove it, or set PURRLOR_CONTROL_DIR in .env."
+install -d -m 700 -o root -g root "$CONTROL_DIR"
+chown root:root "$CONTROL_DIR"
+chmod 700 "$CONTROL_DIR"
+if [ -d /etc/tmpfiles.d ]; then
+  printf 'd %s 0700 root root -\n' "$CONTROL_DIR" > /etc/tmpfiles.d/purrlor.conf
+fi
+echo "  ok   admin control directory $CONTROL_DIR (root only)"
+
+# ---------------------------------------------------------------------------
 # TLS certificate
 # ---------------------------------------------------------------------------
 

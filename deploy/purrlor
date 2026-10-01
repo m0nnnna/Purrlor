@@ -128,10 +128,23 @@ Accounts (bundled homeserver only; asks for the admin account's password):
 Global emote library (asks for the admin account's password):
   purrlor emotes setup                 create the library everyone can add emotes to (once)
 
-Public pages (docs/public-web.md) — hide a reported page from people who aren't signed in:
-  purrlor pages list                   pages hidden now
-  purrlor pages hide <name>            hide their page and their posts on the public feed
+Moderation (root; docs/admin.md) — every change needs a reason, which goes in the audit log:
+  purrlor pages list                   who is hidden or switched off, now
+  purrlor pages show <name>            one person's page: built, public switch, hidden, switched off
+  purrlor pages hide <name>            hide their page and Global posts from people not signed in
   purrlor pages unhide <name>          show them again
+  purrlor pages off <name>             keep their page off the public web, whatever they set
+  purrlor pages on <name>              their own switch decides again
+  purrlor takedown file <file>...      block files on the public web and queue them for deletion
+  purrlor takedown user <name>         the same for everything public they've made
+  purrlor takedown album <name> <title>  one art album, gallery or music block on their page
+  purrlor takedown restore <file>...   serve blocked files again
+  purrlor takedown list                what is blocked, and each file's deletion state
+  purrlor takedown run                 delete the queued files from the homeserver (admin password)
+  purrlor reports [--pages]            page reports from the homeserver's admin room (admin password)
+  purrlor audit [N]                    the last N things done (default 50)
+  Options: --reason "why" (else asked), --yes (skip the confirmation). A <file> is its mxc:// address
+  or the public media link.
 HELP
 }
 
@@ -1027,31 +1040,215 @@ cmd_emotes() {
   esac
 }
 
-# Hidden pages: a text file in the token server's data volume, one user ID per line, which it
-# re-reads within ten seconds of a change (services/token-server/src/publicWebRoutes.ts).
+# --- The admin control socket (docs/admin-control.md, docs/admin.md) ---------------------------------
+# `pages`, `takedown`, `reports` and `audit` talk to the token server over a Unix socket only root
+# can open: no password, nothing on the network. Everything an admin types goes to it as a
+# --data-urlencode form field (never into a URL or JSON by hand), user names are checked here as
+# well as there, and every change needs a reason, which the server writes to its audit log.
+
+control_sock() {
+  local dir="${PURRLOR_CONTROL_DIR:-}"
+  [ -n "$dir" ] || dir="$(env_get PURRLOR_CONTROL_DIR)"
+  printf '%s/purrlor.sock' "${dir:-/run/purrlor}"
+}
+
+# ctl METHOD PATH [curl form args...] -> prints the server's answer; fails unless it went through.
+# A 207 (some deletions failed) is printed and counts as done: the answer says which.
+ctl() {
+  local method="$1" path="$2" out code body
+  shift 2
+  local args=(-sS -m "${CTL_TIMEOUT:-300}" --unix-socket "$(control_sock)" -H 'Accept: text/plain'
+    --data-urlencode "actor=${SUDO_USER:-root}")
+  [ "$method" = GET ] && args+=(-G)
+  out="$(curl "${args[@]}" "$@" -w '\n%{http_code}' "http://purrlor$path")" \
+    || die "Couldn't talk to the control socket ($(control_sock)). Is the token server running ('purrlor status')? Its CONTROL_SOCKET must not be empty."
+  code="${out##*$'\n'}"
+  body="${out%$'\n'*}"
+  [ -z "$body" ] || printf '%s\n' "$body"
+  case "$code" in
+    200|207) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# parse_opts ARGS... -> REASON, ASSUME_YES, LIMIT, ALL, PAGES_ONLY and the rest in POS.
+# Anything after a bare -- is never an option, so a name or file link can't be mistaken for one.
+REASON=""; ASSUME_YES=0; LIMIT=""; ALL=0; PAGES_ONLY=0; POS=()
+parse_opts() {
+  REASON=""; ASSUME_YES=0; LIMIT=""; ALL=0; PAGES_ONLY=0; POS=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --reason) [ $# -ge 2 ] || die "--reason needs the reason after it."; REASON="$2"; shift 2 ;;
+      --reason=*) REASON="${1#--reason=}"; shift ;;
+      --limit) [ $# -ge 2 ] || die "--limit needs a number after it."; LIMIT="$2"; shift 2 ;;
+      --limit=*) LIMIT="${1#--limit=}"; shift ;;
+      --yes|-y) ASSUME_YES=1; shift ;;
+      --pages) PAGES_ONLY=1; shift ;;
+      --) shift; POS+=("$@"); break ;;
+      -*) die "Unknown option: $1" ;;
+      *) POS+=("$1"); shift ;;
+    esac
+  done
+  if [ -n "$LIMIT" ]; then printf '%s' "$LIMIT" | grep -Eq '^[0-9]{1,5}$' || die "--limit must be a number."; fi
+}
+
+# need_reason -> REASON, one line: from --reason, or asked for at a terminal.
+need_reason() {
+  if [ -z "$REASON" ]; then
+    [ -t 0 ] || die "This needs a reason: add --reason \"why\" (it goes in the audit log)."
+    read -r -p "Reason (goes in the audit log): " REASON
+  fi
+  REASON="$(printf '%s' "$REASON" | tr -d '\000-\037\177' | sed -E 's/^ +//; s/ +$//')"
+  [ -n "$REASON" ] || die "A reason is needed."
+}
+
+# confirm MESSAGE -> returns only if the admin typed yes (or gave --yes); nothing has changed before it.
+confirm() {
+  [ "$ASSUME_YES" -eq 1 ] && return 0
+  [ -t 0 ] || die "Run this at a terminal so it can ask you to confirm, or add --yes."
+  printf '%s\n' "$1"
+  local answer
+  read -r -p "Type yes to go ahead: " answer
+  [ "$answer" = yes ] || die "Cancelled. Nothing was changed."
+}
+
+# user_arg NAME -> NAME if it can only be a user name: no slash, no dots-only, no option look.
+user_arg() {
+  printf '%s' "${1:-}" | grep -Eq '^@?[A-Za-z0-9_=+][A-Za-z0-9._=+-]*(:[A-Za-z0-9.:-]+)?$' \
+    || die "'${1:-}' isn't a user name (try luna, @luna or @luna:server)."
+  printf '%s' "$1"
+}
+
+# file_arg TARGET -> TARGET if it's an mxc:// URL or an http(s) link, with nothing odd in it.
+file_arg() {
+  printf '%s' "${1:-}" | grep -Eq '^(mxc|https?)://[^[:space:][:cntrl:]]+$' \
+    || die "'${1:-}' isn't a file: give its mxc:// address or the public media link."
+  printf '%s' "$1"
+}
+
+# ctl_admin METHOD PATH [form args...] -> ctl, with the homeserver admin's account and password asked
+# for first. The password goes in on standard input, never on a command line.
+ctl_admin() {
+  local method="$1" path="$2"
+  shift 2
+  ask_admin_credentials
+  printf '%s' "$PURRLOR_ADMIN_PASSWORD" | ctl "$method" "$path" --data-urlencode "adminUser=$PURRLOR_ADMIN_USER" --data-urlencode 'adminPassword@-' "$@"
+}
+
 cmd_pages() {
-  local usage="Usage: purrlor pages list | hide <name> | unhide <name>"
-  local file=/data/hidden-pages.txt id
-  case "${1:-}" in
+  local usage="Usage: purrlor pages list | show <name> | hide <name> | unhide <name> | off <name> | on <name>
+  (hide and off take --reason \"why\"; add --yes to skip the confirmation)"
+  need_root pages "$@"
+  local action="${1:-}"
+  [ -n "$action" ] || die "$usage"
+  shift
+  parse_opts "$@"
+  local id
+  case "$action" in
     list)
-      compose exec -T -e FILE="$file" token-server sh -c '[ -s "$FILE" ] && cat "$FILE" || echo "No pages are hidden."'
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      ctl GET /pages
       ;;
-    hide|unhide)
-      [ -n "${2:-}" ] || die "$usage"
-      id="$(full_user_id "$2")"
-      printf '%s' "$id" | grep -Eq '^@[a-z0-9._=+-]+:[A-Za-z0-9.:-]+$' || die "'$2' isn't a user name on this server."
-      if [ "$1" = hide ]; then
-        compose exec -T -e FILE="$file" -e ID="$id" token-server sh -c 'touch "$FILE" && (grep -qxF "$ID" "$FILE" || echo "$ID" >> "$FILE")' \
-          || die "That didn't go through. If the token server isn't running, 'purrlor status' shows it."
-        say "Hidden: $id. Their page and public posts disappear for signed-out visitors within a minute."
+    show)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      id="$(user_arg "${POS[0]}")"
+      ctl GET "/pages/$id"
+      ;;
+    hide|off)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      id="$(user_arg "${POS[0]}")"
+      need_reason
+      if [ "$action" = hide ]; then
+        confirm "Hide $id's page AND their Global posts from everyone who isn't signed in."
+        ctl POST "/pages/$id/hide" --data-urlencode "reason=$REASON"
       else
-        compose exec -T -e FILE="$file" -e ID="$id" token-server sh -c 'touch "$FILE" && grep -vxF "$ID" "$FILE" > "$FILE.new"; mv "$FILE.new" "$FILE"' \
-          || die "That didn't go through. If the token server isn't running, 'purrlor status' shows it."
-        say "Shown again: $id."
+        confirm "Keep $id's page off the public web, whatever their own switch says (their Global posts stay public)."
+        ctl POST "/pages/$id/public-off" --data-urlencode "reason=$REASON"
       fi
+      ;;
+    unhide|on)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      id="$(user_arg "${POS[0]}")"
+      local route=unhide
+      [ "$action" = on ] && route=public-on
+      ctl POST "/pages/$id/$route" --data-urlencode "reason=$REASON"
       ;;
     *) die "$usage" ;;
   esac
+}
+
+cmd_takedown() {
+  local usage="Usage: purrlor takedown file <mxc-or-link>... | user <name> | album <name> <album> | restore <mxc-or-link>... | list | run
+  (all but list take --reason \"why\"; add --yes to skip the confirmation)"
+  need_root takedown "$@"
+  local action="${1:-}"
+  [ -n "$action" ] || die "$usage"
+  shift
+  parse_opts "$@"
+  local id target
+  local form=()
+  case "$action" in
+    file|restore)
+      [ "${#POS[@]}" -ge 1 ] || die "$usage"
+      for target in "${POS[@]}"; do form+=(--data-urlencode "target=$(file_arg "$target")"); done
+      need_reason
+      if [ "$action" = file ]; then
+        confirm "Block ${#POS[@]} file(s) on the public web now, and queue them for deletion from the homeserver."
+        ctl POST /takedown/media ${form[@]+"${form[@]}"} --data-urlencode "reason=$REASON"
+      else
+        ctl POST /media/unblock ${form[@]+"${form[@]}"} --data-urlencode "reason=$REASON"
+      fi
+      ;;
+    user)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      id="$(user_arg "${POS[0]}")"
+      need_reason
+      confirm "Block and queue for deletion every file the public web serves for $id (their page and posts stay up)."
+      ctl POST "/takedown/user/$id" --data-urlencode "reason=$REASON"
+      ;;
+    album)
+      [ "${#POS[@]}" -eq 2 ] || die "$usage"
+      id="$(user_arg "${POS[0]}")"
+      [ -n "${POS[1]}" ] || die "$usage"
+      need_reason
+      confirm "Block and queue for deletion the album '${POS[1]}' on $id's page."
+      ctl POST "/takedown/album/$id" --data-urlencode "album=${POS[1]}" --data-urlencode "reason=$REASON"
+      ;;
+    list)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      ctl GET /media
+      ;;
+    run)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      need_reason
+      confirm "Delete every queued file from the homeserver for good (needs the homeserver admin's password)."
+      ctl_admin POST /deletions/run --data-urlencode "reason=$REASON"
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
+cmd_reports() {
+  local usage="Usage: purrlor reports [--pages] [--limit N]   (asks for the homeserver admin's password)"
+  need_root reports "$@"
+  parse_opts "$@"
+  [ "${#POS[@]}" -eq 0 ] || die "$usage"
+  local form=()
+  [ -z "$LIMIT" ] || form+=(--data-urlencode "limit=$LIMIT")
+  [ "$PAGES_ONLY" -eq 0 ] || form+=(--data-urlencode 'only=pages')
+  ctl_admin POST /reports ${form[@]+"${form[@]}"}
+  echo
+  echo "Copyright complaints arrive by email at the address in the terms, not here: block the file with 'purrlor takedown file'."
+}
+
+cmd_audit() {
+  local usage="Usage: purrlor audit [how many, default 50]"
+  need_root audit "$@"
+  parse_opts "$@"
+  [ "${#POS[@]}" -le 1 ] || die "$usage"
+  local n="${LIMIT:-${POS[0]:-50}}"
+  printf '%s' "$n" | grep -Eq '^[0-9]{1,4}$' || die "$usage"
+  ctl GET /audit --data-urlencode "limit=$n"
 }
 
 # The dispatcher and the `exit` after it are one command (same line as `esac`), so bash has read
@@ -1076,6 +1273,9 @@ case "${1:-help}" in
   admin) shift; cmd_admin "$@" ;;
   emotes) shift; cmd_emotes "$@" ;;
   pages) shift; cmd_pages "$@" ;;
+  takedown) shift; cmd_takedown "$@" ;;
+  reports) shift; cmd_reports "$@" ;;
+  audit) shift; cmd_audit "$@" ;;
   matrix-dns) write_matrix_resolv ;;
   *) warn "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac; exit $?
