@@ -9,6 +9,7 @@ import {
   type MatrixClient,
   type Room,
 } from 'matrix-js-sdk';
+import { PROFILE_PAGE_EVENT } from '../matrix/profilePage';
 import { DEMO_BOT_USER_ID, DEMO_SERVER_NAME, DEMO_USER_ID } from './demoMode';
 import {
   buildDemoRooms,
@@ -19,6 +20,7 @@ import {
   demoOutsideFeedEvents,
   demoOutsideSpaceState,
   demoProfileRoomEvents,
+  demoProfilePage,
   demoProfileRoomState,
   demoPublicDirectory,
   DEMO_MEDIA_PREFIX,
@@ -269,6 +271,11 @@ export function createDemoClient(): MatrixClient {
       if (roomId === DEMO_OUTSIDE_SPACE.roomId) return demoOutsideSpaceState();
       if (roomId === DEMO_OUTSIDE_SPACE.profileRoomId) return demoProfileRoomState();
       throw new Error('M_FORBIDDEN');
+    },
+    // A profile page (matrix/profilePageStore.ts): Luna has one; nothing else does.
+    getStateEvent: async (roomId: string, type: string) => {
+      if (roomId === DEMO_OUTSIDE_SPACE.profileRoomId && type === PROFILE_PAGE_EVENT) return demoProfilePage();
+      throw new Error('M_NOT_FOUND');
     },
     createMessagesRequest: async (roomId: string) => {
       const room = getRoom(roomId);

@@ -137,3 +137,7 @@
   font-size: var(--nu-font-size-xs);
   font-weight: 700;
 }
+.nu-profile-view__posts {
+  /* Without a page, the tabs and posts sit straight in the profile's column, as they always have. */
+  display: contents;
+}

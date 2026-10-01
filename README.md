@@ -14,7 +14,8 @@ notification levels, [`docs/channel-permissions.md`](docs/channel-permissions.md
 announcement and moderators-only channels and slowmode, [`docs/roles.md`](docs/roles.md) for custom
 roles and channel-only moderators, [`docs/moderation.md`](docs/moderation.md)
 for report review and automod, [`docs/calendar.md`](docs/calendar.md) for Space calendars and
-reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks, and
+reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks,
+[`docs/profile-pages.md`](docs/profile-pages.md) for profile pages and the page builder, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old
@@ -135,6 +136,15 @@ bio/banner/animated avatar, pick your own **typing status** (so the indicator sa
 yelling…" instead of "is typing…"), and fully re-theme the app by pasting or loading a `.css` file. The
 default look is "Nightfur"; "Y2K Chatroom" and "Lola" are one click away, or write your own. Space Settings lets you
 set a nickname scoped to just that Space, independent of your global display name.
+
+Your profile can also have a **page**: on your profile, **Build your page** opens a page builder
+with colours, a background, fonts, an effect, and blocks (text, link buttons, images, a gallery, a
+profile song, your Spaces). It saves a draft as you go and shows nothing until you publish. See
+[`docs/profile-pages.md`](docs/profile-pages.md).
+
+On a phone, Account Settings → **Install Purrlor** adds it to your home screen as an app (on an
+iPhone, background notifications only work that way). Sharing a link or text to the installed app
+opens a new post with it.
 
 ## Features
 

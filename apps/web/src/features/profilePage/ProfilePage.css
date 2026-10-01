@@ -1,0 +1,381 @@
+/*
+ * Profile pages (ProfilePageFrame.tsx, PageBlocks.tsx). The page's own choices arrive only as the
+ * --page-* custom properties set on .nu-profile-page (pageStyle.ts); everything else here is the
+ * app's, so a page can recolour and re-font itself but can't reach past its own frame.
+ */
+
+/* The page fills the profile's scrolling column edge to edge, so the column drops its padding. */
+.nu-feed--page {
+  padding: 0;
+}
+
+/* The page's background fills the whole pane; its content keeps the feed's reading width. */
+.nu-feed > .nu-profile-page {
+  flex: 1 0 auto;
+  max-width: none;
+}
+
+.nu-profile-page {
+  position: relative;
+  container-type: inline-size;
+  isolation: isolate;
+  min-height: 100%;
+  color: var(--page-text);
+  font-family: var(--page-body-font);
+  /* Links and buttons inside the page that use the app's tokens pick up the page's colours. */
+  --nu-color-text-link: var(--page-link);
+}
+
+.nu-profile-page__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  padding: var(--nu-space-5);
+  max-width: calc(680px + 2 * var(--nu-space-5));
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.nu-profile-page--two-columns .nu-profile-page__content {
+  max-width: calc(1000px + 2 * var(--nu-space-5));
+}
+
+.nu-profile-page__content > * {
+  flex: none;
+}
+
+/* The header card, in the page's colours. The real Matrix ID under the name stays the app's own
+   type and always shows, so a page can't pass itself off as someone else's. */
+.nu-profile-page .nu-profile-view__card {
+  background: var(--page-block);
+  border: var(--page-border);
+  border-radius: var(--page-corners);
+  box-shadow: var(--page-shadow);
+  color: var(--page-text);
+}
+
+.nu-profile-page .nu-profile-view__avatar {
+  box-shadow: 0 0 0 5px var(--page-bg);
+}
+
+.nu-profile-page .nu-profile-view__name {
+  font-family: var(--page-heading-font);
+  color: var(--page-text);
+}
+
+.nu-profile-page .nu-profile-view__handle {
+  font-family: var(--nu-font-body, 'Figtree', system-ui, sans-serif);
+  color: var(--page-text);
+  opacity: 0.75;
+}
+
+.nu-profile-page .nu-profile-view__bio,
+.nu-profile-page .nu-profile-view__count-link,
+.nu-profile-page .nu-profile-view__count-link strong {
+  color: var(--page-text);
+}
+
+.nu-profile-page .nu-profile-view__banner {
+  margin-top: 0;
+}
+
+/* Posts keep the app's own look on a solid card, whatever the page's background. */
+.nu-profile-page__posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  padding: var(--nu-space-4);
+  background: var(--nu-color-bg-app);
+  color: var(--nu-color-text-primary);
+  font-family: var(--nu-font-body, 'Figtree', system-ui, sans-serif);
+  border-radius: var(--page-corners);
+  --nu-color-text-link: initial;
+}
+
+.nu-profile-page__posts > * {
+  flex: none;
+}
+
+/* --- Blocks --- */
+
+.nu-profile-page__blocks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nu-space-4);
+}
+
+@container (min-width: 720px) {
+  .nu-profile-page--two-columns .nu-profile-page__blocks {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .nu-profile-page--two-columns .nu-profile-page__plain {
+    grid-column: 1 / -1;
+  }
+}
+
+.nu-profile-page__block {
+  padding: var(--nu-space-4);
+  background: var(--page-block);
+  border: var(--page-border);
+  border-radius: var(--page-corners);
+  box-shadow: var(--page-shadow);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nu-profile-page__block-title {
+  margin: 0 0 var(--nu-space-3);
+  font-family: var(--page-heading-font);
+  font-weight: 400;
+  font-size: 18px;
+  color: var(--page-accent);
+}
+
+.nu-profile-page__text {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.nu-profile-page__text a {
+  color: var(--page-link);
+}
+
+.nu-profile-page__links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__link,
+.nu-profile-page__play {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+  width: 100%;
+  padding: var(--nu-space-3);
+  border: 2px solid var(--page-accent);
+  border-radius: calc(var(--page-corners) * 0.75);
+  background: transparent;
+  color: var(--page-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: transform 0.1s ease;
+}
+
+.nu-profile-page__link:hover,
+.nu-profile-page__play:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--page-accent) 18%, transparent);
+}
+
+.nu-profile-page__link-emote {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: none;
+}
+
+.nu-profile-page__link-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nu-profile-page__link-domain {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.nu-profile-page__figure {
+  margin: 0;
+}
+
+.nu-profile-page__image-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  color: var(--page-text);
+  text-decoration: none;
+}
+
+.nu-profile-page__image {
+  display: block;
+  width: 100%;
+  max-height: 600px;
+  object-fit: contain;
+  border-radius: calc(var(--page-corners) * 0.75);
+}
+
+.nu-profile-page__caption {
+  margin-top: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  opacity: 0.85;
+}
+
+.nu-profile-page__gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__gallery-item {
+  appearance: none;
+  display: block;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--page-corners) * 0.5);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--page-text) 10%, transparent);
+  cursor: zoom-in;
+}
+
+.nu-profile-page__gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-profile-page__youtube {
+  display: block;
+  width: 100%;
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: calc(var(--page-corners) * 0.5);
+}
+
+.nu-profile-page__audio {
+  width: 100%;
+}
+
+.nu-profile-page__spaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__space {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__space-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.nu-profile-page__space-join {
+  appearance: none;
+  padding: var(--nu-space-1) var(--nu-space-3);
+  border: none;
+  border-radius: var(--nu-radius-full);
+  background: var(--page-accent);
+  color: var(--page-bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nu-profile-page__divider {
+  width: 100%;
+  margin: 0;
+  border: none;
+}
+
+.nu-profile-page__divider--line {
+  border-top: 2px solid var(--page-accent);
+  opacity: 0.6;
+}
+
+.nu-profile-page__divider--dots {
+  border-top: 4px dotted var(--page-accent);
+}
+
+.nu-profile-page__divider--emote {
+  display: flex;
+  justify-content: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__divider-emote {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+/* --- Effects --- */
+
+/* The layer spans the whole page; the view inside it sticks to the visible part while the
+   profile scrolls, so the particles stay on screen. */
+.nu-profile-page__effects {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.nu-profile-page__effects-view {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.nu-profile-page__particle {
+  position: absolute;
+  top: -24px;
+  color: var(--page-accent);
+  opacity: 0.8;
+  animation-name: nu-profile-page-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes nu-profile-page-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(105dvh) rotate(240deg);
+  }
+}
+
+.nu-profile-page__effects-toggle {
+  position: absolute;
+  top: var(--nu-space-2);
+  right: var(--nu-space-2);
+  z-index: 2;
+  appearance: none;
+  padding: 2px var(--nu-space-2);
+  border: 1px solid color-mix(in srgb, var(--page-text) 30%, transparent);
+  border-radius: var(--nu-radius-full);
+  background: color-mix(in srgb, var(--page-bg) 70%, transparent);
+  color: var(--page-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nu-profile-page__effects,
+  .nu-profile-page__effects-toggle {
+    display: none;
+  }
+
+  .nu-profile-page__link,
+  .nu-profile-page__play {
+    transition: none;
+  }
+}

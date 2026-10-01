@@ -687,6 +687,47 @@ export function demoProfileRoomState() {
   ];
 }
 
+/**
+ * Luna's profile page (matrix/profilePage.ts), so the tour shows what a built page looks like.
+ * No images: the demo's media IDs carry a file extension, which page images (strict mxc:// IDs)
+ * don't accept.
+ */
+export function demoProfilePage() {
+  return {
+    version: 1,
+    style: {
+      colors: { bg: '#0b0a1f', text: '#eef0ff', accent: '#b8a6ff', link: '#ffd479', block: '#16143a' },
+      background: { kind: 'gradient', from: '#1d1450', to: '#05040f', angle: 170 },
+      fonts: { heading: 'handwriting', body: 'rounded' },
+      corners: 18,
+      border: 'glow',
+      borderColor: '#7c6cff',
+      blockOpacity: 0.85,
+      columns: 1,
+      effect: 'stars',
+    },
+    blocks: [
+      {
+        id: 'hello',
+        type: 'text',
+        title: 'Hi, I’m Luna',
+        body: 'I draw moths, owls and anything else that’s awake at 3am.\n\nCommissions are **open**: sketches and full colour.',
+      },
+      {
+        id: 'links',
+        type: 'links',
+        title: 'Find me',
+        items: [
+          { label: 'My art', url: 'https://example.org/luna/art' },
+          { label: 'Commission prices', url: 'https://example.org/luna/commissions', color: '#3a2a7a' },
+        ],
+      },
+      { id: 'line', type: 'divider', style: 'dots' },
+      { id: 'spaces', type: 'spaces', title: 'Come hang out', spaces: [{ roomId: DEMO_OUTSIDE_SPACE.roomId, name: DEMO_OUTSIDE_SPACE.name }] },
+    ],
+  };
+}
+
 /** Raw `/messages` for Luna's profile room: one Global post, with an image. */
 export function demoProfileRoomEvents() {
   return [

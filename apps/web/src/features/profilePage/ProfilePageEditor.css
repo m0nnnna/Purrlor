@@ -1,0 +1,315 @@
+/* The page builder (ProfilePageEditor.tsx): controls beside a live preview; one at a time on a phone. */
+
+.nu-page-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-page-editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-2) var(--nu-space-4);
+  border-bottom: 1px solid var(--nu-color-border);
+  flex: none;
+}
+
+.nu-page-editor__status {
+  flex: 1;
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-page-editor__error {
+  margin: var(--nu-space-2) var(--nu-space-4) 0;
+}
+
+.nu-page-editor__view-switch {
+  display: none;
+  gap: var(--nu-space-1);
+}
+
+.nu-page-editor__view-switch button {
+  appearance: none;
+  padding: var(--nu-space-1) var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-full);
+  background: none;
+  color: var(--nu-color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-page-editor__view-switch button[aria-selected='true'] {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-page-editor__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+}
+
+.nu-page-editor__controls {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nu-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-5);
+  border-right: 1px solid var(--nu-color-border);
+}
+
+.nu-page-editor__preview {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-page-editor__preview > .nu-profile-page {
+  flex: 1 0 auto;
+}
+
+.nu-page-editor__preview-card {
+  padding-top: var(--nu-space-4);
+}
+
+.nu-page-editor__empty {
+  text-align: center;
+  opacity: 0.7;
+}
+
+@media (max-width: 900px) {
+  .nu-page-editor__view-switch {
+    display: flex;
+  }
+
+  .nu-page-editor__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nu-page-editor__controls {
+    border-right: none;
+  }
+
+  .nu-page-editor[data-nu-view='edit'] .nu-page-editor__preview,
+  .nu-page-editor[data-nu-view='preview'] .nu-page-editor__controls {
+    display: none;
+  }
+}
+
+.nu-page-editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-page-editor__heading {
+  margin: var(--nu-space-2) 0 0;
+  font-size: var(--nu-font-size-md);
+  color: var(--nu-color-text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: var(--nu-space-2);
+  flex-wrap: wrap;
+}
+
+.nu-page-editor__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-page-editor__row > .nu-field {
+  flex: 1;
+  min-width: 120px;
+}
+
+.nu-page-editor__colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--nu-space-2);
+}
+
+.nu-page-editor__color {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-page-editor__color input[type='color'] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.nu-page-editor__radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-3);
+}
+
+.nu-page-editor__starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-2);
+}
+
+.nu-page-editor__starter {
+  appearance: none;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border: 2px solid;
+  border-radius: var(--nu-radius-md);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nu-page-editor__inline-button {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--nu-color-text-link);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.nu-page-editor__block {
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-page-editor__block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  padding: var(--nu-space-1) var(--nu-space-2);
+}
+
+.nu-page-editor__block-name {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  padding: var(--nu-space-2) 0;
+  border: none;
+  background: none;
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-page-editor__icon-button {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--nu-radius-sm);
+  background: none;
+  color: var(--nu-color-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-page-editor__icon-button:hover:not(:disabled) {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-page-editor__icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nu-page-editor__block-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-2) var(--nu-space-3) var(--nu-space-3);
+}
+
+.nu-page-editor__subitem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  margin: 0;
+  padding: var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+}
+
+.nu-page-editor__thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-2);
+}
+
+.nu-page-editor__thumb {
+  position: relative;
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--nu-radius-sm);
+  overflow: hidden;
+  background: var(--nu-color-bg-tertiary);
+  flex: none;
+}
+
+.nu-page-editor__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-page-editor__thumb-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--nu-radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.nu-page-editor__picker {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+}
+
+.nu-page-editor__disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.nu-page-editor__danger {
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding-top: var(--nu-space-4);
+  border-top: 1px solid var(--nu-color-border);
+}
