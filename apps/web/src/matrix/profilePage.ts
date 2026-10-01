@@ -51,6 +51,15 @@ export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 export const DIVIDER_STYLES = ['line', 'dots', 'emote'] as const;
 export type DividerStyle = (typeof DIVIDER_STYLES)[number];
 
+/** Who may sign a guestbook: anyone signed in, or only people its owner follows. */
+export const GUESTBOOK_WHO = ['everyone', 'following'] as const;
+export type GuestbookWho = (typeof GUESTBOOK_WHO)[number];
+
+/** A piece's content rating. Mature pieces are blurred until clicked, and hidden unless the viewer
+ *  has said they're over 18 (matrix/ageSetting.ts). */
+export const ART_RATINGS = ['general', 'mature'] as const;
+export type ArtRating = (typeof ART_RATINGS)[number];
+
 export type PageColors = { bg: string; text: string; accent: string; link: string; block: string };
 
 export type PageBackground =
@@ -80,7 +89,18 @@ export type PageBlock =
   | { id: string; type: 'gallery'; title?: string; images: PageImage[] }
   | { id: string; type: 'song'; title?: string; url: string }
   | { id: string; type: 'spaces'; title?: string; spaces: PageSpace[] }
-  | { id: string; type: 'divider'; style: DividerStyle; emote?: string };
+  | { id: string; type: 'divider'; style: DividerStyle; emote?: string }
+  /** The owner's Top 8: people who follow them back (checked again when the page is drawn). */
+  | { id: string; type: 'friends'; title?: string; users: string[] }
+  /** Visitors' messages, kept in the profile room (matrix/guestbook.ts). The owner's rules are here. */
+  | { id: string; type: 'guestbook'; title?: string; who: GuestbookWho; slowmode: number; blockedWords: string[] }
+  /** An artist's albums of pieces, each with a rating and tags. */
+  | { id: string; type: 'art'; title?: string; albums: ArtAlbum[] }
+  /** Commission status, price sheet and queue, drawn from their own state events (matrix/commissions.ts). */
+  | { id: string; type: 'commissions'; title?: string };
+
+export type ArtPiece = { url: string; title?: string; description?: string; tags: string[]; rating: ArtRating };
+export type ArtAlbum = { id: string; title: string; description?: string; pieces: ArtPiece[] };
 
 /** A Space shown on a page, as it was when the owner added it (name and avatar can go stale). */
 export type PageSpace = { roomId: string; name: string; avatarUrl?: string; via?: string[] };
@@ -96,6 +116,19 @@ export const LIMITS = {
   galleryImages: 12,
   links: 12,
   spaces: 8,
+  /** The Top 8. */
+  friends: 8,
+  guestbookWords: 20,
+  guestbookWord: 40,
+  /** Longest slowmode a guestbook may ask for, seconds. */
+  guestbookSlowmode: 3600,
+  albums: 12,
+  albumPieces: 24,
+  /** Pieces across a page's art blocks. They load only when their album is opened, so they don't
+   *  count toward `images`. */
+  artPieces: 60,
+  tags: 6,
+  tag: 24,
   title: 60,
   label: 40,
   caption: 200,
@@ -131,6 +164,7 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/;
 const MXC_URL = /^mxc:\/\/[A-Za-z0-9.\-:[\]]{1,255}\/[A-Za-z0-9_-]{1,255}$/;
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,16}$/;
 const ROOM_ID = /^![A-Za-z0-9._~=+/-]{1,255}:[A-Za-z0-9.\-:[\]]{1,255}$/;
+const USER_ID = /^@[a-z0-9._=\-/+]{1,200}:[A-Za-z0-9.\-:[\]]{1,200}$/;
 const SERVER_NAME = /^[A-Za-z0-9.\-:[\]]{1,255}$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -248,6 +282,32 @@ function readSpace(raw: unknown): PageSpace | undefined {
   return { roomId: raw.roomId, name, ...(avatarUrl && { avatarUrl }), ...(via.length > 0 && { via }) };
 }
 
+/** A tag: lower case, no leading #, one word's worth of characters. */
+function readTag(value: unknown): string | undefined {
+  const line = readLine(value, LIMITS.tag)?.replace(/^#+/, '').trim().toLowerCase();
+  return line || undefined;
+}
+
+function readPiece(raw: unknown): ArtPiece | undefined {
+  if (!isRecord(raw)) return undefined;
+  const url = readMxc(raw.url);
+  if (!url) return undefined;
+  const title = readLine(raw.title, LIMITS.title);
+  const description = readLine(raw.description, LIMITS.caption);
+  const tags = [...new Set((Array.isArray(raw.tags) ? raw.tags : []).map(readTag).filter((tag): tag is string => !!tag))].slice(0, LIMITS.tags);
+  return { url, ...(title && { title }), ...(description && { description }), tags, rating: readChoice(raw.rating, ART_RATINGS, 'general') };
+}
+
+function readAlbum(raw: unknown, index: number): ArtAlbum | undefined {
+  if (!isRecord(raw)) return undefined;
+  const title = readLine(raw.title, LIMITS.title);
+  const pieces = (Array.isArray(raw.pieces) ? raw.pieces : []).map(readPiece).filter((piece): piece is ArtPiece => !!piece).slice(0, LIMITS.albumPieces);
+  if (!title || pieces.length === 0) return undefined;
+  const description = readLine(raw.description, LIMITS.caption);
+  const id = typeof raw.id === 'string' && BLOCK_ID.test(raw.id) ? raw.id : `a${index}`;
+  return { id, title, ...(description && { description }), pieces };
+}
+
 function withTitle(raw: Record<string, unknown>): { title?: string } {
   const title = readLine(raw.title, LIMITS.title);
   return title ? { title } : {};
@@ -306,9 +366,59 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
       if (style === 'emote') return emote ? { id, type: 'divider', style, emote } : { id, type: 'divider', style: 'line' };
       return { id, type: 'divider', style };
     }
+    case 'friends': {
+      const users = [...new Set((Array.isArray(raw.users) ? raw.users : []).filter((user): user is string => typeof user === 'string' && user.length <= 255 && USER_ID.test(user)))].slice(0, LIMITS.friends);
+      return users.length > 0 ? { id, type: 'friends', ...withTitle(raw), users } : undefined;
+    }
+    case 'guestbook': {
+      const blockedWords = [
+        ...new Set((Array.isArray(raw.blockedWords) ? raw.blockedWords : []).map((word) => readLine(word, LIMITS.guestbookWord)).filter((word): word is string => !!word)),
+      ].slice(0, LIMITS.guestbookWords);
+      return {
+        id,
+        type: 'guestbook',
+        ...withTitle(raw),
+        who: readChoice(raw.who, GUESTBOOK_WHO, 'everyone'),
+        slowmode: Math.round(readNumber(raw.slowmode, 0, LIMITS.guestbookSlowmode, 0)),
+        blockedWords,
+      };
+    }
+    case 'art': {
+      const seen = new Set<string>();
+      const albums = (Array.isArray(raw.albums) ? raw.albums : [])
+        .map(readAlbum)
+        .filter((album): album is ArtAlbum => !!album)
+        .map((album) => {
+          let id = album.id;
+          while (seen.has(id)) id = `${id}_`;
+          seen.add(id);
+          return { ...album, id };
+        })
+        .slice(0, LIMITS.albums);
+      return albums.length > 0 ? { id, type: 'art', ...withTitle(raw), albums } : undefined;
+    }
+    case 'commissions':
+      return { id, type: 'commissions', ...withTitle(raw) };
     default:
       return undefined;
   }
+}
+
+function artPieceCount(block: PageBlock): number {
+  return block.type === 'art' ? block.albums.reduce((count, album) => count + album.pieces.length, 0) : 0;
+}
+
+/** An art block cut down to `room` pieces, dropping albums that end up empty. */
+function limitArtPieces(block: Extract<PageBlock, { type: 'art' }>, room: number): Extract<PageBlock, { type: 'art' }> | undefined {
+  let left = room;
+  const albums: ArtAlbum[] = [];
+  for (const album of block.albums) {
+    if (left < 1) break;
+    const pieces = album.pieces.slice(0, left);
+    left -= pieces.length;
+    albums.push({ ...album, pieces });
+  }
+  return albums.length > 0 ? { ...block, albums } : undefined;
 }
 
 function blockImageCount(block: PageBlock): number {
@@ -326,6 +436,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
   const seen = new Set<string>();
   const blocks: PageBlock[] = [];
   let images = backgroundImages;
+  let artPieces = 0;
   for (const [index, item] of raw.entries()) {
     if (blocks.length >= LIMITS.blocks) break;
     const rawId = isRecord(item) ? item.id : undefined;
@@ -338,6 +449,12 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
     if (block.type === 'gallery') {
       if (room < 1) continue;
       block = { ...block, images: block.images.slice(0, room) };
+    }
+    if (block.type === 'art') {
+      const limited = limitArtPieces(block, LIMITS.artPieces - artPieces);
+      if (!limited) continue;
+      block = limited;
+      artPieces += artPieceCount(block);
     }
     images += blockImageCount(block);
     seen.add(id);

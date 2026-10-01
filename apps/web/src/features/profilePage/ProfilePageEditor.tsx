@@ -15,6 +15,9 @@ import {
 import { BlockEditor } from './BlockEditor';
 import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, removeBlock, updateBlock, withFormattedText } from './editorModel';
 import { PageBlocks } from './PageBlocks';
+import { PageOwnerContext } from './PageOwnerContext';
+import { getOwnProfileRoomId } from '../../matrix/profileFeed';
+import { PublicPageSwitch } from '../../app/PublicPageSwitch';
 import { ProfilePageFrame } from './ProfilePageFrame';
 import { StyleControls } from './StyleControls';
 import './ProfilePageEditor.css';
@@ -206,6 +209,11 @@ export function ProfilePageEditor({
             )}
           </div>
 
+          <div className="nu-page-editor__section" data-nu-role="page-editor-public">
+            <h3 className="nu-page-editor__heading">Who can see it</h3>
+            <PublicPageSwitch />
+          </div>
+
           <div className="nu-page-editor__section nu-page-editor__danger">
             <button type="button" className="nu-button nu-button--secondary" onClick={() => void handleDiscard()} disabled={!!busy}>
               Discard changes
@@ -231,7 +239,9 @@ export function ProfilePageEditor({
               <p className="nu-profile-view__handle">{mx.getUserId()}</p>
             </section>
             {preview && preview.blocks.length > 0 ? (
-              <PageBlocks blocks={preview.blocks} />
+              <PageOwnerContext.Provider value={{ userId: mx.getUserId() ?? '', roomId: getOwnProfileRoomId(mx), isMe: true }}>
+                <PageBlocks blocks={preview.blocks} />
+              </PageOwnerContext.Provider>
             ) : (
               <p className="nu-page-editor__empty">Add a block to see it here.</p>
             )}

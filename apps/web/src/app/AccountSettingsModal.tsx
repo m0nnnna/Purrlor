@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Modal } from '../components/Modal';
 import { AccountGeneralSettings } from './AccountGeneralSettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { PrivacySettings } from './PrivacySettings';
 import { RemindersSettings } from './RemindersSettings';
 import { SessionsSettings } from './SessionsSettings';
 import './AccountSettingsModal.css';
 
-type AccountSettingsTab = 'account' | 'sessions' | 'appearance' | 'reminders';
+type AccountSettingsTab = 'account' | 'sessions' | 'appearance' | 'reminders' | 'privacy';
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<AccountSettingsTab>('account');
@@ -43,11 +44,20 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
         >
           Reminders
         </button>
+        <button
+          type="button"
+          className={tab === 'privacy' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+          data-nu-role="account-settings-privacy-tab"
+          onClick={() => setTab('privacy')}
+        >
+          Privacy
+        </button>
       </div>
       {tab === 'account' && <AccountGeneralSettings onClose={onClose} />}
       {tab === 'sessions' && <SessionsSettings />}
       {tab === 'appearance' && <AppearanceSettings />}
       {tab === 'reminders' && <RemindersSettings onClose={onClose} />}
+      {tab === 'privacy' && <PrivacySettings />}
     </Modal>
   );
 }

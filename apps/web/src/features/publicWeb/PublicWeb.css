@@ -1,0 +1,153 @@
+/*
+ * What a visitor who isn't signed in sees (PublicApp.tsx): a slim Purrlor bar over a scrolling
+ * column. The app's own shell isn't here, so this supplies the full-height box it would.
+ */
+.nu-public {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--nu-color-bg-primary);
+  color: var(--nu-color-text);
+}
+
+.nu-public__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-3) var(--nu-space-5);
+  border-bottom: 1px solid var(--nu-color-border);
+  padding-top: max(var(--nu-space-3), env(safe-area-inset-top));
+}
+
+.nu-public__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+
+.nu-public__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-public__nav-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nu-color-text-link);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.nu-public__nav-link:hover {
+  text-decoration: underline;
+}
+
+.nu-public__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.nu-public__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--nu-space-5);
+  box-sizing: border-box;
+}
+
+.nu-public__main > * {
+  flex: none;
+}
+
+.nu-public__page {
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-public__banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-5);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg, 12px);
+  max-width: 680px;
+  margin: var(--nu-space-5) auto;
+  box-sizing: border-box;
+}
+
+.nu-public__banner h1,
+.nu-public__banner p {
+  margin: 0;
+}
+
+.nu-public__posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-public__more {
+  align-self: center;
+}
+
+.nu-public__counts {
+  align-items: center;
+}
+
+.nu-public__count {
+  cursor: default;
+}
+
+.nu-public__signin-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85em;
+  color: var(--nu-color-text-link);
+  cursor: pointer;
+}
+
+.nu-public__signin-link:hover {
+  text-decoration: underline;
+}
+
+.nu-public__media-button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.nu-public__audio {
+  width: 100%;
+}
+
+.nu-public__sensitive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-3) var(--nu-space-4);
+  border: 1px dashed var(--nu-color-border);
+  border-radius: var(--nu-radius-md, 8px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}

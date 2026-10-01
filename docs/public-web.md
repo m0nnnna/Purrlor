@@ -32,6 +32,21 @@ The owner's profile room carries, as state:
 Only the owner can set it (their profile room's power levels). Anything but `enabled: true` is off.
 The service reads it on each feed refresh, so switching it off takes effect within a minute.
 
+## What the app does with it
+
+- **Signed out** (`features/publicWeb/`): `/@name` is the person's page (or "Sign in to see this
+  page", the same answer for every reason a page isn't shown), `/@name/post/<id>` is one Global
+  post, `/feed` is the Global feed. Each has a bar with **Sign in** and **Join Purrlor**, and a page
+  has **Make your own page**. The page goes through `parseProfilePage` first. Media goes through
+  `/api/public/media` (`useMediaUrl` does that when there's no Matrix client). The Top 8 shows
+  only friends whose own pages are public, drawn from their page answers; the guestbook says
+  "Sign in to read and sign this guestbook": the API doesn't serve entries.
+- **Signed in**, the same addresses open inside the app: `/@name` is that person's profile,
+  `/feed` the global feed (`useOpenPublicRoute`).
+- **The switch** is in Account Settings → Privacy and in the page builder. It writes
+  `xyz.nekous.public_web` to the owner's profile room (creating it if they've never posted).
+- The composer's Global option says "Anyone on the web can see this, even without signing in".
+
 ## API
 
 Under the app's own address, by the deployment's nginx (below). All `GET`, no sign-in, rate

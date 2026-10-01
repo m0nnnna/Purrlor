@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useMatrixClient } from '../MatrixClientContext';
+import { useContext, useEffect, useState } from 'react';
+import { MatrixClientContext, type useMatrixClient } from '../MatrixClientContext';
 import { needsMediaAuthentication } from '../mediaAuth';
+import { publicMediaUrl } from '../publicWeb';
 
 type MediaUrlOptions = {
   width?: number;
@@ -70,7 +71,9 @@ async function resolveAuthenticatedMedia(mx: ReturnType<typeof useMatrixClient>,
  * fetch to decrypt) from this hook's "cheap path when possible" one.
  */
 export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrlOptions = {}): string | null {
-  const mx = useMatrixClient();
+  // Signed out there's no client: the public media route serves what a public answer referenced
+  // (matrix/publicWeb.ts), and needs no authorisation header.
+  const mx = useContext(MatrixClientContext);
   const { width, height } = options;
   // Only defaults to 'scale' when an actual thumbnail is being requested (width or height
   // given) — matrix-js-sdk's mxcUrlToHttp treats a *truthy* resizeMethod alone as "this is a
@@ -78,13 +81,14 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
   // route a no-dimensions request (Avatar.tsx's animated path, EmoteImage.tsx) to `/thumbnail`
   // instead of `/download` — the wrong endpoint for "give me the whole original file".
   const method = options.method ?? (width || height ? 'scale' : undefined);
-  const [src, setSrc] = useState<string | null>(() => getResolvedSrc(mx, mxcUrl, width, height, method));
+  const [src, setSrc] = useState<string | null>(() => (mx ? getResolvedSrc(mx, mxcUrl, width, height, method) : null));
 
   useEffect(() => {
     if (!mxcUrl) {
       setSrc(null);
       return undefined;
     }
+    if (!mx) return undefined;
 
     const known = getResolvedSrc(mx, mxcUrl, width, height, method);
     if (known) {
@@ -132,5 +136,5 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
     };
   }, [mx, mxcUrl, width, height, method]);
 
-  return src;
+  return mx ? src : mxcUrl ? publicMediaUrl(mxcUrl, width, height) : null;
 }

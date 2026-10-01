@@ -8,6 +8,8 @@ import { LoginScreen } from './LoginScreen';
 import { RegisterScreen } from './RegisterScreen';
 import { RecoveryKeySetupScreen } from './RecoveryKeySetupScreen';
 import { AppShell } from './AppShell';
+import { PublicApp } from '../features/publicWeb/PublicApp';
+import { parsePublicRoute } from '../matrix/publicWeb';
 
 type BootState =
   | { phase: 'checking-session' }
@@ -19,7 +21,10 @@ type BootState =
 
 export function App() {
   const [boot, setBoot] = useState<BootState>({ phase: 'checking-session' });
-  const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  // A signed-out visitor at /@name, /@name/post/<id> or /feed sees the public web (docs/public-web.md)
+  // until they choose to sign in or join; signing in reloads the same address into the app.
+  const [publicRoute] = useState(() => (isDemoMode() ? undefined : parsePublicRoute(window.location.pathname)));
+  const [authView, setAuthView] = useState<'public' | 'login' | 'register'>(publicRoute ? 'public' : 'login');
 
   useEffect(() => {
     // Demo mode short-circuits the whole real boot: no stored session is read, no homeserver is
@@ -115,6 +120,9 @@ export function App() {
   }
 
   if (boot.phase === 'logged-out') {
+    if (authView === 'public' && publicRoute) {
+      return <PublicApp route={publicRoute} onSignIn={() => setAuthView('login')} onRegister={() => setAuthView('register')} />;
+    }
     if (authView === 'register') {
       return (
         <RegisterScreen

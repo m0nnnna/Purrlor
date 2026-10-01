@@ -1,13 +1,18 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
+import { useFollows } from '../../matrix/hooks/useFollows';
+import { useProfileBrief } from '../../matrix/hooks/useProfileBrief';
+import { followsBack } from '../../matrix/topFriends';
 import type { Emote } from '../../matrix/emotes';
 import {
   DIVIDER_STYLES,
+  GUESTBOOK_WHO,
   LIMITS,
   readHttpsUrl,
   type DividerStyle,
+  type GuestbookWho,
   type PageBlock,
   type PageLink,
   type PageSpace,
@@ -329,6 +334,105 @@ function DividerEditor({ block, onChange, emotes }: EditorProps<'divider'>) {
   );
 }
 
+function FriendRow({ userId, checked, disabled, onToggle }: { userId: string; checked: boolean; disabled: boolean; onToggle: (on: boolean) => void }) {
+  const mx = useMatrixClient();
+  const brief = useProfileBrief(userId);
+  const [back, setBack] = useState<boolean>();
+  useEffect(() => {
+    let cancelled = false;
+    void followsBack(mx, userId, mx.getUserId() ?? '').then((result) => {
+      if (!cancelled) setBack(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mx, userId]);
+  return (
+    <label className="nu-field__checkbox-row">
+      <input type="checkbox" checked={checked} disabled={(disabled && !checked) || (back === false && !checked)} onChange={(evt) => onToggle(evt.target.checked)} />
+      {brief.name}
+      {back === false && <span className="nu-field__hint"> doesn’t follow you back</span>}
+    </label>
+  );
+}
+
+/** Your Top 8, picked from people you follow who follow you back. Anyone else wouldn't be shown anyway. */
+function FriendsEditor({ block, onChange }: EditorProps<'friends'>) {
+  const follows = useFollows().users;
+  const chosen = new Set(block.users);
+  // Someone you've since unfollowed stays listed so you can take them off.
+  const people = [...new Set([...block.users, ...follows])];
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <p className="nu-field__hint">
+        Only people who follow you back are shown ({block.users.length} of {LIMITS.friends}).
+      </p>
+      {people.length === 0 && <p className="nu-field__hint">Follow some people first.</p>}
+      {people.map((userId) => (
+        <FriendRow
+          key={userId}
+          userId={userId}
+          checked={chosen.has(userId)}
+          disabled={block.users.length >= LIMITS.friends}
+          onToggle={(on) => onChange({ ...block, users: on ? [...block.users, userId] : block.users.filter((u) => u !== userId) })}
+        />
+      ))}
+    </>
+  );
+}
+
+const GUESTBOOK_WHO_LABELS: Record<GuestbookWho, string> = { everyone: 'Anyone signed in', following: 'Only people I follow' };
+
+function GuestbookEditor({ block, onChange }: EditorProps<'guestbook'>) {
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <label className="nu-field">
+        Who can sign
+        <select
+          className="nu-field__input"
+          value={block.who}
+          onChange={(evt) => onChange({ ...block, who: evt.target.value as GuestbookWho })}
+          data-nu-role="page-editor-guestbook-who"
+        >
+          {GUESTBOOK_WHO.map((who) => (
+            <option key={who} value={who}>
+              {GUESTBOOK_WHO_LABELS[who]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="nu-field">
+        Slowmode (seconds between one person’s entries, 0 for none)
+        <input
+          className="nu-field__input"
+          type="number"
+          min={0}
+          max={LIMITS.guestbookSlowmode}
+          value={block.slowmode}
+          onChange={(evt) => onChange({ ...block, slowmode: Math.max(0, Math.min(LIMITS.guestbookSlowmode, Math.round(Number(evt.target.value) || 0))) })}
+        />
+      </label>
+      <label className="nu-field">
+        Blocked words (one per line)
+        <textarea
+          className="nu-field__input nu-field__textarea"
+          rows={3}
+          value={block.blockedWords.join('\n')}
+          onChange={(evt) =>
+            onChange({ ...block, blockedWords: evt.target.value.split('\n').map((word) => word.slice(0, LIMITS.guestbookWord)).slice(0, LIMITS.guestbookWords) })
+          }
+        />
+        <span className="nu-field__hint">
+          Entries with these words are left out and deleted from your guestbook. Like everything on your page, the list is public. To switch the
+          guestbook off, remove the block.
+        </span>
+      </label>
+    </>
+  );
+}
+
 function Fields({
   block,
   onChange,
@@ -356,6 +460,12 @@ function Fields({
       return <SpacesEditor block={block} onChange={onChange} {...shared} />;
     case 'divider':
       return <DividerEditor block={block} onChange={onChange} {...shared} />;
+    case 'friends':
+      return <FriendsEditor block={block} onChange={onChange} {...shared} />;
+    case 'guestbook':
+      return <GuestbookEditor block={block} onChange={onChange} {...shared} />;
+    default:
+      return null;
   }
 }
 

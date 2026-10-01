@@ -398,3 +398,104 @@
     transition: none;
   }
 }
+
+/* Top 8 (SocialBlocks.tsx): avatars with names, a row that wraps. */
+.nu-profile-page__friends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__friend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nu-space-1);
+  width: 84px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nu-profile-page__friend-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+/* Guestbook: a message box over a list of entries, plain text only. */
+.nu-profile-page__sign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__sign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  margin: var(--nu-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-profile-page__entry {
+  display: flex;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__entry-avatar {
+  flex: none;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.nu-profile-page__entry-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.nu-profile-page__entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nu-space-2);
+  font-size: 0.85em;
+}
+
+.nu-profile-page__entry-meta time {
+  opacity: 0.7;
+}
+
+.nu-profile-page__entry-remove {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--page-link);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-profile-page__entry-body {
+  margin: var(--nu-space-1) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -26,7 +26,7 @@ let handledFocusRequest = 0;
 function audienceHint(target: ComposerTarget | undefined, privately: boolean): string {
   if (privately) return 'Saved to your account, never sent to a room. Publish it later from Yours.';
   if (!target) return '';
-  if (target.target.kind === 'global') return 'Anyone on this server can read this, on your profile and the global feed.';
+  if (target.target.kind === 'global') return 'Anyone on the web can see this, even without signing in. It shows on your profile and the global feed.';
   return target.isPublic
     ? `Anyone in ${target.label} can read this, and it appears on the global feed.`
     : `Only members of ${target.label} can read this.`;

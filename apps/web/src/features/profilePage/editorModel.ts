@@ -63,6 +63,10 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   song: 'Profile song',
   spaces: 'Spaces',
   divider: 'Divider',
+  friends: 'Top 8 friends',
+  guestbook: 'Guestbook',
+  art: 'Art gallery',
+  commissions: 'Commissions',
 };
 
 /** A new, empty block of a kind, at the end of the page. */
@@ -84,6 +88,14 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
         return { id, type, spaces: [] };
       case 'divider':
         return { id, type, style: 'line' };
+      case 'friends':
+        return { id, type, users: [] };
+      case 'guestbook':
+        return { id, type, who: 'everyone', slowmode: 0, blockedWords: [] };
+      case 'art':
+        return { id, type, albums: [] };
+      case 'commissions':
+        return { id, type };
     }
   })();
   return { ...page, blocks: [...page.blocks, block] };

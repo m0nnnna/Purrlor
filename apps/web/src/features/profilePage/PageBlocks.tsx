@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
 import { Lightbox } from '../../components/Lightbox';
-import { useMatrixClient } from '../../matrix/MatrixClientContext';
+import { MatrixClientContext } from '../../matrix/MatrixClientContext';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import type { PageBlock, PageImage, PageLink, PageSpace } from '../../matrix/profilePage';
 import { renderMessageText } from '../messaging/renderMessageText';
 import { parseWatchUrl } from '../voice/watchTogether';
 import { linkDomain } from './pageStyle';
+import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 
@@ -20,12 +21,13 @@ function BlockTitle({ title }: { title?: string }) {
 }
 
 function TextBlock({ block }: { block: Block<'text'> }) {
-  const mx = useMatrixClient();
+  // Signed-out visitors have no client (the public page, features/publicWeb/).
+  const mx = useContext(MatrixClientContext);
   return (
     <>
       <BlockTitle title={block.title} />
       <div className="nu-profile-page__text">
-        {renderMessageText(block.body, [], [], mx.getUserId() ?? undefined, { formattedBody: block.formatted })}
+        {renderMessageText(block.body, [], [], mx?.getUserId() ?? undefined, { formattedBody: block.formatted })}
       </div>
     </>
   );
@@ -147,13 +149,13 @@ function SongBlock({ block }: { block: Block<'song'> }) {
 }
 
 function SpaceRow({ space }: { space: PageSpace }) {
-  const mx = useMatrixClient();
+  const mx = useContext(MatrixClientContext);
   const setSelectedSpaceId = useSetAtom(selectedSpaceIdAtom);
   const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
   const setProfileUserId = useSetAtom(profileUserIdAtom);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string>();
-  const joined = mx.getRoom(space.roomId)?.getMyMembership() === 'join';
+  const joined = mx?.getRoom(space.roomId)?.getMyMembership() === 'join';
 
   const open = (roomId: string) => {
     setProfileUserId(null);
@@ -162,6 +164,7 @@ function SpaceRow({ space }: { space: PageSpace }) {
   };
 
   const join = async () => {
+    if (!mx) return;
     setJoining(true);
     setError(undefined);
     try {
@@ -177,14 +180,18 @@ function SpaceRow({ space }: { space: PageSpace }) {
     <div className="nu-profile-page__space" data-nu-role="profile-page-space">
       <Avatar name={space.name} mxcUrl={space.avatarUrl ?? null} size={36} />
       <span className="nu-profile-page__space-name">{space.name}</span>
-      <button
-        type="button"
-        className="nu-profile-page__space-join"
-        disabled={joining}
-        onClick={() => (joined ? open(space.roomId) : void join())}
-      >
-        {joined ? 'Open' : joining ? 'Joining…' : 'Join'}
-      </button>
+      {mx ? (
+        <button
+          type="button"
+          className="nu-profile-page__space-join"
+          disabled={joining}
+          onClick={() => (joined ? open(space.roomId) : void join())}
+        >
+          {joined ? 'Open' : joining ? 'Joining…' : 'Join'}
+        </button>
+      ) : (
+        <span className="nu-profile-page__link-domain">Sign in to join</span>
+      )}
       {error && <span className="nu-field__error">{error}</span>}
     </div>
   );
@@ -232,6 +239,12 @@ function BlockBody({ block }: { block: PageBlock }) {
       return <SpacesBlock block={block} />;
     case 'divider':
       return <DividerBlock block={block} />;
+    case 'friends':
+      return <FriendsBlock block={block} />;
+    case 'guestbook':
+      return <GuestbookBlock block={block} />;
+    default:
+      return null;
   }
 }
 

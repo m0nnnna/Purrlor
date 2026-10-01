@@ -4,8 +4,11 @@ import { parseProfilePage, type ProfilePage } from '../../matrix/profilePage';
 import { PageBlocks } from './PageBlocks';
 import { ProfilePageFrame } from './ProfilePageFrame';
 
-const mx = { getUserId: () => '@me:purr.example.org', getRoom: () => null, joinRoom: vi.fn() };
-vi.mock('../../matrix/MatrixClientContext', () => ({ useMatrixClient: () => mx }));
+const mx = vi.hoisted(() => ({ getUserId: () => '@me:purr.example.org', getRoom: () => null, joinRoom: () => undefined }));
+vi.mock('../../matrix/MatrixClientContext', async () => {
+  const { createContext } = await import('react');
+  return { MatrixClientContext: createContext(mx), useMatrixClient: () => mx };
+});
 // Media resolves straight to an https URL, standing in for the homeserver's.
 vi.mock('../../matrix/hooks/useMediaUrl', () => ({
   useMediaUrl: (mxc: string | null | undefined) => (mxc ? `https://purr.example.org/media/${mxc.split('/').pop()}` : null),

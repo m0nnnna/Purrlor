@@ -28,6 +28,7 @@ import { ReportDialog } from './ReportDialog';
 import { useProfilePage } from '../../matrix/hooks/useProfilePage';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
 import { PageBlocks } from '../profilePage/PageBlocks';
+import { PageOwnerContext } from '../profilePage/PageOwnerContext';
 import { ProfilePageEditor } from '../profilePage/ProfilePageEditor';
 import './FeedView.css';
 import './ProfileView.css';
@@ -267,7 +268,11 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
             )}
           </section>
 
-          {page && page.blocks.length > 0 && <PageBlocks blocks={page.blocks} />}
+          {page && page.blocks.length > 0 && (
+            <PageOwnerContext.Provider value={{ userId, roomId: profileRoomId, isMe }}>
+              <PageBlocks blocks={page.blocks} />
+            </PageOwnerContext.Provider>
+          )}
           {page && !isMe && profileRoomId && (
             <p className="nu-profile-page__report">
               <button

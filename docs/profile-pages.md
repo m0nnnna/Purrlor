@@ -46,6 +46,25 @@ controls on the left, the page as visitors see it on the right (one at a time on
 - A text block keeps its Markdown `body` plus the `formatted` body a message would have, worked out
   from the author's emotes when the page is saved, so visitors see emotes they don't have.
 
+## Top 8 and guestbook
+
+Two blocks that depend on other people, so they're checked when the page is drawn, not just when it's read.
+
+- **Top 8** (`friends` block, up to 8 people). Only people who follow the owner back are shown: a
+  person's profile room publishes who they follow (`profileFeed.ts`), so `matrix/topFriends.ts`
+  reads it for each name and drops anyone whose own profile doesn't list the owner. The builder
+  offers only people you follow who follow you back. A page edited by hand to list someone else just
+  doesn't show them.
+- **Guestbook** (`guestbook` block). Entries are `xyz.nekous.guestbook` events (`{ "body": "…" }`, 500
+  characters, plain text) in the owner's profile room (`matrix/guestbook.ts`). Signing joins that room
+  the way liking does. The owner's rules are on the block: **who** (`everyone` or `following`: people
+  the owner follows), **slowmode** in seconds (0 to 3600) and **blockedWords** (up to 20). Matrix
+  can't stop an event before it's sent, so, as in channels, the form follows the rules and the page
+  leaves out entries that break them, and the owner's client deletes entries with a blocked word as
+  it reads them. The owner removes any entry the way they remove a comment (they have power level
+  100 in their own room); anyone can remove their own. To switch the guestbook off, remove the block.
+  The word list is part of the page, so it's public.
+
 ## What the checks allow
 
 Everything that reads a page goes through `parseProfilePage`, which keeps only what it recognises.

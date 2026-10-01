@@ -22,6 +22,7 @@ import { DemoModeBanner } from '../demo/DemoModeBanner';
 import { isDemoMode } from '../demo/demoMode';
 import { useComposeShortcut } from '../features/feed/useComposeShortcut';
 import { useShareTarget } from '../features/feed/useShareTarget';
+import { useOpenPublicRoute } from '../features/publicWeb/useOpenPublicRoute';
 import { InstallHint } from './InstallHint';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
 import { useOpenRoomFromNotification } from '../matrix/hooks/useOpenRoomFromNotification';
@@ -48,6 +49,7 @@ export function AppShell() {
   useOpenRoomFromNotification();
   useComposeShortcut();
   useShareTarget();
+  useOpenPublicRoute();
   const inviteLinkJoin = useJoinFromInviteLink();
   const [inviteErrorDismissed, setInviteErrorDismissed] = useState(false);
 
