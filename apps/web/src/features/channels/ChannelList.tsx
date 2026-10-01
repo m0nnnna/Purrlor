@@ -20,7 +20,7 @@ import { useHasNewPosts } from '../../matrix/hooks/useHasNewPosts';
 import { useSpaceNews } from '../../matrix/hooks/useSpaceNews';
 import { spaceLanding } from '../../matrix/spaceNews';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
+import { getChannelCategories, reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
@@ -30,7 +30,7 @@ import { useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../ma
 import { useRoomNotificationLevel } from '../../matrix/hooks/useNotificationLevel';
 import { LEVEL_LABELS, RoomNotificationMenu } from '../notifications/NotificationLevelMenu';
 import { useSpaceHierarchy, type HierarchyChannel } from '../../matrix/hooks/useSpaceHierarchy';
-import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
+import { listChildRooms, useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
 import { useSpaceVoiceServer } from '../../matrix/hooks/useSpaceVoiceServer';
 import { useVoiceChannelParticipants } from '../../matrix/hooks/useVoiceChannelParticipants';
@@ -521,7 +521,11 @@ export function ChannelList() {
   const nothingChosen = !!space && !selectedRoomId && spaceView === null && !globalFeedOpen && !profileUserId && !openPost;
   useEffect(() => {
     if (!space || !nothingChosen) return;
-    const landing = spaceLanding(mx, space, spaceRooms, categories);
+    // Read fresh, not from spaceRooms/categories: right after switching Spaces those still hold the
+    // last Space's lists for a render (their hooks catch up in an effect), and landing on them sent
+    // you to the last Space's first channel. They're still deps, so a Space whose channels are
+    // still loading gets its landing once they arrive.
+    const landing = spaceLanding(mx, space, listChildRooms(mx, space.roomId), getChannelCategories(space));
     if (landing.kind === 'news') setSpaceView('news');
     else if (landing.kind === 'channel') setSelectedRoomId(landing.roomId);
   }, [mx, space, nothingChosen, spaceRooms, categories, setSpaceView, setSelectedRoomId]);
