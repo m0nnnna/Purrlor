@@ -1,0 +1,60 @@
+.nu-terms-notice {
+  margin: 0;
+  text-align: center;
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-terms-notice__link {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nu-color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nu-terms-notice__link:hover {
+  color: var(--nu-color-accent-hover);
+}
+
+.nu-terms {
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-secondary);
+  line-height: 1.5;
+}
+
+.nu-terms p,
+.nu-terms ul {
+  margin: 0 0 var(--nu-space-3);
+}
+
+.nu-terms ul {
+  padding-left: var(--nu-space-5);
+}
+
+.nu-terms li + li {
+  margin-top: var(--nu-space-1);
+}
+
+.nu-terms h3 {
+  margin: var(--nu-space-4) 0 var(--nu-space-2);
+  font-size: var(--nu-font-size-md);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-terms h4 {
+  margin: var(--nu-space-3) 0 var(--nu-space-1);
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-terms strong {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-terms__date {
+  color: var(--nu-color-text-muted);
+}

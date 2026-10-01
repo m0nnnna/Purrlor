@@ -39,4 +39,15 @@ describe('LoginScreen', () => {
 
     expect(loginWithPassword).toHaveBeenCalledWith('https://matrix.example.com', 'alice', 'hunter22');
   });
+
+  it('opens the terms of service from the agreement note', async () => {
+    await withConfig({ homeserver: '' });
+    render(<LoginScreen onLoggedIn={vi.fn()} onSwitchToRegister={vi.fn()} />);
+
+    expect(screen.getByText(/By making an account you agree to our/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Terms of Service' }));
+
+    expect(screen.getByText(/You must be at least 18 years old/)).toBeTruthy();
+    expect(screen.getByText(/must be marked with a content warning/)).toBeTruthy();
+  });
 });

@@ -7,6 +7,7 @@ import { bootstrapNewAccountEncryption } from '../matrix/e2eeSetup';
 import { registerAccount, RegistrationError, type EmailRetry, type EmailVerification, type TermsPolicy } from '../matrix/registration';
 import { clearSession } from '../matrix/session';
 import { getRuntimeConfig, homeserverDisplayName } from './runtimeConfig';
+import { TermsNotice } from './TermsOfService';
 import './RegisterScreen.css';
 
 type Phase = 'form' | 'creating-account' | 'setting-up-encryption';
@@ -199,6 +200,7 @@ export function RegisterScreen({ onSwitchToLogin, onRegistered }: RegisterScreen
             {error}
           </p>
         )}
+        <TermsNotice lead="You must be 18 or older. By creating an account you confirm your age and agree to our" />
         <button className="nu-login__submit" type="submit" disabled={submitting}>
           {phase === 'creating-account' && 'Creating your account…'}
           {phase === 'setting-up-encryption' && 'Setting up encryption…'}

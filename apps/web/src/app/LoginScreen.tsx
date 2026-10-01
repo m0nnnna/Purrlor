@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { loginWithPassword } from '../matrix/login';
 import { enterDemoMode } from '../demo/demoMode';
 import { getRuntimeConfig, homeserverDisplayName } from './runtimeConfig';
+import { TermsNotice } from './TermsOfService';
 import './LoginScreen.css';
 
 type LoginScreenProps = {
@@ -89,6 +90,7 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
         >
           Just looking? Take a tour with sample data
         </button>
+        <TermsNotice lead="By making an account you agree to our" />
       </form>
     </div>
   );
