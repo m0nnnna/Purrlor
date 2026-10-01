@@ -87,3 +87,20 @@ test('who may edit the news is a role setting, and the homeserver holds to it', 
   );
   await api(bob, 'PUT', `/rooms/${enc(spaceId)}/state/xyz.nekous.space_news/`, { body: 'Bob was here', revision: 'bob-1' });
 });
+
+test('each Space opens on its own first channel when switching between them on the rail', async ({ page }) => {
+  const alice = await createUser('alice');
+  const first = await createSpaceWithChannel(alice, [], 'lobby');
+  const second = await createSpaceWithChannel(alice, [], 'hangout');
+  const header = role(page, 'main-pane-header').locator('.nu-main-pane__header-name');
+
+  await logIn(page, alice);
+  for (const [space, channel] of [
+    [first, 'lobby'],
+    [second, 'hangout'],
+    [first, 'lobby'],
+  ] as const) {
+    await page.locator(`[data-nu-role="server-rail-item"][aria-label="${space.spaceName}"]`).click();
+    await expect(header).toHaveText(channel);
+  }
+});

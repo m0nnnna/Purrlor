@@ -11,7 +11,7 @@ type SpaceChildContent = { via?: string[]; order?: string };
  * sort), falling back to room name for children without one. Sub-spaces are excluded — nested
  * space navigation isn't in scope yet.
  */
-function listChildRooms(mx: ReturnType<typeof useMatrixClient>, spaceId: string): Room[] {
+export function listChildRooms(mx: ReturnType<typeof useMatrixClient>, spaceId: string): Room[] {
   const space = mx.getRoom(spaceId);
   if (!space) return [];
 

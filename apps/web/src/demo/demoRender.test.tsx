@@ -404,6 +404,27 @@ describe('opening a Space in the demo world', () => {
     });
     expect(await screen.findByText('Movie night moved to Saturday')).toBeInTheDocument();
   });
+
+  it('opens the next Space on its own first channel, not the one the last Space landed on', async () => {
+    const { store } = renderWithDemo(
+      <>
+        <ChannelList />
+        <MainPane />
+      </>,
+      { spaceId: DEMO_ROOM_IDS.cafe, roomId: null }
+    );
+    // Cat Café: its news, then on to its #general.
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue to #general' }));
+    expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general);
+
+    // Then the Arcade, picked on the rail.
+    act(() => {
+      store.set(selectedSpaceIdAtom, DEMO_ROOM_IDS.arcade);
+      store.set(selectedRoomIdAtom, null);
+      store.set(selectedSpaceViewAtom, null);
+    });
+    await waitFor(() => expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.gaming));
+  });
 });
 
 describe('Account Settings against the demo world', () => {
