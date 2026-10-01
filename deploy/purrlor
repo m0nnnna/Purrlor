@@ -762,7 +762,18 @@ cmd_media_move() {
   else
     case "$target" in /*) ;; *) die "Give the full path, starting with / — e.g. /mnt/storage/purrlor-media" ;; esac
     case "$target" in *[[:space:]:,]*) die "The path can't contain spaces, ':' or ','." ;; esac
-    dest="$(realpath -m "$target")"
+    # Tidied by hand rather than with `realpath -m`, which BusyBox (Alpine hosts) doesn't have.
+    case "/$target/" in */./*|*/../*) die "Give the path without . or .. in it." ;; esac
+    dest="$(printf '%s' "$target" | tr -s /)"
+    dest="${dest%/}"
+    dest="${dest:-/}"
+    # A symlinked folder on the way is followed, as Docker will when it mounts it.
+    if [ -d "$dest" ]; then
+      dest="$(cd "$dest" && pwd -P)"
+    elif [ "$dest" != / ] && [ -d "$(dirname "$dest")" ]; then
+      dest="$(cd "$(dirname "$dest")" && pwd -P)/$(basename "$dest")"
+      dest="$(printf '%s' "$dest" | tr -s /)"
+    fi
     [ "$dest" != / ] || die "Not the root directory — pick a folder for it."
     [ "$dest" != "$current" ] || die "Media is already stored in $dest."
     if [ -e "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
