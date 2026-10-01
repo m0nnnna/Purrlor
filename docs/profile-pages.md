@@ -55,6 +55,12 @@ Two blocks that depend on other people, so they're checked when the page is draw
   reads it for each name and drops anyone whose own profile doesn't list the owner. The builder
   offers only people you follow who follow you back. A page edited by hand to list someone else just
   doesn't show them.
+  - **Signed out**, the public API serves only the page, so the follow-back check can't run there.
+    The signed-out Top 8 lists only friends whose own pages are public (each is fetched from
+    `/api/public/pages`), and trusts the owner's list for who follows back. That's a known gap,
+    accepted for now: it can show someone the owner picked by hand who doesn't follow them, but only if
+    they've made their own page public. Closing it would mean the token server checking follow-back
+    (it already reads every profile room's follows) and returning the checked list.
 - **Guestbook** (`guestbook` block). Entries are `xyz.nekous.guestbook` events (`{ "body": "…" }`, 500
   characters, plain text) in the owner's profile room (`matrix/guestbook.ts`). Signing joins that room
   the way liking does. The owner's rules are on the block: **who** (`everyone` or `following`: people
@@ -63,7 +69,8 @@ Two blocks that depend on other people, so they're checked when the page is draw
   leaves out entries that break them, and the owner's client deletes entries with a blocked word as
   it reads them. The owner removes any entry the way they remove a comment (they have power level
   100 in their own room); anyone can remove their own. To switch the guestbook off, remove the block.
-  The word list is part of the page, so it's public.
+  The word list is part of the page, so it's public. Signed-out visitors don't see the guestbook: it
+  says "Sign in to read and sign this guestbook", and that's intended.
 
 ## Artists: galleries and commissions
 
@@ -95,8 +102,9 @@ Two more blocks, for artists.
     (`xyz.nekous.commission_alerts`); your client sees the status change in the artist's profile
     room (you're in it once you follow them) and shows a card and a desktop notification while a
     tab is open. There's no push for it.
-  - Signed-out visitors see "Sign in to see commission status, prices and the queue": the public
-    API doesn't serve these events.
+  - Like every block, it's an optional add-on: nothing appears unless the owner adds the block.
+    Signed-out visitors see "Sign in to see commission status, prices and the queue": the public
+    API doesn't serve these events, and that's intended.
 
 ## What the checks allow
 
