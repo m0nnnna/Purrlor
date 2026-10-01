@@ -16,6 +16,7 @@ https://claude.ai/code/artifact/8f290dcd-d140-46e7-9ab5-994d822de800
 Branches as of 2026-09-30:
 - `master`: everything, merged 2026-09-30 (fast-forward from `opus-work`; `global-emote-library`, `sonnet-work` and `opus-work` are now fully contained in it). The live server is small and treated as a beta, so `master` deploys straight to it.
 - `profile-pages`: the profile pages plan, started 2026-10-01: phases 1 and 2 (installable app, page parser, renderer, builder) and phase 3's service side (the public web API in the token server, page reports and admin hiding). Pushed, not merged: nothing deploys until the plan is finished.
+- `sonnet-work-2`: the Sonnet tasks of the profile pages plan (public web views, Top 8 and guestbook, watch parties, art galleries and commissions), off `profile-pages`, 2026-10-01. Not pushed or merged.
 - `sonnet/gif`: GIF search via Klipy. On hold, do not merge. Klipy's terms forbid the server proxy, re-hosting and caching this branch does unless Klipy approves it in writing.
 
 ## Checks
