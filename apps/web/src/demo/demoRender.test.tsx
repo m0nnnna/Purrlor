@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
-import { globalFeedOpenAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialSpaceIdAtom, socialViewAtom, type SocialView } from '../app/state/selection';
+import {
+  globalFeedOpenAtom,
+  selectedRoomIdAtom,
+  selectedSpaceIdAtom,
+  selectedSpaceViewAtom,
+  socialSpaceIdAtom,
+  socialViewAtom,
+  type SocialView,
+} from '../app/state/selection';
 import { ChannelList } from '../features/channels/ChannelList';
 import { FeedView } from '../features/feed/FeedView';
 import { GlobalFeedView } from '../features/feed/GlobalFeedView';
@@ -13,6 +21,8 @@ import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { createDemoClient } from './demoClient';
+import { SPACE_NEWS_EVENT } from '../matrix/spaceNews';
+import { act } from '@testing-library/react';
 import { DEMO_OUTSIDE_SPACE, DEMO_ROOM_IDS } from './demoWorld';
 
 const DEMO_LUNA = DEMO_OUTSIDE_SPACE.author;
@@ -42,6 +52,17 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
+  // The composer asks whether it's on a phone-sized layout before taking focus.
+  window.matchMedia ??= ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
 });
 
 // vitest runs without `globals`, so Testing Library never gets to register its own automatic
@@ -340,5 +361,46 @@ describe('The sample Space’s moderation, calendar and webhook', () => {
     const general = createDemoClient().getRoom(DEMO_ROOM_IDS.general)!;
     expect(general.currentState.getStateEvents('xyz.nekous.webhook')).toHaveLength(1);
     expect(general.getLiveTimeline().getEvents().some((e) => e.getContent().body === 'Build 42 passed ✅')).toBe(true);
+  });
+});
+
+describe('opening a Space in the demo world', () => {
+  it('shows its news first, then goes to its first text channel, until there’s new news', async () => {
+    const { mx, store } = renderWithDemo(
+      <>
+        <ChannelList />
+        <MainPane />
+      </>,
+      { spaceId: DEMO_ROOM_IDS.cafe, roomId: null }
+    );
+
+    // Unseen news: the Space opens on it.
+    expect(await screen.findByText(/Movie night is this week/)).toBeInTheDocument();
+    expect(store.get(selectedSpaceViewAtom)).toBe('news');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to #general' }));
+    expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general);
+
+    // Opened again with nothing chosen (as the rail does): the news is seen, so #general.
+    act(() => {
+      store.set(selectedRoomIdAtom, null);
+      store.set(selectedSpaceViewAtom, null);
+    });
+    await waitFor(() => expect(store.get(selectedRoomIdAtom)).toBe(DEMO_ROOM_IDS.general));
+    expect(store.get(selectedSpaceViewAtom)).toBeNull();
+
+    // Another editor announces an update (a new revision): the next visit shows the news again.
+    await act(async () => {
+      await mx.sendStateEvent(
+        DEMO_ROOM_IDS.cafe,
+        SPACE_NEWS_EVENT as never,
+        { body: 'Movie night moved to Saturday', revision: 'demo-update', updated_ts: Date.now() } as never,
+        ''
+      );
+    });
+    act(() => {
+      store.set(selectedRoomIdAtom, null);
+      store.set(selectedSpaceViewAtom, null);
+    });
+    expect(await screen.findByText('Movie night moved to Saturday')).toBeInTheDocument();
   });
 });

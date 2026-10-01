@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { unreadActivityCountAtom } from '../../app/state/feed';
 import type { Room } from 'matrix-js-sdk';
-import { globalFeedOpenAtom, profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom, socialViewAtom } from '../../app/state/selection';
+import {
+  globalFeedOpenAtom,
+  profileUserIdAtom,
+  selectedRoomIdAtom,
+  selectedSpaceIdAtom,
+  selectedSpaceViewAtom,
+  socialViewAtom,
+} from '../../app/state/selection';
 import { Icon } from '../../components/Icon';
 import { UnreadBadge } from '../../components/UnreadBadge';
 import { DiscoverModal } from '../discover/DiscoverModal';
@@ -77,16 +84,20 @@ export function ServerRail() {
   const openSocial = useOpenSocial();
   const onNotifications = globalFeedOpen && socialView === 'notifications';
   const setProfileUserId = useSetAtom(profileUserIdAtom);
+  const setSpaceView = useSetAtom(selectedSpaceViewAtom);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showDiscover, setShowDiscover] = useState(false);
   const [showInvites, setShowInvites] = useState(false);
   const dmUnread = useUnreadSummary(useSpacelessRooms());
 
+  // A Space opens fresh, with nothing chosen in it: ChannelList then lands on its unseen news or its
+  // first text channel (matrix/spaceNews.ts), rather than whatever view the last Space was on.
   const selectSpace = (id: string | null) => {
     setGlobalFeedOpen(false);
     setProfileUserId(null);
     setSelectedSpaceId(id);
     setSelectedRoomId(null);
+    setSpaceView(null);
   };
 
   const handleInviteAccepted = (room: Room) => {

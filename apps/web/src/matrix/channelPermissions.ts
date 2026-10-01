@@ -220,7 +220,9 @@ export function syncedChannelUsers(
  */
 export function syncedThresholds(channel: PowerLevels, space: PowerLevels, myLevel: number): PowerLevels | undefined {
   let next = channel;
-  for (const { id } of CAPABILITIES) {
+  for (const { id, spaceOnly } of CAPABILITIES) {
+    if (spaceOnly) continue; // about the Space itself, not its channels
+
     const want = capabilityLevel(space, id);
     const have = capabilityLevel(next, id);
     if (want !== have && want <= myLevel && have <= myLevel) next = withCapability(next, id, want);

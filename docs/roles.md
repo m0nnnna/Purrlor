@@ -39,7 +39,7 @@ gives them another.
 
 ## What each role can do
 
-Space Settings → Roles sets the lowest role for five actions. Each is a Matrix threshold on the
+Space Settings → Roles sets the lowest role for six actions. Each is a Matrix threshold on the
 Space's power levels:
 
 | Action | Power-levels key | Default |
@@ -49,6 +49,7 @@ Space's power levels:
 | Remove members | `kick` | 50 |
 | Ban members | `ban` | 50 |
 | Invite people | `invite` | 0 |
+| Edit the Space's news ([news.md](news.md)) | `events["xyz.nekous.space_news"]` | 50 |
 
 A client only offers levels at or below your own: the homeserver refuses the rest.
 
@@ -60,7 +61,7 @@ Matrix doesn't cascade a Space's power levels to its channels, so the role sync
 - **People.** Everyone at or above the Space's lowest role (the lowest custom one, else Moderator)
   gets the same level in each channel. Someone at such a level in a channel but not in the Space goes
   back to the default.
-- **Thresholds.** The five above are copied into each channel, as far as the admin's client doing
+- **Thresholds.** The first five above are copied into each channel (the news is the Space's own, so it stays there), as far as the admin's client doing
   it may change them. Only once the Space has its roles set up (the `xyz.nekous.roles` event exists):
   an older Space's channels keep what they were made with instead of all changing on the next pass.
 - A custom role below Moderator is **not** a moderator anywhere else: it doesn't review reports,

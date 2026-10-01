@@ -338,6 +338,18 @@ const seeds = (): RoomSeed[] => [
       feedPointerEvent(id, NIBBLES, DEMO_ROOM_IDS.feedNibbles),
       // Report review is on, with a couple of sample reports in its queue (the Reports room below).
       demoEvent(id, { type: 'xyz.nekous.moderation', stateKey: '', content: { review_room: DEMO_ROOM_IDS.review } }),
+      // News (matrix/spaceNews.ts): what opening the Space shows first, until you've read it.
+      demoEvent(id, {
+        type: 'xyz.nekous.space_news',
+        stateKey: '',
+        ts: ts(400),
+        content: {
+          body: 'Welcome to the **Cat Café**! 🐾\n\nMovie night is this week: check Events and RSVP so we know how many snacks to get.\n\nNew here? Say hi in #introductions.',
+          revision: 'demo-welcome',
+          updated_ts: ts(400),
+          updated_by: NIBBLES,
+        },
+      }),
       // Two events on the Space's calendar (matrix/calendar.ts), one in a text channel, one in voice.
       demoEvent(id, {
         type: 'xyz.nekous.calendar_event',
