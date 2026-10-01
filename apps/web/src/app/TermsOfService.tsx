@@ -4,6 +4,9 @@ import './TermsOfService.css';
 
 export const TERMS_EFFECTIVE_DATE = 'October 1, 2026';
 
+/** Where copyright complaints and takedown requests go. One place to change it. */
+export const TAKEDOWN_EMAIL = 'abuse@nekoops.net';
+
 /** The terms themselves, as shown in the modal. */
 export function TermsOfService() {
   return (
@@ -108,7 +111,17 @@ export function TermsOfService() {
         </li>
       </ul>
 
-      <h3>4. Enforcement and changes</h3>
+      <h3>4. Copyright and takedowns</h3>
+      <p>
+        Only upload music, art and other files you made or have the right to share. Music and albums
+        on a profile page are public to anyone on the web when its owner has chosen to show their
+        page to people who aren't signed in. If you believe something here infringes your copyright,
+        email <a href={`mailto:${TAKEDOWN_EMAIL}`}>{TAKEDOWN_EMAIL}</a> with what it is, where it is
+        (a link to the page), and that you're the owner or act for them. We remove infringing content
+        and may suspend accounts that repeatedly upload it.
+      </p>
+
+      <h3>5. Enforcement and changes</h3>
       <p>
         Moderators and administrators may remove content and suspend or ban accounts that break these
         terms. We may update these terms; continuing to use Purrlor after a change means you accept

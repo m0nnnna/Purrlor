@@ -146,3 +146,18 @@ builds itself from a checked `mxc://` URL.
 
 Luna, in the global feed, has a page, so the tour shows one (`demoProfilePage` in
 `demo/demoWorld.ts`).
+
+## Music, albums and who can see them
+
+Decided 2026-10-01 (the build is in the plan doc's "Next" table):
+
+- **Public only with the opt-in.** A profile's albums and music are public to signed-out visitors
+  only when the owner has turned on "Show my page to people who aren't signed in". The public API
+  serves a page, and so the files it names, only for opted-in owners, and the media route serves
+  only files a public answer named in the last six hours. With the switch off, signed-out visitors
+  get nothing from the page. Signed-in people always see them. (Pictures in Global posts are a
+  separate matter: those are public either way.)
+- **Takedowns.** Copyright complaints go to `abuse@nekoops.net` (`TAKEDOWN_EMAIL` in
+  `app/TermsOfService.tsx`, section 4 of the terms). The address has to exist before this ships.
+  Admin hiding (`purrlor pages hide`) already removes a whole page from the public web within a
+  minute; removing one track means the owner deleting it, or an admin hiding the page.
