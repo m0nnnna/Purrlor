@@ -10,12 +10,17 @@ export const selectedSpaceIdAtom = atom<string | null>(null);
 /** Currently selected room (channel) within the selected space. */
 export const selectedRoomIdAtom = atom<string | null>(null);
 
+/** Bumped when a channel is picked in the list: its message box takes focus, even when that channel
+ *  was already open (opening a Space may already have landed on it, matrix/spaceNews.ts). */
+export const channelComposerFocusAtom = atom(0);
+
 /**
  * A Space-level view that isn't a channel. `'feed'` is the hub's Posts timeline, which is a
  * merge across many rooms (`feed.ts`) rather than any one of them, so it can't be expressed as a
- * `selectedRoomIdAtom` value. `null` means an ordinary channel is selected.
+ * `selectedRoomIdAtom` value. `'news'` is the Space's news page (matrix/spaceNews.ts). `null`
+ * means an ordinary channel is selected.
  */
-export const selectedSpaceViewAtom = atom<'feed' | 'events' | null>(null);
+export const selectedSpaceViewAtom = atom<'feed' | 'events' | 'news' | null>(null);
 
 /**
  * Whether the global feed (public posts from every public Space, see matrix/globalFeed.ts) is

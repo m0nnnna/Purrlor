@@ -7,6 +7,7 @@ import {
   selectedRoomIdAtom,
   selectedSpaceIdAtom,
   selectedSpaceViewAtom,
+  channelComposerFocusAtom,
   globalFeedOpenAtom,
   profileUserIdAtom,
 } from '../../app/state/selection';
@@ -499,7 +500,9 @@ export function ChannelList() {
   // Picking a channel also leaves the Posts view, which sits alongside channels rather than
   // being one of them — otherwise the feed would stay on screen over a channel that now looks
   // selected in this list.
+  const requestComposerFocus = useSetAtom(channelComposerFocusAtom);
   const selectChannel = (roomId: string) => {
+    requestComposerFocus((n) => n + 1);
     setSelectedRoomId(roomId);
     setSpaceView(null);
     setGlobalFeedOpen(false);
