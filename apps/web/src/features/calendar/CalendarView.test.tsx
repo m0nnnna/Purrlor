@@ -41,8 +41,13 @@ describe('CalendarView month view', () => {
     const today = cells.find((cell) => cell.className.includes('nu-calendar__cell--today'))!;
     expect(today.textContent).toContain('Movie night');
 
-    // Picking a different day shows there's nothing on it; picking today shows the event's card.
-    fireEvent.click(cells.find((cell) => !cell.className.includes('--today') && !cell.className.includes('--outside'))!);
+    // Picking an empty day shows there's nothing on it; picking today shows the event's card.
+    // Empty means no event in the cell (just its number): on the 1st of a month the next day is
+    // tomorrow, which has one.
+    const emptyDay = cells.find(
+      (cell) => !cell.className.includes('--today') && !cell.className.includes('--outside') && /^\d+$/.test(cell.textContent?.trim() ?? '')
+    )!;
+    fireEvent.click(emptyDay);
     expect(screen.getByText(/^Nothing on /)).toBeInTheDocument();
     fireEvent.click(today);
     expect(screen.getByRole('heading', { name: 'Movie night' })).toBeInTheDocument();
