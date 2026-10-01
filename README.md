@@ -15,7 +15,8 @@ announcement and moderators-only channels and slowmode, [`docs/roles.md`](docs/r
 roles and channel-only moderators, [`docs/moderation.md`](docs/moderation.md)
 for report review and automod, [`docs/calendar.md`](docs/calendar.md) for Space calendars and
 reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks,
-[`docs/profile-pages.md`](docs/profile-pages.md) for profile pages and the page builder, and
+[`docs/profile-pages.md`](docs/profile-pages.md) for profile pages and the page builder,
+[`docs/public-web.md`](docs/public-web.md) for what signed-out visitors can see, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old

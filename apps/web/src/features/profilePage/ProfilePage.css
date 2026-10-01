@@ -98,6 +98,25 @@
   flex: none;
 }
 
+/* "Report this page", under the blocks: quiet, but always there on someone else's page. */
+.nu-profile-page__report {
+  margin: 0;
+  text-align: right;
+}
+
+.nu-profile-page__report button {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--page-text);
+  opacity: 0.7;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* --- Blocks --- */
 
 .nu-profile-page__blocks {

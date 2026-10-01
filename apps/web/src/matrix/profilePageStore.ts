@@ -26,6 +26,14 @@ export async function readProfilePage(mx: MatrixClient, roomId: string): Promise
   }
 }
 
+/** The published page's own event ID, for reporting it. Undefined when there's no page. */
+export async function readProfilePageEventId(mx: MatrixClient, roomId: string): Promise<string | undefined> {
+  const room = mx.getRoom(roomId);
+  if (room?.getMyMembership() === 'join') return room.currentState.getStateEvents(PROFILE_PAGE_EVENT, '')?.getId() ?? undefined;
+  const state = (await mx.roomState(roomId).catch(() => [])) as { type?: string; state_key?: string; event_id?: string }[];
+  return state.find((event) => event.type === PROFILE_PAGE_EVENT && event.state_key === '')?.event_id;
+}
+
 /** Publishes your page, creating your profile room first if you've never posted globally. */
 export async function publishProfilePage(mx: MatrixClient, page: ProfilePage, displayName: string): Promise<void> {
   const roomId = await ensureProfileRoom(mx, displayName);

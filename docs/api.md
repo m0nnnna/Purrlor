@@ -154,6 +154,13 @@ is the credential; the channel stores only its SHA-256 (`xyz.nekous.webhook` sta
 `400` bad body, `404` unknown webhook or wrong token, `409` encrypted channel, `429` rate limited.
 See [webhooks.md](webhooks.md).
 
+### `GET /api/public/…`
+
+The public web, for people who aren't signed in: Global posts and opted-in profile pages, their
+media, and link-preview cards. `pages/{user}`, `feed`, `posts/{eventId}`, `status/{user}`,
+`media/{server}/{mediaId}`, `card/{user}`, `card/post/{eventId}`. All read-only, no sign-in, rate
+limited per address. See [public-web.md](public-web.md) for the shapes and the rules.
+
 ---
 
 ## 3. Push gateway HTTP API
@@ -270,6 +277,8 @@ else. It just isn't shown there.
 | `xyz.nekous.webhook` | the webhook's id | A channel | `{ "name", "token_sha256", "avatar_url"? }`; `{}` once deleted. See [webhooks.md](webhooks.md). | Channel moderators |
 | `xyz.nekous.calendar_event` | the event's id | A Space | `{ "title", "description"?, "start", "end"?, "channel_id"?, "location"? }` (times in UTC ms); `{}` when cancelled. See [calendar.md](calendar.md). | Space moderators |
 | `xyz.nekous.moderation` | `""` | A Space | `{ "review_room": "!…", "blocked_words": ["…"] }`: report review and automod. See [moderation.md](moderation.md). | Space moderators |
+| `xyz.nekous.profile_page` | `""` | A profile room | A profile page: `{ "version": 1, "style": { … }, "blocks": [ … ] }`; `{}` when taken down. See [profile-pages.md](profile-pages.md). | The profile's owner |
+| `xyz.nekous.public_web` | `""` | A profile room | `{ "enabled": true }`: the page may be shown to people who aren't signed in. Anything else is off. See [public-web.md](public-web.md). | The profile's owner |
 | `xyz.nekous.channel_settings` | `""` | A channel | `{ "moderators_only": true, "slowmode_seconds": 30 }`, both optional. Moderators-only also means the room is invite-only; slowmode is honoured by Purrlor's composer only. See [channel-permissions.md](channel-permissions.md). | Channel moderators |
 
 A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its own. See
@@ -398,6 +407,7 @@ Un-liking redacts the reaction. One like is counted per person.
 | `xyz.nekous.mention_inbox` | `{ "items": [ { "roomId", "eventId", "mentionedAt" } ] }` |
 | `xyz.nekous.space_nicknames` | `{ "<spaceId>": "<nickname>" }` |
 | `xyz.nekous.left_channels` | `{ "roomIds": ["!…"] }`. Channels you left, so auto-join never re-adds you. |
+| `xyz.nekous.profile_page_draft` | `{ "page": { … }, "updated_ts": … }`. Your profile page's unpublished draft. See [profile-pages.md](profile-pages.md). |
 
 ### 5.5 Extended profile fields (MSC4133)
 

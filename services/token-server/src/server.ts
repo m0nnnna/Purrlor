@@ -6,6 +6,7 @@ import { checkMembership, getBotUserId, mayViewParticipants } from './membership
 import { grantsForPowerLevel } from './grants.js';
 import { livekitRoomName } from './livekitRoomName.js';
 import { handleWebhook } from './webhooks.js';
+import { publicWebRouter } from './publicWebRoutes.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -37,6 +38,10 @@ function corsOriginAllowed(origin: string | undefined, callback: (err: Error | n
 }
 
 const app = express();
+// Behind nginx (and Docker's network): the visitor's address is in X-Forwarded-For, which the
+// public web's per-address rate limits need. Only proxies on private and loopback addresses are
+// believed, so a visitor can't pick their own address by sending the header.
+app.set('trust proxy', process.env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal');
 app.use(cors({ origin: corsOriginAllowed }));
 app.use(express.json());
 
@@ -199,6 +204,12 @@ app.post('/api/livekit/rooms/participants', async (req, res) => {
 app.post('/api/webhooks/:roomId/:webhookId/:token', (req, res) => {
   void handleWebhook(req, res);
 });
+
+/**
+ * The public web (publicWeb.ts): Global posts, opted-in profile pages, and their link previews,
+ * for people who aren't signed in. Read-only.
+ */
+app.use('/api/public', publicWebRouter());
 
 app.listen(PORT, () => {
   console.log(`purrlor-token-server listening on :${PORT}`);

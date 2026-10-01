@@ -109,10 +109,16 @@ services:
       - MATRIX_BOT_PASSWORD=${MATRIX_BOT_PASSWORD:-}
       - VOICE_MODERATOR_POWER_LEVEL=${VOICE_MODERATOR_POWER_LEVEL:-50}
       - VOICE_ALLOWED_SPACES=${VOICE_ALLOWED_SPACES:-}
+      # The public web (docs/public-web.md). PUBLIC_WEB_URL is the app's own address, used in link
+      # previews; unset, it's taken from each request. Hidden pages: `purrlor pages hide <name>`.
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-}
+      - PUBLIC_WEB_HIDDEN_FILE=/data/hidden-pages.txt
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - NO_PROXY=${OUTBOUND_NO_PROXY:-}
       - NODE_USE_ENV_PROXY=1
+    volumes:
+      - token-server-data:/data
     depends_on:
       - livekit
     networks:
@@ -256,3 +262,4 @@ volumes:
   matrix-db:
   matrix-media:
   push-gateway-data:
+  token-server-data:

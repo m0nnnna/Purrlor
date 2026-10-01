@@ -1258,6 +1258,13 @@ else
 fi
 
 cat > "$NGINX_SITE" <<NGINX_EOF
+# Bots that unfurl links (Discord, Bluesky, iMessage, Slack…) get a shared /@name link's preview
+# card from the token server; people get the app (docs/public-web.md).
+map \$http_user_agent \$purrlor_unfurl {
+    default 0;
+    ~*(discordbot|twitterbot|facebookexternalhit|slackbot|telegrambot|whatsapp|linkedinbot|cardyb|bluesky|mastodon|embedly|iframely|redditbot|skypeuripreview|vkshare|pinterest|google-pagerenderer) 1;
+}
+
 server {
     listen 443 ssl http2;
     server_name $APP_DOMAIN;
@@ -1280,6 +1287,29 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # The public web (docs/public-web.md): read-only answers for people who aren't signed in.
+    location /api/public/ {
+        proxy_pass http://$UPSTREAM:3001/api/public/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # A profile page or post link: the app, except for bots unfurling it, who get its preview card.
+    location ~ ^/@[^/]+(/post/[^/]+)?\$ {
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        if (\$purrlor_unfurl) {
+            rewrite ^/@[^/]+/post/([^/]+)\$ /api/public/card/post/\$1 break;
+            rewrite ^/@([^/]+)\$ /api/public/card/\$1 break;
+            proxy_pass http://$UPSTREAM:3001;
+        }
+        proxy_pass http://$UPSTREAM:8080;
     }
 
     # The push gateway, likewise (PURRLOR_PUSH_GATEWAY_URL). The trailing slashes strip the

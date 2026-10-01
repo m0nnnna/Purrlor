@@ -127,6 +127,11 @@ Accounts (bundled homeserver only; asks for the admin account's password):
 
 Global emote library (asks for the admin account's password):
   purrlor emotes setup                 create the library everyone can add emotes to (once)
+
+Public pages (docs/public-web.md) — hide a reported page from people who aren't signed in:
+  purrlor pages list                   pages hidden now
+  purrlor pages hide <name>            hide their page and their posts on the public feed
+  purrlor pages unhide <name>          show them again
 HELP
 }
 
@@ -1022,6 +1027,33 @@ cmd_emotes() {
   esac
 }
 
+# Hidden pages: a text file in the token server's data volume, one user ID per line, which it
+# re-reads within ten seconds of a change (services/token-server/src/publicWebRoutes.ts).
+cmd_pages() {
+  local usage="Usage: purrlor pages list | hide <name> | unhide <name>"
+  local file=/data/hidden-pages.txt id
+  case "${1:-}" in
+    list)
+      compose exec -T -e FILE="$file" token-server sh -c '[ -s "$FILE" ] && cat "$FILE" || echo "No pages are hidden."'
+      ;;
+    hide|unhide)
+      [ -n "${2:-}" ] || die "$usage"
+      id="$(full_user_id "$2")"
+      printf '%s' "$id" | grep -Eq '^@[a-z0-9._=+-]+:[A-Za-z0-9.:-]+$' || die "'$2' isn't a user name on this server."
+      if [ "$1" = hide ]; then
+        compose exec -T -e FILE="$file" -e ID="$id" token-server sh -c 'touch "$FILE" && (grep -qxF "$ID" "$FILE" || echo "$ID" >> "$FILE")' \
+          || die "That didn't go through. If the token server isn't running, 'purrlor status' shows it."
+        say "Hidden: $id. Their page and public posts disappear for signed-out visitors within a minute."
+      else
+        compose exec -T -e FILE="$file" -e ID="$id" token-server sh -c 'touch "$FILE" && grep -vxF "$ID" "$FILE" > "$FILE.new"; mv "$FILE.new" "$FILE"' \
+          || die "That didn't go through. If the token server isn't running, 'purrlor status' shows it."
+        say "Shown again: $id."
+      fi
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
 # The dispatcher and the `exit` after it are one command (same line as `esac`), so bash has read
 # all of it before running any of it — a script updated underneath it can't be half-read.
 case "${1:-help}" in
@@ -1043,6 +1075,7 @@ case "${1:-help}" in
   user) shift; cmd_user "$@" ;;
   admin) shift; cmd_admin "$@" ;;
   emotes) shift; cmd_emotes "$@" ;;
+  pages) shift; cmd_pages "$@" ;;
   matrix-dns) write_matrix_resolv ;;
   *) warn "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac; exit $?

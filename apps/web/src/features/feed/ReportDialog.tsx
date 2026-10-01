@@ -26,7 +26,7 @@ export function ReportDialog({
   eventId: string;
   /** A feed's owner, whose server is the way into the room when reporting needs joining it. */
   ownerId?: string;
-  what: 'post' | 'comment' | 'message';
+  what: 'post' | 'comment' | 'message' | 'page';
   /** The reported event and its Space, for reaching the Space's moderators. */
   event?: MatrixEvent;
   space?: Room;
@@ -50,7 +50,7 @@ export function ReportDialog({
     try {
       await reportContent(mx, roomId, eventId, reason.trim(), ownerId ? feedJoinVia(roomId, ownerId) : []);
       if (toModerators) {
-        const about = what !== 'message' && postId ? { kind: what, postId } : undefined;
+        const about = (what === 'post' || what === 'comment') && postId ? { kind: what, postId } : undefined;
         await reportToSpaceModerators(mx, space!, event!, reason.trim(), about);
       }
       setSent(true);

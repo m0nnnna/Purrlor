@@ -22,7 +22,9 @@ import { useInfiniteScroll } from './useInfiniteScroll';
 import { useKeptScroll } from './useKeptScroll';
 import { useLikedPosts, usePinnedGlobalPost } from './profileData';
 import { getOwnProfileRoomId } from '../../matrix/profileFeed';
-import { copyStyleToDraft } from '../../matrix/profilePageStore';
+import { copyStyleToDraft, readProfilePageEventId } from '../../matrix/profilePageStore';
+import { usePageHidden } from '../../matrix/hooks/usePageHidden';
+import { ReportDialog } from './ReportDialog';
 import { useProfilePage } from '../../matrix/hooks/useProfilePage';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
 import { PageBlocks } from '../profilePage/PageBlocks';
@@ -118,7 +120,11 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
     ? getOwnProfileRoomId(mx)
     : (extended.profileRoom ??
       feed.sources.find((source) => source.origin.kind === 'global' && source.owner === userId)?.roomId);
-  const { page } = useProfilePage(profileRoomId);
+  const { page: publishedPage } = useProfilePage(profileRoomId);
+  // An admin can hide a reported page (docs/public-web.md). Nobody else sees it then; its owner is told.
+  const pageHidden = usePageHidden(publishedPage ? userId : undefined);
+  const page = pageHidden && !isMe ? undefined : publishedPage;
+  const [reportingPage, setReportingPage] = useState<{ roomId: string; eventId: string }>();
 
   const pinnedPost = usePinnedGlobalPost(extended.pinnedPost, feed.posts, feed.sources);
   const liked = useLikedPosts(isMe && tab === 'likes');
@@ -249,6 +255,11 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
               </button>
             </p>
             {followError && <p className="nu-field__error">{followError}</p>}
+            {isMe && pageHidden && (
+              <p className="nu-field__warning" data-nu-role="profile-page-hidden">
+                An admin has hidden your page after a report. Everyone else sees your plain profile until they show it again.
+              </p>
+            )}
             {styleCopied && (
               <p className="nu-field__hint" data-nu-role="profile-style-copied">
                 Copied to your page’s draft. Open your profile and choose Edit page to see it.
@@ -257,6 +268,24 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
           </section>
 
           {page && page.blocks.length > 0 && <PageBlocks blocks={page.blocks} />}
+          {page && !isMe && profileRoomId && (
+            <p className="nu-profile-page__report">
+              <button
+                type="button"
+                data-nu-role="profile-report-page"
+                onClick={() => {
+                  setFollowError(undefined);
+                  readProfilePageEventId(mx, profileRoomId)
+                    .then((eventId) =>
+                      eventId ? setReportingPage({ roomId: profileRoomId, eventId }) : setFollowError('Couldn’t find this page to report it')
+                    )
+                    .catch(() => setFollowError('Couldn’t find this page to report it'));
+                }}
+              >
+                Report this page
+              </button>
+            </p>
+          )}
 
           <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
             <div className="nu-profile-view__tabs" role="tablist">
@@ -335,6 +364,15 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
         <div ref={sentinelRef} className="nu-feed__sentinel" aria-hidden="true" />
       </div>
 
+      {reportingPage && (
+        <ReportDialog
+          roomId={reportingPage.roomId}
+          eventId={reportingPage.eventId}
+          ownerId={userId}
+          what="page"
+          onClose={() => setReportingPage(undefined)}
+        />
+      )}
       {peopleList && (
         <PeopleListModal
           title={peopleList === 'followers' ? `Followers of ${basic.name}` : `${basic.name} follows`}

@@ -221,6 +221,11 @@ function getBotClient(): Promise<MatrixClient> {
   return botClientPromise;
 }
 
+/** The service account, for reading what it may read anyway (the public web, publicWebRoutes.ts). */
+export function getServiceClient(): Promise<MatrixClient> {
+  return getBotClient();
+}
+
 /**
  * The bot, in `roomId`, for posting there (webhooks.ts): only for a room this deployment serves,
  * joined first if it has to be (through the same tenancy check as any join). Null otherwise.
