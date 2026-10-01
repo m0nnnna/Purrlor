@@ -4,6 +4,7 @@ import {
   currentPositionSeconds,
   isAudioFileUrl,
   parseWatchUrl,
+  shouldAcceptState,
   type WatchTogetherMode,
   type WatchTogetherState,
 } from './watchTogether';
@@ -72,7 +73,8 @@ export function useWatchTogether(livekitRoom: LivekitRoom, myIdentity: string): 
       const msg = decode(payload);
       if (!msg) return;
       if (msg.type === 'state') {
-        setState(msg.state);
+        // Two people starting at once converge on one session (shouldAcceptState).
+        setState((prev) => (shouldAcceptState(prev, msg.state) ? msg.state : prev));
       } else if (msg.type === 'stop') {
         setState(null);
       } else if (msg.type === 'request-sync') {
@@ -107,6 +109,7 @@ export function useWatchTogether(livekitRoom: LivekitRoom, myIdentity: string): 
         positionSeconds: 0,
         updatedAt: Date.now(),
         startedBy: myIdentity,
+        startedAt: Date.now(),
       };
       setState(next);
       broadcast({ type: 'state', state: next });

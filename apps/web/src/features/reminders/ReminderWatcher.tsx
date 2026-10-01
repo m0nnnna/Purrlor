@@ -15,6 +15,7 @@ import {
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { PUSH_GATEWAY_ACCOUNT_DATA_EVENT } from '../../matrix/push';
 import { syncRemindersToGateway } from '../../matrix/reminderPush';
+import { useJoinVoiceChannel } from '../calendar/useJoinVoiceChannel';
 import './ReminderWatcher.css';
 
 /** Event reminders already shown on this device, so a reload doesn't show them again. */
@@ -40,7 +41,9 @@ function markShown(id: string) {
 
 type Toast =
   | { kind: 'message'; key: string; reminderId: string; roomId: string; eventId: string; text: string }
-  | { kind: 'event'; key: string; spaceId: string; title: string; start: number };
+  | { kind: 'event'; key: string; spaceId: string; title: string; start: number }
+  /** A watch party's start: the same reminder at zero minutes, with a button that joins its channel. */
+  | { kind: 'party'; key: string; channelId: string; title: string };
 
 /**
  * Shows reminders when they're due (matrix/reminders.ts): "remind me about this message" ones
@@ -57,6 +60,7 @@ export function ReminderWatcher() {
   const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
   const setSpaceView = useSetAtom(selectedSpaceViewAtom);
   const setPendingJump = useSetAtom(pendingJumpTargetAtom);
+  const joinVoiceChannel = useJoinVoiceChannel();
 
   const show = useCallback((toast: Toast, body: string) => {
     setToasts((current) => (current.some((t) => t.key === toast.key) ? current : [...current, toast]));
@@ -98,6 +102,16 @@ export function ReminderWatcher() {
             show({ kind: 'event', key, spaceId: space.roomId, title: event.title, start: event.start }, `${event.title} starts at ${when}`);
           } else if (now < remindAt) {
             nextTimes.push(remindAt);
+          }
+          // A watch party also pings when it starts, with a way straight in.
+          const startKey = `event-start:${event.id}`;
+          if (event.watch && event.channelId && !shown.has(startKey)) {
+            if (now >= event.start && now < event.start + 10 * 60 * 1000) {
+              markShown(startKey);
+              show({ kind: 'party', key: startKey, channelId: event.channelId, title: event.title }, `${event.title} is starting. Join the watch party`);
+            } else if (now < event.start) {
+              nextTimes.push(event.start);
+            }
           }
         }
       }
@@ -154,7 +168,9 @@ export function ReminderWatcher() {
   const dismiss = (key: string) => setToasts((current) => current.filter((t) => t.key !== key));
 
   const open = (toast: Toast) => {
-    if (toast.kind === 'message') {
+    if (toast.kind === 'party') {
+      joinVoiceChannel(toast.channelId);
+    } else if (toast.kind === 'message') {
       // Out of Posts or Events: those take the main pane over whatever room is selected.
       setSpaceView(null);
       setSelectedSpaceId(findParentSpaceId(mx, toast.roomId));
@@ -179,11 +195,13 @@ export function ReminderWatcher() {
             <span>
               {toast.kind === 'message'
                 ? toast.text || 'A message you asked to be reminded about'
-                : `Starts at ${new Date(toast.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
+                : toast.kind === 'party'
+                  ? 'Watch party starting now'
+                  : `Starts at ${new Date(toast.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
             </span>
           </div>
           <button type="button" className="nu-button nu-button--secondary" data-nu-role="reminder-open" onClick={() => open(toast)}>
-            Open
+            {toast.kind === 'party' ? 'Join' : 'Open'}
           </button>
           <button
             type="button"

@@ -22,6 +22,7 @@ import { useSharedWatchTogether } from './watchTogetherContext';
 import { sessionMode, type WatchTogetherMode } from './watchTogether';
 import { WatchTogetherModal } from './WatchTogetherModal';
 import { WatchTogetherPlayer } from './WatchTogetherPlayer';
+import { WatchPartyStartBanner } from './WatchPartyStartBanner';
 import '@livekit/components-styles';
 
 // Split out of VoiceChannelPanel.tsx so livekit-client/@livekit/components-react — and everything
@@ -227,6 +228,7 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
         watchTogether?.state &&
         sharedMode === 'watch' && <WatchTogetherPlayer state={watchTogether.state} controls={watchTogether} />
       )}
+      <WatchPartyStartBanner room={room} />
       <ul className="nu-voice-participants" data-nu-role="voice-participants">
         {participants.map((p) => (
           <ParticipantRow

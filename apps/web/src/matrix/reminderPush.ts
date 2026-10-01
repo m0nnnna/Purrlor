@@ -46,7 +46,17 @@ export function remindersForGateway(
     title: event.title,
     body: `Starts at ${new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
   }));
-  return [...fromMessages, ...fromEvents].filter((r) => r.at > now).sort((a, b) => a.at - b.at);
+  // A watch party pings again when it starts; the notification opens its voice channel.
+  const fromParties = events
+    .filter((event) => event.watch && event.channelId)
+    .map((event) => ({
+      id: `event-start:${event.id}`,
+      at: event.start,
+      title: event.title,
+      body: 'Watch party starting now. Tap to join',
+      roomId: event.channelId,
+    }));
+  return [...fromMessages, ...fromEvents, ...fromParties].filter((r) => r.at > now).sort((a, b) => a.at - b.at);
 }
 
 /** Sends this account's reminders to its push gateway. Nothing to do without one. */

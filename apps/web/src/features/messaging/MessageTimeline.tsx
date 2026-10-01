@@ -40,6 +40,8 @@ import { ForwardMessageModal } from './ForwardMessageModal';
 import { ImageMessage } from './ImageMessage';
 import { LinkPreviewCard } from './LinkPreviewCard';
 import { PollCard } from './PollCard';
+import { WatchPartyCard } from '../calendar/WatchPartyCard';
+import { NOTICE_EVENT_KEY } from '../../matrix/watchParty';
 import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
@@ -423,6 +425,9 @@ function MessageRow({
               })}
             </div>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
+            {content.msgtype === 'm.notice' && typeof content[NOTICE_EVENT_KEY] === 'string' && (
+              <WatchPartyCard room={room} eventId={content[NOTICE_EVENT_KEY]} />
+            )}
           </>
         )}
         <ReactionBar groups={reactionGroups} onToggle={toggleReaction} />

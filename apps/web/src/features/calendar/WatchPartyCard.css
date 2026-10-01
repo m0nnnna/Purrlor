@@ -1,0 +1,23 @@
+/* A watch party's countdown under its notice in the channel (WatchPartyCard.tsx). */
+.nu-watch-party {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-3);
+  margin-top: var(--nu-space-2);
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-secondary);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.nu-watch-party--live {
+  border-color: var(--nu-color-accent);
+}
+
+.nu-watch-party__status {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

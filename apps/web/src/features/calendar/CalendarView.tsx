@@ -18,7 +18,9 @@ import {
 } from '../../matrix/calendar';
 import { buildIcs, downloadTextFile, fileNameFor } from '../../matrix/calendarExport';
 import { localDayKey, localeWeekStart, monthGrid } from '../../matrix/calendarMonth';
+import { partyPhase, watchThumbnailUrl } from '../../matrix/watchParty';
 import { EventFormModal } from './EventFormModal';
+import { useJoinVoiceChannel } from './useJoinVoiceChannel';
 import './CalendarView.css';
 
 /** Re-renders when the Space's state changes: its events, or anyone's RSVP (a member event). */
@@ -64,6 +66,9 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
   const channel = event.channelId ? mx.getRoom(event.channelId) : null;
+  const joinVoiceChannel = useJoinVoiceChannel();
+  const thumbnail = event.watch ? watchThumbnailUrl(event.watch.url) : undefined;
+  const live = !!event.watch && !!event.channelId && partyPhase(event) === 'live';
 
   const rsvp = (value: Rsvp | undefined) => {
     setError(undefined);
@@ -84,7 +89,18 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
     <article className="nu-calendar__event" data-nu-role="calendar-event">
       <div className="nu-calendar__event-time">{time}</div>
       <div className="nu-calendar__event-body">
-        <h3 className="nu-calendar__event-title">{event.title}</h3>
+        <h3 className="nu-calendar__event-title">
+          {event.title}
+          {event.watch && (
+            <span className="nu-calendar__event-badge" data-nu-role="calendar-event-party">
+              {event.watch.mode === 'listen' ? 'Listening party' : 'Watch party'}
+            </span>
+          )}
+        </h3>
+        {thumbnail && (
+          // A YouTube thumbnail, loaded from YouTube's image host with no referrer, and only for a watch party's card.
+          <img className="nu-calendar__event-thumb" src={thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        )}
         {(channel || event.location) && (
           <p className="nu-calendar__event-where">
             {channel ? (
@@ -108,6 +124,11 @@ function EventCard({ space, event, going, interested }: { space: Room; event: Ca
           {going.length} going{interested.length > 0 && ` · ${interested.length} interested`}
         </p>
         <div className="nu-calendar__event-actions">
+          {live && event.channelId && (
+            <button type="button" className="nu-button nu-button--primary" data-nu-role="calendar-event-join" onClick={() => joinVoiceChannel(event.channelId as string)}>
+              Join now
+            </button>
+          )}
           <button
             type="button"
             className={own === 'going' ? 'nu-button nu-button--primary' : 'nu-button nu-button--secondary'}
@@ -276,7 +297,8 @@ export function CalendarView({ space }: { space: Room }) {
   useSpaceStateVersion(space);
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<'list' | 'month'>('list');
-  const events = readCalendarEvents(space);
+  const [partiesOnly, setPartiesOnly] = useState(false);
+  const events = readCalendarEvents(space).filter((event) => !partiesOnly || event.watch);
   const upcoming = upcomingEvents(events);
   const past = pastEvents(events).slice(0, 20);
   const canManage = canManageCalendar(space, mx.getUserId() ?? '');
@@ -312,6 +334,15 @@ export function CalendarView({ space }: { space: Room }) {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className={partiesOnly ? 'nu-calendar__mode nu-calendar__mode--active' : 'nu-calendar__mode'}
+            data-nu-role="calendar-filter-parties"
+            aria-pressed={partiesOnly}
+            onClick={() => setPartiesOnly((on) => !on)}
+          >
+            Watch parties
+          </button>
           {upcoming.length > 0 && (
             <button
               type="button"
@@ -335,7 +366,8 @@ export function CalendarView({ space }: { space: Room }) {
           <MonthView space={space} events={events} />
         ) : upcoming.length === 0 ? (
           <p className="nu-calendar__empty" data-nu-role="calendar-empty">
-            Nothing coming up in {space.name}.{canManage ? ' Add an event and everyone here can RSVP.' : ''}
+            {partiesOnly ? `No watch parties coming up in ${space.name}.` : `Nothing coming up in ${space.name}.`}
+            {canManage && !partiesOnly ? ' Add an event and everyone here can RSVP.' : ''}
           </p>
         ) : (
           <EventList space={space} events={upcoming} />

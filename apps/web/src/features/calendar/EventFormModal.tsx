@@ -5,6 +5,9 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { createCalendarEvent, updateCalendarEvent, type CalendarEvent } from '../../matrix/calendar';
 import { spaceChannels } from '../../matrix/channelPermissions';
 import { announceEvent } from '../../matrix/calendarNotice';
+import { readChannelType } from '../../matrix/channelType';
+import { parseWatchParty } from '../../matrix/watchParty';
+import type { WatchTogetherMode } from '../voice/watchTogether';
 
 /** `datetime-local` wants local time as YYYY-MM-DDTHH:mm. */
 function toLocalInput(ms: number): string {
@@ -29,9 +32,15 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
   const [end, setEnd] = useState(event?.end ? toLocalInput(event.end) : '');
   const [channelId, setChannelId] = useState(event?.channelId ?? '');
   const [location, setLocation] = useState(event?.location ?? '');
+  // A watch party: what to play, and how (matrix/watchParty.ts). It needs a voice channel to be played in.
+  const [isParty, setIsParty] = useState(!!event?.watch);
+  const [watchUrl, setWatchUrl] = useState(event?.watch?.url ?? '');
+  const [watchMode, setWatchMode] = useState<WatchTogetherMode>(event?.watch?.mode ?? 'watch');
   // Where to tell people about a new event: the channel it's in, unless changed. Not offered when editing.
   const [announceIn, setAnnounceIn] = useState<string | undefined>(undefined);
   const announceChannelId = announceIn ?? channelId;
+  const channelIsVoice = channels.some((channel) => channel.roomId === channelId && readChannelType(channel) === 'voice');
+  const partyOn = isParty && channelIsVoice;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -44,15 +53,20 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
       setError('The end has to be after the start.');
       return;
     }
+    const watch = partyOn ? parseWatchParty({ url: watchUrl, mode: watchMode }) : undefined;
+    if (partyOn && !watch) {
+      setError('Add a YouTube link or a link to a video or audio file for the watch party.');
+      return;
+    }
     setSaving(true);
     setError(undefined);
-    const input = { title, description, start: startMs, end: endMs, channelId: channelId || undefined, location: channelId ? undefined : location };
+    const input = { title, description, start: startMs, end: endMs, channelId: channelId || undefined, location: channelId ? undefined : location, ...(watch && { watch }) };
     try {
       if (event) await updateCalendarEvent(mx, space, event.id, input);
       else {
-        await createCalendarEvent(mx, space, input);
+        const id = await createCalendarEvent(mx, space, input);
         // A failed notice shouldn't undo the event: it's made, and people can still find it in Events.
-        if (announceChannelId) await announceEvent(mx, announceChannelId, input).catch((err: unknown) => console.warn('Couldn’t announce the event', err));
+        if (announceChannelId) await announceEvent(mx, announceChannelId, input, id).catch((err: unknown) => console.warn('Couldn’t announce the event', err));
       }
       onClose();
     } catch (err) {
@@ -94,6 +108,37 @@ export function EventFormModal({ space, event, onClose }: { space: Room; event?:
             ))}
           </select>
         </label>
+        {channelIsVoice && (
+          <>
+            <label className="nu-field__checkbox-row">
+              <input type="checkbox" data-nu-role="calendar-event-watch" checked={isParty} onChange={(e) => setIsParty(e.target.checked)} />
+              Watch party: everyone going gets a ping when it starts, and the first to join can start it for the room
+            </label>
+            {partyOn && (
+              <>
+                <label className="nu-field">
+                  What to play
+                  <input
+                    className="nu-field__input"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://youtu.be/…"
+                    data-nu-role="calendar-event-watch-url"
+                    value={watchUrl}
+                    onChange={(e) => setWatchUrl(e.target.value)}
+                  />
+                </label>
+                <label className="nu-field">
+                  How
+                  <select className="nu-field__input" value={watchMode} onChange={(e) => setWatchMode(e.target.value as WatchTogetherMode)}>
+                    <option value="watch">Watch together (video in the call)</option>
+                    <option value="listen">Listen together (a small player)</option>
+                  </select>
+                </label>
+              </>
+            )}
+          </>
+        )}
         {!channelId && (
           <label className="nu-field">
             Location (optional)

@@ -303,3 +303,21 @@
 .nu-voice-control-button--leave:hover {
   opacity: 0.9;
 }
+
+/* A watch party is on and nothing is playing yet (WatchPartyStartBanner.tsx). */
+.nu-voice-panel__party {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-3);
+  margin: var(--nu-space-3) var(--nu-space-4);
+  padding: var(--nu-space-3) var(--nu-space-4);
+  border: 1px solid var(--nu-color-accent);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-voice-panel__party > span {
+  flex: 1 1 14rem;
+  min-width: 0;
+}

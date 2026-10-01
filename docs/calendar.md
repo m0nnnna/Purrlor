@@ -64,6 +64,38 @@ reacting to the change would see the RSVP from before (the end-to-end test caugh
   event's channel by default, any channel, or none. It's an `m.notice`, like a bot's, so nobody is
   pinged. If the notice fails the event is still made. Editing an event announces nothing.
 
+## Watch parties
+
+A watch party is a calendar event that also says what to play, in one of the Space's voice channels
+(`matrix/watchParty.ts`). It adds a field and reuses what was already there:
+
+```json
+// on xyz.nekous.calendar_event, only with a channel_id
+{ "watch": { "url": "https://youtu.be/…", "mode": "watch" } }   // mode: "watch" or "listen"
+```
+
+Older clients ignore it and see a normal event. The event form has a **Watch party** toggle once a
+voice channel is chosen.
+
+- **Start ping.** Everyone who RSVP'd Going gets the event reminder (15 minutes before) and a second
+  one at the start, whose **Join** button opens the voice channel and joins the call. With the push
+  gateway the second reminder goes out as Web Push (`event-start:<id>`) and opens the channel.
+- **Countdown.** The notice the event posts in its channel carries the event's ID
+  (`xyz.nekous.calendar_event_id`), so it shows "Starts in 12m 5s", then "Live now: 4 watching" from
+  the voice channel's participant list, with a Join button.
+- **Starting playback.** There's no server in a call, so whoever is in the channel while the party
+  is live and nothing is playing gets **Start watching** (or **Start listening**). It starts Watch
+  Together with the event's link, and the banner goes away for everyone in the call.
+- **Two starts at once.** Watch Together used to let the last message received win, so two people
+  pressing Start together could end up on different videos. A session now carries `startedAt`; of two
+  different sessions started within 2 seconds of each other the earlier wins, and the lower user ID
+  breaks a tie (`shouldAcceptState`, `features/voice/watchTogether.ts`). Updates to the session
+  playing (play, pause, seek) always apply. A start more than 2 seconds later is a deliberate
+  replacement and wins; a stale message from an older session is dropped. Clients from before
+  `startedAt` keep the old rule.
+- **Events page.** A **Watch parties** filter, a badge, a **Join now** button while one is live, and
+  a YouTube video's thumbnail on its card (loaded from `i.ytimg.com` with no referrer).
+
 ## Reminders
 
 Reminders come up in whichever Purrlor tab is open when they're due. With background push set up,

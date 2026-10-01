@@ -37,6 +37,10 @@ export type WatchTogetherState = {
    *  watching," not used to gate control: anyone in the call can play/pause/seek/stop, same as
    *  screen share has no separate "owner" permission either. */
   startedBy: string;
+  /** When the session was started (not when it was last changed): what tells two sessions apart,
+   *  and which of two started at the same moment wins (see shouldAcceptState). Absent in sessions
+   *  started by older clients, which keep the old rule: the last message received wins. */
+  startedAt?: number;
 };
 
 /** Which way a session is shared. A session with no mode came from an older client: watch. */
@@ -108,6 +112,27 @@ export function parseWatchUrl(input: string): { kind: 'youtube'; videoId: string
   }
 
   return { kind: 'media' };
+}
+
+/** Two sessions started within this long of each other count as started at the same moment. */
+export const SIMULTANEOUS_START_MS = 2000;
+
+/**
+ * Whether a state received from the call should replace the one already showing. Updates to the
+ * session already playing (play, pause, seek) always do. Two *different* sessions — two people
+ * pressing Start together, say the first two to join a watch party — can't both play, and with no
+ * server in a call there's nobody to pick, so every client applies the same rule and they all land
+ * on the same one: of two sessions started within SIMULTANEOUS_START_MS of each other, the earlier
+ * `startedAt` wins, and the lower user ID breaks a tie. A session started clearly later is a
+ * deliberate replacement, and wins; a stale message from one clearly earlier is dropped.
+ */
+export function shouldAcceptState(current: WatchTogetherState | null, incoming: WatchTogetherState): boolean {
+  if (!current || current.startedAt === undefined || incoming.startedAt === undefined) return true;
+  if (current.startedAt === incoming.startedAt && current.startedBy === incoming.startedBy) return true;
+  const gap = incoming.startedAt - current.startedAt;
+  if (Math.abs(gap) > SIMULTANEOUS_START_MS) return gap > 0;
+  if (gap !== 0) return gap < 0;
+  return incoming.startedBy < current.startedBy;
 }
 
 /** A synced state is always a little stale by the time it's read (network delay, or just time

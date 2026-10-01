@@ -1,4 +1,5 @@
 import { EventType, type MatrixClient, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import { parseWatchParty, type WatchParty } from './watchParty';
 
 /**
  * A Space's calendar: events its members can see coming up and RSVP to. docs/calendar.md has the
@@ -30,6 +31,8 @@ export type CalendarEvent = {
   channelId?: string;
   /** Free text, for somewhere that isn't a channel. */
   location?: string;
+  /** What to play when it starts (watchParty.ts). Only ever with a channel: a call to play it in. */
+  watch?: WatchParty;
   createdBy: string;
 };
 
@@ -40,6 +43,7 @@ type CalendarContent = {
   end?: unknown;
   channel_id?: unknown;
   location?: unknown;
+  watch?: unknown;
 };
 
 const MAX_TITLE = 200;
@@ -50,14 +54,18 @@ export function parseCalendarEvent(id: string, sender: string, content: Calendar
   if (typeof content.title !== 'string' || !content.title.trim()) return undefined;
   if (typeof content.start !== 'number' || !Number.isFinite(content.start)) return undefined;
   const end = typeof content.end === 'number' && Number.isFinite(content.end) && content.end > content.start ? content.end : undefined;
+  const channelId = typeof content.channel_id === 'string' ? content.channel_id : undefined;
+  // Older clients ignore the field and just see a normal event; a watch party with nowhere to be watched isn't one.
+  const watch = channelId ? parseWatchParty(content.watch) : undefined;
   return {
     id,
     title: content.title.slice(0, MAX_TITLE),
     description: typeof content.description === 'string' ? content.description.slice(0, MAX_DESCRIPTION) : '',
     start: content.start,
     end,
-    channelId: typeof content.channel_id === 'string' ? content.channel_id : undefined,
+    channelId,
     location: typeof content.location === 'string' && content.location.trim() ? content.location : undefined,
+    ...(watch && { watch }),
     createdBy: sender,
   };
 }
@@ -97,6 +105,7 @@ function toContent(input: CalendarEventInput): Record<string, unknown> {
     ...(input.end && input.end > input.start && { end: input.end }),
     ...(input.channelId && { channel_id: input.channelId }),
     ...(input.location?.trim() && { location: input.location.trim() }),
+    ...(input.channelId && input.watch && { watch: { url: input.watch.url.trim(), mode: input.watch.mode } }),
   };
 }
 
