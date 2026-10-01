@@ -106,7 +106,7 @@ Sign-ups (bundled homeserver only):
   purrlor open-signups       allow sign-up with the sign-up code
   purrlor close-signups      no new sign-ups at all (the admin can still create accounts)
   purrlor email              whether new accounts must verify an email address
-  purrlor email setup        turn that on (or change the mail server it sends from)
+  purrlor email setup        turn that on, or change the mail server it sends from (keeps what you don't change)
   purrlor email codes off    a verified email alone is enough — no sign-up code needed
   purrlor email codes on     need the sign-up code as well as a verified email
   purrlor email off          turn it off again
@@ -521,22 +521,75 @@ EMAIL_EOF
   return 1
 }
 
+# urldecode STRING -> STRING with its %XX escapes turned back into characters (urlencode's opposite).
+urldecode() { printf '%b' "${1//%/\\x}"; }
+
+# email_current -> CUR_HOST CUR_PORT CUR_USER CUR_PASS CUR_ADDR CUR_NAME, read back from the saved
+# mail settings (all empty when email verification is off), so changing one thing doesn't mean
+# typing the rest again.
+email_current() {
+  CUR_HOST=""; CUR_PORT=""; CUR_USER=""; CUR_PASS=""; CUR_ADDR=""; CUR_NAME=""
+  [ -f "$EMAIL_FILE" ] || return 0
+  local uri rest auth sender
+  uri="$(email_setting CONTINUWUITY_SMTP__CONNECTION_URI)"
+  rest="${uri#*://}"
+  rest="${rest%%\?*}"
+  if [[ "$rest" == *@* ]]; then
+    # urlencode turned any @ or : in the username and password into %40 and %3A, so these split cleanly.
+    auth="${rest%@*}"
+    rest="${rest##*@}"
+    CUR_USER="$(urldecode "${auth%%:*}")"
+    if [[ "$auth" == *:* ]]; then CUR_PASS="$(urldecode "${auth#*:}")"; fi
+  fi
+  CUR_HOST="${rest%:*}"
+  CUR_PORT="${rest##*:}"
+  sender="$(email_setting CONTINUWUITY_SMTP__SENDER)"
+  if [[ "$sender" =~ ^(.*)\ \<([^\>]+)\>$ ]]; then
+    CUR_NAME="${BASH_REMATCH[1]}"
+    CUR_ADDR="${BASH_REMATCH[2]}"
+  else
+    CUR_ADDR="$sender"
+  fi
+}
+
 email_prompt() {
-  local host port security user pass sender_addr sender_name
-  echo "New accounts will have to confirm an email address by clicking a link. The homeserver"
-  echo "sends that email through a mail server you have an account on — your email provider's"
-  echo "SMTP settings, or a sending service (Resend, Postmark, Mailgun, Amazon SES, Brevo...)."
+  local host port security user pass sender_addr sender_name example
+  email_current
+  if [ -n "$CUR_HOST" ]; then
+    echo "Changing the mail server the homeserver sends from. Press Enter to keep what's in [brackets];"
+    echo "the password is kept too unless you type a new one. The new settings are tested before"
+    echo "they replace the old ones, so if they don't work nothing changes."
+  else
+    echo "New accounts will have to confirm an email address by clicking a link. The homeserver"
+    echo "sends that email through a mail server you have an account on — your email provider's"
+    echo "SMTP settings, or a sending service (Resend, Postmark, Mailgun, Amazon SES, Brevo...)."
+  fi
   echo
-  read -r -p "Mail server (SMTP) host, e.g. smtp.example.com: " host
+  local hint=", e.g. smtp.example.com"
+  [ -z "$CUR_HOST" ] || hint=" [$CUR_HOST]"
+  read -r -p "Mail server (SMTP) host$hint: " host
+  host="${host:-$CUR_HOST}"
   [ -n "$host" ] || die "No mail server given — nothing changed."
-  read -r -p "Port [587]: " port; port="${port:-587}"
+  read -r -p "Port [${CUR_PORT:-587}]: " port; port="${port:-${CUR_PORT:-587}}"
   case "$port" in *[!0-9]*|'') die "The port has to be a number." ;; esac
   if [ "$port" = 465 ]; then security=tls; else security=starttls; fi
-  read -r -p "Username (often your full email address; blank if none): " user
-  if [ -n "$user" ]; then read -r -s -p "Password (an app password for Gmail/Outlook/iCloud): " pass; echo; fi
-  read -r -p "Send from this address (e.g. noreply@$(host_of "$(env_get PURRLOR_HOMESERVER_URL)" | sed 's/^matrix\.//')): " sender_addr
+  hint="; blank if none"
+  [ -z "$CUR_USER" ] || hint="; Enter keeps $CUR_USER, - for none"
+  read -r -p "Username (often your full email address$hint): " user
+  if [ "$user" = - ]; then user=""; else user="${user:-$CUR_USER}"; fi
+  if [ -n "$user" ]; then
+    if [ "$user" = "$CUR_USER" ] && [ -n "$CUR_PASS" ]; then
+      read -r -s -p "Password (Enter keeps the current one): " pass; echo
+      pass="${pass:-$CUR_PASS}"
+    else
+      read -r -s -p "Password (an app password for Gmail/Outlook/iCloud): " pass; echo
+    fi
+  fi
+  example="noreply@$(host_of "$(env_get PURRLOR_HOMESERVER_URL)" | sed 's/^matrix\.//')"
+  read -r -p "Send from this address [${CUR_ADDR:-e.g. $example}]: " sender_addr
+  sender_addr="${sender_addr:-$CUR_ADDR}"
   printf '%s' "$sender_addr" | grep -q '@' || die "That doesn't look like an email address — nothing changed."
-  read -r -p "Name it's from [Purrlor]: " sender_name; sender_name="${sender_name:-Purrlor}"
+  read -r -p "Name it's from [${CUR_NAME:-Purrlor}]: " sender_name; sender_name="${sender_name:-${CUR_NAME:-Purrlor}}"
 
   # smtps:// is TLS from the first byte (port 465); smtp://…?tls=required upgrades with STARTTLS
   # (587, 25) and refuses to go on unencrypted.
