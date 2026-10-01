@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useAtomValue, useStore } from 'jotai';
-import { composerFocusAtom, sharedPostTextAtom } from '../../app/state/feed';
+import { composerFocusAtom, sharedPostFilesAtom, sharedPostTextAtom } from '../../app/state/feed';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import type { Emote } from '../../matrix/emotes';
@@ -73,6 +73,9 @@ export function PostComposer({
   const [sensitive, setSensitive] = useState(false);
   const media = useStagedMedia(setError);
   const { staged, preparing } = media;
+  // The focus effect below runs once per request, so it reaches the latest staging function by ref.
+  const addSharedFiles = useRef(media.addPicked);
+  addSharedFiles.current = media.addPicked;
 
   const target = targets.find((t) => t.id === targetId) ?? targets[0];
 
@@ -108,6 +111,11 @@ export function PostComposer({
     const input = textareaRef.current;
     if (focusRequest <= handledFocusRequest || !input || input.offsetParent === null) return;
     handledFocusRequest = focusRequest;
+    const sharedFiles = store.get(sharedPostFilesAtom);
+    if (sharedFiles) {
+      store.set(sharedPostFilesAtom, null);
+      void addSharedFiles.current(sharedFiles);
+    }
     const shared = store.get(sharedPostTextAtom);
     if (shared) {
       store.set(sharedPostTextAtom, null);

@@ -15,6 +15,11 @@ applyStoredThemeOnLoad();
 // The browser offers installing once, early; kept for Account Settings and the phone hint.
 captureInstallPrompt();
 
+// The worker that catches pictures shared in from other apps (public/sw.js); it also serves push.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+}
+
 const container = document.getElementById('root');
 if (!container) {
   throw new Error('#root element not found');

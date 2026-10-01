@@ -29,9 +29,14 @@ export function useStagedMedia(onError: (message: string) => void) {
   stagedRef.current = staged;
   useEffect(() => () => stagedRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl)), []);
 
-  const addFiles = async (evt: ChangeEvent<HTMLInputElement>) => {
+  const addFiles = (evt: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(evt.target.files ?? []);
     evt.target.value = '';
+    return addPicked(files);
+  };
+
+  /** Stages files that didn't come from the picker, such as ones shared in from another app. */
+  const addPicked = async (files: File[]) => {
     if (!files.length) return;
     const room = MAX_ATTACHMENTS - staged.length;
     if (files.length > room) onError(`Up to ${MAX_ATTACHMENTS} images or videos at a time.`);
@@ -78,7 +83,7 @@ export function useStagedMedia(onError: (message: string) => void) {
 
   const savedBytes = staged.reduce((sum, item) => sum + (item.originalSize ? item.originalSize - item.file.size : 0), 0);
 
-  return { staged, preparing, addFiles, remove, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
+  return { staged, preparing, addFiles, addPicked, remove, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
 }
 
 export function StagedMediaPreviews({ staged, onRemove, role }: { staged: Staged[]; onRemove: (index: number) => void; role: string }) {

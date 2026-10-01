@@ -14,6 +14,10 @@ export const composerFocusAtom = atom(0);
  *  on screen to take it. Taken once, alongside a composerFocusAtom bump. */
 export const sharedPostTextAtom = atom<string | null>(null);
 
+/** Pictures and videos shared into Purrlor from another app (useShareTarget), waiting for the
+ *  composer on screen to stage them. Taken once, alongside a composerFocusAtom bump. */
+export const sharedPostFilesAtom = atom<File[] | null>(null);
+
 /** Bumped after pinning or unpinning, so a profile re-reads which post is pinned. */
 export const profileRevisionAtom = atom(0);
 
