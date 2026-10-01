@@ -7,7 +7,18 @@ import {
   isBackgroundPushEnabled,
   readPushGatewayUrl,
   setPushGatewayUrl,
+  showBackgroundPushConfirmation,
+  type EnableStep,
 } from '../matrix/push';
+
+/** What's happening while it's enabled: the push service step can take the better part of a minute. */
+const STEP_LABELS: Record<EnableStep, string> = {
+  permission: 'Waiting for you to allow notifications in the browser…',
+  'service-worker': 'Starting the notification worker…',
+  'push-service': 'Registering with your browser’s push service. This can take up to a minute…',
+  gateway: 'Connecting to the push gateway…',
+  homeserver: 'Telling your homeserver where to send notifications…',
+};
 
 /**
  * Background push notifications — separate from "Desktop notifications" above (foreground-tab
@@ -23,6 +34,8 @@ export function BackgroundPushSettings() {
   const [gatewayUrl, setGatewayUrlInput] = useState(() => readPushGatewayUrl(mx) ?? '');
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<EnableStep>();
+  const [justEnabled, setJustEnabled] = useState(false);
   const [error, setError] = useState<string>();
   const support = getPushSupport();
 
@@ -35,14 +48,18 @@ export function BackgroundPushSettings() {
     if (!trimmed || busy) return;
     setBusy(true);
     setError(undefined);
+    setJustEnabled(false);
     try {
       await setPushGatewayUrl(mx, trimmed);
-      await enableBackgroundPush(mx, trimmed);
+      await enableBackgroundPush(mx, trimmed, setStep);
       setEnabled(true);
+      setJustEnabled(true);
+      void showBackgroundPushConfirmation();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to enable background notifications');
     } finally {
       setBusy(false);
+      setStep(undefined);
     }
   };
 
@@ -50,6 +67,7 @@ export function BackgroundPushSettings() {
     if (busy) return;
     setBusy(true);
     setError(undefined);
+    setJustEnabled(false);
     try {
       await disableBackgroundPush(mx, gatewayUrl.trim());
       setEnabled(false);
@@ -89,8 +107,15 @@ export function BackgroundPushSettings() {
           {error}
         </p>
       )}
+      {step && (
+        <p className="nu-field__hint" data-nu-role="account-settings-push-step" aria-live="polite">
+          {STEP_LABELS[step]}
+        </p>
+      )}
       <div className="nu-account-settings__notifications">
-        <span className="nu-field__hint">{enabled ? 'Enabled on this device' : 'Not enabled on this device'}</span>
+        <span className="nu-field__hint" data-nu-role="account-settings-push-status">
+          {enabled ? (justEnabled ? 'Enabled on this device. A test notification is on its way.' : 'Enabled on this device') : 'Not enabled on this device'}
+        </span>
         {enabled ? (
           <button
             type="button"

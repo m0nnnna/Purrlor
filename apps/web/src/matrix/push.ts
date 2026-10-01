@@ -67,37 +67,109 @@ export async function isBackgroundPushEnabled(): Promise<boolean> {
   return !!subscription;
 }
 
+/** Where enabling background push has got to, for the settings to show while it works. */
+export type EnableStep = 'permission' | 'service-worker' | 'push-service' | 'gateway' | 'homeserver';
+
+/** How long a step may take before it's reported as failed rather than left spinning. */
+const STEP_TIMEOUT_MS = 20_000;
+/**
+ * The browser's own push service (Google's for Chrome, Mozilla's for Firefox) can be slow to
+ * register a new subscription: 25-30 seconds is ordinary on some networks. So this one is generous.
+ */
+const PUSH_SERVICE_TIMEOUT_MS = 90_000;
+
+/** `promise`, or a rejection with `message` if it hasn't settled within `ms`. */
+export function within<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Registers this device for background push: service worker, a real PushManager subscription,
  * handing that subscription to the gateway (so it knows where to actually deliver a push), and
  * a Matrix pusher pointing the homeserver at the gateway's notify endpoint. Must run from a real
  * user gesture — same requirement as Notification.requestPermission, which this also triggers
  * if not already granted.
+ *
+ * `onStep` hears each step as it starts. Every step but the permission prompt (which waits on the
+ * person) has a time limit, so one that never answers ends in an error saying which it was, not a
+ * button stuck on "Enabling…".
  */
-export async function enableBackgroundPush(mx: MatrixClient, gatewayUrl: string): Promise<void> {
+export async function enableBackgroundPush(
+  mx: MatrixClient,
+  gatewayUrl: string,
+  onStep: (step: EnableStep) => void = () => {}
+): Promise<void> {
+  onStep('permission');
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    throw new Error('Notification permission was not granted');
+    throw new Error(
+      permission === 'denied'
+        ? 'Notifications are blocked for this site. Allow them in your browser’s site settings, then try again.'
+        : 'Notification permission was not granted'
+    );
   }
 
-  const registration = await navigator.serviceWorker.register('/sw.js');
-  await navigator.serviceWorker.ready;
+  onStep('service-worker');
+  const workerFailed = 'Your browser didn’t start Purrlor’s notification worker. Reload the page and try again.';
+  const registration = await within(navigator.serviceWorker.register('/sw.js'), STEP_TIMEOUT_MS, workerFailed);
+  await within(navigator.serviceWorker.ready, STEP_TIMEOUT_MS, workerFailed);
 
-  const { publicKey } = await fetch(`${gatewayUrl}/vapid-public-key`).then((r) => r.json());
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  onStep('push-service');
+  const gatewayFailed = `Couldn’t reach the push gateway at ${gatewayUrl}.`;
+  const { publicKey } = await within(
+    fetch(`${gatewayUrl}/vapid-public-key`).then((r) => {
+      if (!r.ok) throw new Error(gatewayFailed);
+      return r.json() as Promise<{ publicKey: string }>;
+    }),
+    STEP_TIMEOUT_MS,
+    gatewayFailed
+  );
+  const subscription = await within(
+    registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) }),
+    PUSH_SERVICE_TIMEOUT_MS,
+    'Your browser’s push service didn’t answer. A VPN, proxy or firewall can block it, and some browsers turn it off (in Brave: Settings → Privacy → “Use Google services for push messaging”).'
+  ).catch((err: unknown) => {
+    // The browser's own refusal (a DOMException such as "Registration failed - push service
+    // error") means little without saying whose it is. By shape: not every DOMException is an Error.
+    const { name, message } = (err ?? {}) as { name?: unknown; message?: unknown };
+    if (typeof message === 'string' && name !== 'Error') throw new Error(`Your browser’s push service refused: ${message}`);
+    throw err;
   });
 
+  onStep('gateway');
   let pushkey = getOrCreatePushKey();
-  if ((await registerWithGateway(mx, gatewayUrl, pushkey, subscription)) === 'taken') {
+  const register = () => within(registerWithGateway(mx, gatewayUrl, pushkey, subscription), STEP_TIMEOUT_MS, gatewayFailed);
+  if ((await register()) === 'taken') {
     // Someone else who used this browser registered this key; this account gets its own.
     pushkey = rotatePushKey();
-    if ((await registerWithGateway(mx, gatewayUrl, pushkey, subscription)) === 'taken') {
+    if ((await register()) === 'taken') {
       throw new Error('Push gateway rejected the subscription');
     }
   }
-  await setOwnPusher(mx, gatewayUrl, pushkey);
+
+  onStep('homeserver');
+  await within(setOwnPusher(mx, gatewayUrl, pushkey), STEP_TIMEOUT_MS, 'Your homeserver didn’t answer. Try again in a moment.');
+}
+
+/**
+ * Shows a notification through the service worker, the way a real push is shown, so turning
+ * background push on ends with proof that notifications appear on this device. Never throws.
+ */
+export async function showBackgroundPushConfirmation(): Promise<void> {
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    await registration?.showNotification('Notifications are on', {
+      body: 'You’ll get Purrlor notifications on this device, even with it closed.',
+      icon: '/favicon.ico',
+      tag: 'purrlor-push-enabled',
+    });
+  } catch {
+    // Only a confirmation.
+  }
 }
 
 /**
