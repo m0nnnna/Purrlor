@@ -45,13 +45,14 @@ const SEARCH_AUTO_PAGES = 4;
  */
 export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
   const mx = useMatrixClient();
-  const open = useAtomValue(globalFeedOpenAtom);
   const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
   const tab = useAtomValue(socialViewAtom);
   const openSocial = useOpenSocial();
   const follows = useFollows();
-  // Whoever you follow is read directly, even past the directory caps.
-  const feed = useGlobalFeed(open, follows);
+  // Whoever you follow is read directly, even past the directory caps. Loaded once this view
+  // mounts, which is the first time the feed is opened; after that it stays mounted (hidden behind
+  // chats, MainPane.tsx), so coming back is instant rather than reading every source again.
+  const feed = useGlobalFeed(true, follows, { paused: hidden });
   const joinedSpaces = useSpaces();
   const targets = useComposerTargets(feed.publicSpaceIds);
   const [managing, setManaging] = useState(false);
@@ -197,7 +198,9 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
 
       <div className="nu-feed" data-nu-role="global-feed" ref={scroll.ref} onScroll={scroll.onScroll}>
         {tab === 'notifications' ? (
-          <ActivityView />
+          // Only while it's on screen: it marks everything it shows as seen, and new notifications
+          // arriving while you're in a chat must still light up the bell.
+          !hidden && <ActivityView />
         ) : (
           <>
             <div className="nu-feed-search" data-nu-role="global-feed-search">
