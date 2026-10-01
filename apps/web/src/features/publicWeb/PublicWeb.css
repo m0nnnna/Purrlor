@@ -7,7 +7,7 @@
   flex-direction: column;
   height: 100dvh;
   background: var(--nu-color-bg-primary);
-  color: var(--nu-color-text);
+  color: var(--nu-color-text-primary);
 }
 
 .nu-public__bar {

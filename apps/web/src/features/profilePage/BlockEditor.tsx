@@ -8,9 +8,13 @@ import { followsBack } from '../../matrix/topFriends';
 import type { Emote } from '../../matrix/emotes';
 import {
   DIVIDER_STYLES,
+  ART_RATINGS,
   GUESTBOOK_WHO,
   LIMITS,
   readHttpsUrl,
+  type ArtAlbum,
+  type ArtPiece,
+  type ArtRating,
   type DividerStyle,
   type GuestbookWho,
   type PageBlock,
@@ -433,6 +437,115 @@ function GuestbookEditor({ block, onChange }: EditorProps<'guestbook'>) {
   );
 }
 
+const RATING_LABELS: Record<ArtRating, string> = { general: 'General', mature: 'Mature (18+)' };
+
+function PieceEditor({ piece, onChange, onRemove }: { piece: ArtPiece; onChange: (piece: ArtPiece) => void; onRemove: () => void }) {
+  return (
+    <fieldset className="nu-page-editor__subitem">
+      <div className="nu-page-editor__row">
+        <ImageThumb mxc={piece.url} />
+        <label className="nu-field">
+          Title (optional)
+          <input className="nu-field__input" value={piece.title ?? ''} maxLength={LIMITS.title} onChange={(evt) => onChange({ ...piece, title: evt.target.value || undefined })} />
+        </label>
+      </div>
+      <label className="nu-field">
+        Short description (optional)
+        <input className="nu-field__input" value={piece.description ?? ''} maxLength={LIMITS.caption} onChange={(evt) => onChange({ ...piece, description: evt.target.value || undefined })} />
+      </label>
+      <div className="nu-page-editor__row">
+        <label className="nu-field">
+          Tags (comma separated)
+          <input
+            className="nu-field__input"
+            defaultValue={piece.tags.join(', ')}
+            onChange={(evt) =>
+              onChange({ ...piece, tags: evt.target.value.split(',').map((tag) => tag.trim().replace(/^#+/, '').toLowerCase()).filter(Boolean).slice(0, LIMITS.tags) })
+            }
+          />
+        </label>
+        <label className="nu-field">
+          Rating
+          <select className="nu-field__input" value={piece.rating} onChange={(evt) => onChange({ ...piece, rating: evt.target.value as ArtRating })} data-nu-role="page-editor-art-rating">
+            {ART_RATINGS.map((rating) => (
+              <option key={rating} value={rating}>
+                {RATING_LABELS[rating]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button type="button" className="nu-page-editor__inline-button" onClick={onRemove}>
+        Remove this piece
+      </button>
+    </fieldset>
+  );
+}
+
+function ArtEditor({ block, onChange }: EditorProps<'art'>) {
+  const total = block.albums.reduce((count, album) => count + album.pieces.length, 0);
+  const setAlbum = (index: number, album: ArtAlbum) => onChange({ ...block, albums: block.albums.map((a, i) => (i === index ? album : a)) });
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <p className="nu-field__hint">
+        Pieces rated Mature are hidden from anyone who hasn’t said they’re over 18, and blurred until clicked for those who have. {total} of {LIMITS.artPieces} pieces.
+      </p>
+      {block.albums.map((album, index) => (
+        <fieldset key={album.id} className="nu-page-editor__subitem" data-nu-role="page-editor-art-album">
+          <label className="nu-field">
+            Album title
+            <input className="nu-field__input" value={album.title} maxLength={LIMITS.title} onChange={(evt) => setAlbum(index, { ...album, title: evt.target.value })} />
+          </label>
+          <label className="nu-field">
+            About this album (optional)
+            <input className="nu-field__input" value={album.description ?? ''} maxLength={LIMITS.caption} onChange={(evt) => setAlbum(index, { ...album, description: evt.target.value || undefined })} />
+          </label>
+          {album.pieces.map((piece, pieceIndex) => (
+            <PieceEditor
+              key={`${piece.url}-${pieceIndex}`}
+              piece={piece}
+              onChange={(next) => setAlbum(index, { ...album, pieces: album.pieces.map((p, i) => (i === pieceIndex ? next : p)) })}
+              onRemove={() => setAlbum(index, { ...album, pieces: album.pieces.filter((_, i) => i !== pieceIndex) })}
+            />
+          ))}
+          <ImagePicker
+            label="Add pieces…"
+            multiple
+            max={Math.min(LIMITS.albumPieces - album.pieces.length, LIMITS.artPieces - total)}
+            disabled={album.pieces.length >= LIMITS.albumPieces || total >= LIMITS.artPieces}
+            onUploaded={(urls) => setAlbum(index, { ...album, pieces: [...album.pieces, ...urls.map((url): ArtPiece => ({ url, tags: [], rating: 'general' }))] })}
+          />
+          <button type="button" className="nu-page-editor__inline-button" onClick={() => onChange({ ...block, albums: block.albums.filter((_, i) => i !== index) })}>
+            Remove this album
+          </button>
+        </fieldset>
+      ))}
+      {block.albums.length < LIMITS.albums && (
+        <button
+          type="button"
+          className="nu-button nu-button--secondary"
+          data-nu-role="page-editor-add-album"
+          onClick={() => onChange({ ...block, albums: [...block.albums, { id: `a${Math.random().toString(36).slice(2, 8)}`, title: '', pieces: [] }] })}
+        >
+          Add an album
+        </button>
+      )}
+    </>
+  );
+}
+
+function CommissionsEditor({ block, onChange }: EditorProps<'commissions'>) {
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <p className="nu-field__hint">
+        Your status, price sheet and queue are edited on your page once it’s published (they save the moment you change them, separately from the page).
+      </p>
+    </>
+  );
+}
+
 function Fields({
   block,
   onChange,
@@ -464,6 +577,10 @@ function Fields({
       return <FriendsEditor block={block} onChange={onChange} {...shared} />;
     case 'guestbook':
       return <GuestbookEditor block={block} onChange={onChange} {...shared} />;
+    case 'art':
+      return <ArtEditor block={block} onChange={onChange} {...shared} />;
+    case 'commissions':
+      return <CommissionsEditor block={block} onChange={onChange} {...shared} />;
     default:
       return null;
   }

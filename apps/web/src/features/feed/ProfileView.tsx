@@ -29,6 +29,7 @@ import { useProfilePage } from '../../matrix/hooks/useProfilePage';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
 import { PageBlocks } from '../profilePage/PageBlocks';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
+import { HeaderCommissionBadge } from '../profilePage/CommissionsBlock';
 import { ProfilePageEditor } from '../profilePage/ProfilePageEditor';
 import './FeedView.css';
 import './ProfileView.css';
@@ -246,6 +247,11 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
             </div>
             <h2 className="nu-profile-view__name">{basic.name}</h2>
             <p className="nu-profile-view__handle">{handleFor(userId)}</p>
+            {page?.blocks.some((block) => block.type === 'commissions') && (
+              <p className="nu-profile-view__commissions">
+                <HeaderCommissionBadge roomId={profileRoomId} />
+              </p>
+            )}
             {extended.bio && <p className="nu-profile-view__bio">{extended.bio}</p>}
             <p className="nu-profile-view__counts">
               <button type="button" className="nu-profile-view__count-link" data-nu-role="profile-following" onClick={() => setPeopleList('following')}>

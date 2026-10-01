@@ -10,6 +10,8 @@ import { renderMessageText } from '../messaging/renderMessageText';
 import { parseWatchUrl } from '../voice/watchTogether';
 import { linkDomain } from './pageStyle';
 import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
+import { ArtBlock } from './ArtBlock';
+import { CommissionsBlock } from './CommissionsBlock';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 
@@ -243,6 +245,10 @@ function BlockBody({ block }: { block: PageBlock }) {
       return <FriendsBlock block={block} />;
     case 'guestbook':
       return <GuestbookBlock block={block} />;
+    case 'art':
+      return <ArtBlock block={block} />;
+    case 'commissions':
+      return <CommissionsBlock title={block.title} />;
     default:
       return null;
   }

@@ -65,6 +65,39 @@ Two blocks that depend on other people, so they're checked when the page is draw
   100 in their own room); anyone can remove their own. To switch the guestbook off, remove the block.
   The word list is part of the page, so it's public.
 
+## Artists: galleries and commissions
+
+Two more blocks, for artists.
+
+- **Art gallery** (`art` block). Albums (title, description) of pieces (image, title, short
+  description, up to 6 tags, a rating of **General** or **Mature**). Only an open album's pieces load,
+  so art pieces have their own cap (60 across a page, 24 per album) instead of counting toward the
+  20 images a page shows. Tapping a tag filters an album. **Mature** pieces are hidden from anyone
+  who hasn't said they're over 18 (Account Settings → Privacy, `xyz.nekous.age_confirmation` in
+  account data, `matrix/ageSetting.ts`) and blurred until clicked for those who have; signed-out
+  visitors never see them, and an album that is all Mature isn't shown at all. The claim isn't
+  verified (the plan's open question).
+- **Commissions** (`commissions` block, `matrix/commissions.ts`). The block only marks where it goes
+  and carries a heading; the rest are state events in the profile room, separate from the page so a
+  queue change doesn't rewrite it: `xyz.nekous.commission_status` (open, waitlist or closed, and a
+  note), `xyz.nekous.commission_prices` (types with a price as the artist writes it, a description, an
+  example image and "2 of 5 open" slots) and `xyz.nekous.commission_queue` (the artist's own stages,
+  and slots with a title, a stage and optionally a client). All are checked on reading like the page.
+  - **A client's name** shows only if they agree. The artist picks a client for a slot; the client
+    agrees with an `xyz.nekous.commission_consent` event of their own in the profile room (a message
+    the artist can't write for them), and until then everyone but the artist and that client sees
+    "Client". The client turns it on and off with "Show my name on this slot".
+  - **Request a commission** sends the form (type, description, references, budget) to the artist as
+    an encrypted DM, started if you've none. Purrlor takes no payments: the artist links their own
+    Ko-fi or PayPal with a link button.
+  - A **badge** ("Commissions: open") sits under the name on the profile when the page has the
+    block. **Tell me when commissions open** is kept in your account data
+    (`xyz.nekous.commission_alerts`); your client sees the status change in the artist's profile
+    room (you're in it once you follow them) and shows a card and a desktop notification while a
+    tab is open. There's no push for it.
+  - Signed-out visitors see "Sign in to see commission status, prices and the queue": the public
+    API doesn't serve these events.
+
 ## What the checks allow
 
 Everything that reads a page goes through `parseProfilePage`, which keeps only what it recognises.

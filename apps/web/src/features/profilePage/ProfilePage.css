@@ -499,3 +499,277 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Art gallery (ArtBlock.tsx): albums that open to a grid of pieces. */
+.nu-profile-page__albums {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+}
+
+.nu-profile-page__album-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-profile-page__album-cover {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: var(--page-corners);
+  background: var(--page-bg);
+}
+
+.nu-profile-page__album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nu-profile-page__album-cover--blurred img {
+  filter: blur(14px);
+}
+
+.nu-profile-page__album-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-profile-page__album-count,
+.nu-profile-page__album-description {
+  opacity: 0.75;
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.nu-profile-page__tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-2);
+  margin: var(--nu-space-2) 0;
+}
+
+.nu-profile-page__tag-filter button {
+  padding: 2px var(--nu-space-3);
+  border: 1px solid var(--page-accent);
+  border-radius: var(--nu-radius-full);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.nu-profile-page__tag-filter button[aria-pressed='true'] {
+  background: var(--page-accent);
+  color: var(--page-bg);
+}
+
+.nu-profile-page__pieces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nu-space-3);
+  margin-top: var(--nu-space-2);
+}
+
+.nu-profile-page__piece {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+}
+
+.nu-profile-page__piece-image {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: var(--page-corners);
+  background: var(--page-bg);
+  overflow: hidden;
+  aspect-ratio: 1;
+  cursor: zoom-in;
+}
+
+.nu-profile-page__piece-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nu-profile-page__piece-image--blurred {
+  cursor: pointer;
+}
+
+.nu-profile-page__piece-image--blurred img {
+  filter: blur(22px);
+  transform: scale(1.2);
+}
+
+.nu-profile-page__piece-warning {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: var(--nu-space-2);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 0.8em;
+  font-weight: 700;
+}
+
+.nu-profile-page__piece-caption {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85em;
+}
+
+.nu-profile-page__tags {
+  opacity: 0.7;
+}
+
+/* Commissions (CommissionsBlock.tsx): a status badge, price cards and a queue. */
+.nu-commission-badge {
+  display: inline-block;
+  padding: 2px var(--nu-space-3);
+  border-radius: var(--nu-radius-full);
+  font-size: 0.85em;
+  font-weight: 700;
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-commission-badge--open {
+  background: #2e8b57;
+  color: #fff;
+}
+
+.nu-commission-badge--waitlist {
+  background: #b8860b;
+  color: #fff;
+}
+
+.nu-commission-badge--closed {
+  background: #8b3a3a;
+  color: #fff;
+}
+
+.nu-profile-view__commissions {
+  margin: var(--nu-space-1) 0 0;
+}
+
+.nu-commissions__status,
+.nu-commissions__flip,
+.nu-commissions__visitor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-commissions__owner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nu-space-2);
+  margin: var(--nu-space-3) 0;
+}
+
+.nu-commissions__prices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--nu-space-3);
+  margin-top: var(--nu-space-3);
+}
+
+.nu-commissions__price {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  padding: var(--nu-space-3);
+  border: 1px solid color-mix(in srgb, var(--page-text) 20%, transparent);
+  border-radius: var(--page-corners);
+}
+
+.nu-commissions__example {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: calc(var(--page-corners) / 2);
+}
+
+.nu-commissions__price-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nu-space-2);
+}
+
+.nu-commissions__amount {
+  font-weight: 700;
+  color: var(--page-accent);
+}
+
+.nu-commissions__description,
+.nu-commissions__slots {
+  margin: 0;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.nu-commissions__queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  margin: var(--nu-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-commissions__slot-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+}
+
+.nu-commissions__slot-client {
+  opacity: 0.75;
+  font-size: 0.85em;
+}
+
+.nu-commissions__stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-1);
+  margin-top: var(--nu-space-1);
+}
+
+.nu-commissions__stage {
+  padding: 1px var(--nu-space-2);
+  border-radius: var(--nu-radius-full);
+  border: 1px solid color-mix(in srgb, var(--page-text) 25%, transparent);
+  font-size: 0.75em;
+  opacity: 0.6;
+}
+
+.nu-commissions__stage--done {
+  opacity: 0.9;
+  text-decoration: line-through;
+}
+
+.nu-commissions__stage--now {
+  opacity: 1;
+  background: var(--page-accent);
+  border-color: var(--page-accent);
+  color: var(--page-bg);
+  font-weight: 700;
+}

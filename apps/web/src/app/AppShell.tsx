@@ -24,6 +24,7 @@ import { useComposeShortcut } from '../features/feed/useComposeShortcut';
 import { useShareTarget } from '../features/feed/useShareTarget';
 import { useOpenPublicRoute } from '../features/publicWeb/useOpenPublicRoute';
 import { InstallHint } from './InstallHint';
+import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
 import { useOpenRoomFromNotification } from '../matrix/hooks/useOpenRoomFromNotification';
 import { useRecoveryStatus } from '../matrix/hooks/useRecoveryStatus';
@@ -85,6 +86,7 @@ export function AppShell() {
       {!isDemoMode() && <ChannelGovernance />}
       {!isDemoMode() && <ModerationWatcher />}
       <ReminderWatcher />
+      <CommissionAlerts />
       <MentionInboxCollector />
       <ActivityWatcher />
       <MentionInviteAcceptor />
