@@ -16,7 +16,7 @@ import { Avatar } from '../../components/Avatar';
 import { useVoiceCall } from './voiceCallContext';
 import { useParticipantSounds } from './useParticipantSounds';
 import { usePushToTalk } from './usePushToTalk';
-import { SCREEN_SHARE_AUDIO_OPTIONS, setScreenShareJitterBufferTarget } from './voiceChannelRoomOptions';
+import { readAppAudioOnly, saveAppAudioOnly, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
 import { useScreenSharePopout } from './useScreenSharePopout';
 import { useSharedWatchTogether } from './watchTogetherContext';
 import { sessionMode, type WatchTogetherMode } from './watchTogether';
@@ -165,6 +165,8 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const watchTogether = useSharedWatchTogether();
   const sharedMode = watchTogether?.state ? sessionMode(watchTogether.state) : undefined;
   const [watchTogetherModal, setWatchTogetherModal] = useState<WatchTogetherMode | null>(null);
+  // Share only the shared window's own sound, never the whole computer's (voiceChannelRoomOptions.ts).
+  const [appAudioOnly, setAppAudioOnly] = useState(readAppAudioOnly);
 
   // Viewer-side only: ask the remote sharer for keyframes periodically and give the decoder a
   // slightly larger jitter buffer, trading a little latency for fewer dropped/stuttered frames.
@@ -319,12 +321,39 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
               ? 'nu-voice-control-button nu-voice-control-button--active'
               : 'nu-voice-control-button'
           }
-          onClick={() =>
-            localParticipant.setScreenShareEnabled(!isScreenShareEnabled, { audio: SCREEN_SHARE_AUDIO_OPTIONS })
+          data-nu-role="voice-screen-share-toggle"
+          onClick={() => {
+            // Closing the browser's picker rejects; that's not an error worth showing.
+            const started = isScreenShareEnabled ? localParticipant.setScreenShareEnabled(false) : startScreenShare(localParticipant, appAudioOnly);
+            started.catch(() => undefined);
+          }}
+          title={
+            isScreenShareEnabled
+              ? 'Stop sharing'
+              : appAudioOnly
+                ? 'Share a window (only that window’s sound, if your browser can capture it)'
+                : 'Share screen (browser will offer a "Share audio" option)'
           }
-          title={isScreenShareEnabled ? 'Stop sharing' : 'Share screen (browser will offer a "Share audio" option)'}
         >
           🖥️
+        </button>
+        <button
+          type="button"
+          className={appAudioOnly ? 'nu-voice-control-button nu-voice-control-button--active' : 'nu-voice-control-button'}
+          data-nu-role="voice-share-app-audio-only"
+          aria-pressed={appAudioOnly}
+          disabled={isScreenShareEnabled}
+          onClick={() => {
+            setAppAudioOnly(!appAudioOnly);
+            saveAppAudioOnly(!appAudioOnly);
+          }}
+          title={
+            appAudioOnly
+              ? 'Screen share sound: only the shared window’s. Click to allow all of your computer’s sound again'
+              : 'Screen share sound: your browser decides. Click to share only the shared window’s sound, never everything'
+          }
+        >
+          🎧
         </button>
         <button
           type="button"

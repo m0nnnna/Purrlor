@@ -1,5 +1,6 @@
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import { MsgType } from 'matrix-js-sdk';
+import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
 import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import './FileMessage.css';
 
@@ -26,6 +27,7 @@ function formatSize(bytes?: number): string {
  *  which is what makes E2EE attachments transparent here too. */
 export function FileMessage({ msgtype, body, url, file, mimetype, size }: FileMessageProps) {
   const src = useAttachmentUrl({ url, file, mimetype });
+  const mediaRef = usePauseWhenOffscreen();
 
   if (!src) {
     return (
@@ -36,11 +38,11 @@ export function FileMessage({ msgtype, body, url, file, mimetype, size }: FileMe
   }
 
   if (msgtype === MsgType.Video) {
-    return <video className="nu-file-message__video" data-nu-role="timeline-file" src={src} controls />;
+    return <video ref={mediaRef} className="nu-file-message__video" data-nu-role="timeline-file" src={src} controls />;
   }
 
   if (msgtype === MsgType.Audio) {
-    return <audio className="nu-file-message__audio" data-nu-role="timeline-file" src={src} controls />;
+    return <audio ref={mediaRef} className="nu-file-message__audio" data-nu-role="timeline-file" src={src} controls />;
   }
 
   return (
