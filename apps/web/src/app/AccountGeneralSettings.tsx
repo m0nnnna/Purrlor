@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Avatar } from '../components/Avatar';
 import { BackgroundPushSettings } from './BackgroundPushSettings';
+import { InstallAppSettings } from './InstallAppSettings';
 import { KeywordNotificationSettings } from './KeywordNotificationSettings';
 import { PostNotificationSettings } from './PostNotificationSettings';
 import { useMatrixClient } from '../matrix/MatrixClientContext';
@@ -243,6 +244,7 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
+      <InstallAppSettings />
       <BackgroundPushSettings />
       <PostNotificationSettings />
       <KeywordNotificationSettings />

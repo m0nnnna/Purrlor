@@ -21,6 +21,8 @@ import { VoiceCallSession } from '../features/voice/VoiceCallSession';
 import { DemoModeBanner } from '../demo/DemoModeBanner';
 import { isDemoMode } from '../demo/demoMode';
 import { useComposeShortcut } from '../features/feed/useComposeShortcut';
+import { useShareTarget } from '../features/feed/useShareTarget';
+import { InstallHint } from './InstallHint';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
 import { useOpenRoomFromNotification } from '../matrix/hooks/useOpenRoomFromNotification';
 import { useRecoveryStatus } from '../matrix/hooks/useRecoveryStatus';
@@ -45,6 +47,7 @@ export function AppShell() {
   const mainPaneHasContent = !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
   useOpenRoomFromNotification();
   useComposeShortcut();
+  useShareTarget();
   const inviteLinkJoin = useJoinFromInviteLink();
   const [inviteErrorDismissed, setInviteErrorDismissed] = useState(false);
 
@@ -72,7 +75,7 @@ export function AppShell() {
           onClick={() => setMobileMembersOpen(false)}
         />
       )}
-      {isDemoMode() && <DemoModeBanner />}
+      {isDemoMode() ? <DemoModeBanner /> : <InstallHint />}
       <DesktopNotifications />
       <NotificationRules />
       {/* Writes power levels and kicks; the demo's sample world has nothing it should change. */}

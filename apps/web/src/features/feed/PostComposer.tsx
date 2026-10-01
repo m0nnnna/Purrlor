@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useAtomValue } from 'jotai';
-import { composerFocusAtom } from '../../app/state/feed';
+import { useAtomValue, useStore } from 'jotai';
+import { composerFocusAtom, sharedPostTextAtom } from '../../app/state/feed';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import type { Emote } from '../../matrix/emotes';
@@ -100,14 +100,23 @@ export function PostComposer({
   // feed kept mounted under a post or profile is hidden, and its composer stays out of it. A
   // composer that only appears because of the request (the global feed opening, say) takes it as
   // it mounts; one that mounts later doesn't, since the request is marked handled.
+  // Text shared from another app (useShareTarget) rides the same request and lands in whichever
+  // composer takes it.
   const focusRequest = useAtomValue(composerFocusAtom);
+  const store = useStore();
   useEffect(() => {
     const input = textareaRef.current;
     if (focusRequest <= handledFocusRequest || !input || input.offsetParent === null) return;
     handledFocusRequest = focusRequest;
+    const shared = store.get(sharedPostTextAtom);
+    if (shared) {
+      store.set(sharedPostTextAtom, null);
+      setText((current) => (current ? `${current}
+${shared}` : shared));
+    }
     input.focus();
     input.scrollIntoView({ block: 'nearest' });
-  }, [focusRequest]);
+  }, [focusRequest, store]);
 
   const tooLong = isOverLimit(text);
 

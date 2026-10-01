@@ -10,6 +10,10 @@ export const feedSearchAtom = atom('');
 /** Bumped by the N shortcut: the composer on screen takes focus (PostComposer). */
 export const composerFocusAtom = atom(0);
 
+/** Text shared into Purrlor from another app on a phone (useShareTarget), waiting for the composer
+ *  on screen to take it. Taken once, alongside a composerFocusAtom bump. */
+export const sharedPostTextAtom = atom<string | null>(null);
+
 /** Bumped after pinning or unpinning, so a profile re-reads which post is pinned. */
 export const profileRevisionAtom = atom(0);
 
