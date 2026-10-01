@@ -100,3 +100,26 @@ test('a mention in a channel shows in Notifications and opens at the message', a
   await row.click();
   await expect(message(page, 'alice: can you look at this?')).toHaveClass(/nu-timeline__message--highlighted/);
 });
+
+test('a mention that arrives while Notifications sits hidden behind another page still counts', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { channelId } = await createSpaceWithChannel(alice, [bob]);
+
+  // Notifications open, then somewhere else: the feed stays loaded behind it (MainPane), but the
+  // Notifications list mustn't count what arrives meanwhile as seen.
+  await logIn(page, alice);
+  const bell = role(page, 'server-rail-notifications');
+  await bell.click();
+  await expect(role(page, 'social-nav')).toBeVisible();
+  await role(page, 'server-rail-home').click();
+  await expect(role(page, 'social-nav')).toHaveCount(0);
+
+  await api(bob, 'PUT', `/rooms/${encodeURIComponent(channelId)}/send/m.room.message/${uniqueName('txn')}`, {
+    msgtype: 'm.text',
+    body: 'alice: while you were away',
+    'm.mentions': { user_ids: [alice.userId] },
+  });
+  await expect(role(bell, 'unread-badge-highlight')).toHaveText('1');
+  await page.waitForTimeout(1500);
+  await expect(role(bell, 'unread-badge-highlight')).toHaveText('1');
+});
