@@ -1123,6 +1123,11 @@ case "$CONTROL_DIR" in
   *) die "PURRLOR_CONTROL_DIR in .env must be an absolute path (it is '$CONTROL_DIR')." ;;
 esac
 [ ! -L "$CONTROL_DIR" ] || die "$CONTROL_DIR is a symlink; the admin control socket's directory must be a real one. Remove it, or set PURRLOR_CONTROL_DIR in .env."
+# It is made root-only below, so it must be the socket's own: a mistyped PURRLOR_CONTROL_DIR (/etc,
+# /var) must not end with a system directory locked to root.
+if [ -d "$CONTROL_DIR" ] && [ -n "$(ls -A "$CONTROL_DIR" | grep -vx 'purrlor.sock' || true)" ]; then
+  die "$CONTROL_DIR has other things in it; the admin control socket needs a directory of its own. Set PURRLOR_CONTROL_DIR in .env to an empty or new one (the default is /run/purrlor)."
+fi
 install -d -m 700 -o root -g root "$CONTROL_DIR"
 chown root:root "$CONTROL_DIR"
 chmod 700 "$CONTROL_DIR"

@@ -99,6 +99,13 @@ reboot. The token server makes the socket itself `0600` each time it starts.
 - **"Couldn't talk to the control socket":** the token server isn't running (`purrlor status`), or
   `CONTROL_SOCKET` in its environment is empty. Its log says `Admin control socket not started: …`
   with the reason, such as the directory being a symlink or owned by someone else.
+- **"Refusing: … is a symlink" or "… is open to other users":** something changed the socket's
+  directory. `purrlor restart token-server` makes it private again; find out what changed it first.
+  The directory must also hold nothing but the socket, or setup and the token server refuse it.
+- **Keeping the audit log beyond reach of the service:** the service only ever appends to it, but
+  a compromised token server could still rewrite its own data volume. For a log even that can't
+  touch, `chattr +a` the file on the host (in the `token-server-data` volume's folder under
+  `/var/lib/docker/volumes/`); appending keeps working.
 - **"needs root":** run it with `sudo`.
 - **A command asks for a reason but you're in a script:** pass `--reason` and `--yes`.
 

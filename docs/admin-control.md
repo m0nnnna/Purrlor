@@ -20,12 +20,21 @@ so the channel is a Unix socket only root can open.
 
 The token server sets those permissions itself every time it starts, and refuses to listen (logging
 `Admin control socket not started: …`, the rest of the service carries on) if the directory is a
-symlink, belongs to another user, or something other than a socket is in the way. Being able to
+symlink, belongs to another user, holds anything but the socket (so a mistyped `PURRLOR_CONTROL_DIR`
+such as `/etc` is never made root-only), or something other than a socket is in the way. Being able to
 connect is the authentication: there's no password or token. It's never bound to a port and nginx
 never proxies it. `deploy/docker-compose.yml` mounts the directory; Docker creates it if it's
 missing.
 
 `/run` is emptied at boot; the token server makes the socket again when its container starts.
+
+The `purrlor` command checks the other end before it sends anything (and the admin password is sent
+for reports and deletions): it refuses a socket or directory that is a symlink, or that other users
+can open. Text answers have control characters, C1 controls and bidi overrides removed, by the
+server and again by the command, because they carry things other people wrote (an album title on a
+page, a homeserver's error) that could otherwise drive the admin's terminal. Admin room commands
+count only the homeserver's own answer (`@conduit:<server>`), so nobody else in the room can make a
+file read as deleted.
 
 ## Talking to it
 

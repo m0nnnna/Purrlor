@@ -190,6 +190,41 @@ FAKE_UID=1000 run pages list
 check "a non-root user is told to use sudo" out_has "needs root"
 check "a non-root user sends nothing" never_called
 
+# --- the socket and what comes back from it --------------------------------------------------------
+
+no_controls() { case "$OUT" in *$'\033'* | *$'\007'* | *$'\r'* | *$'\001'*) return 1 ;; *) return 0 ;; esac; }
+FAKE_BODY=$'Hidden: \033]52;c;cHduZWQ=\007@luna\033[2J\r done\001' run pages list
+check "control characters in an answer never reach the terminal" no_controls
+check "the rest of the answer still does" out_has "Hidden: ]52;c;cHduZWQ=@luna[2J done"
+
+# File modes and symlinks only mean something on Linux, where the server runs.
+if [ "$(uname -s)" = Linux ]; then
+  CDIR="$WORK/control"
+  mkdir -p "$CDIR"
+  chmod 755 "$CDIR"
+  PURRLOR_CONTROL_DIR="$CDIR" run pages list
+  check "a control directory others can open is refused" never_called
+  check "and says why" out_has "open to other users"
+
+  chmod 700 "$CDIR"
+  : > "$CDIR/purrlor.sock"
+  chmod 644 "$CDIR/purrlor.sock"
+  PURRLOR_CONTROL_DIR="$CDIR" run pages list
+  check "a socket others can open is refused" never_called
+
+  chmod 600 "$CDIR/purrlor.sock"
+  PURRLOR_CONTROL_DIR="$CDIR" run pages list
+  check "a private directory and socket are used" sent "$CDIR/purrlor.sock"
+
+  ln -s "$CDIR" "$WORK/linked"
+  PURRLOR_CONTROL_DIR="$WORK/linked" run pages list
+  check "a symlinked control directory is refused" never_called
+  rm "$CDIR/purrlor.sock"
+  ln -s /dev/null "$CDIR/purrlor.sock"
+  PURRLOR_CONTROL_DIR="$CDIR" run pages list
+  check "a symlinked socket is refused" never_called
+fi
+
 # --- help ----------------------------------------------------------------------------------------
 
 run help

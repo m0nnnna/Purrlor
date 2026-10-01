@@ -1052,11 +1052,32 @@ control_sock() {
   printf '%s/purrlor.sock' "${dir:-/run/purrlor}"
 }
 
+# check_control_sock -> returns only if the socket is where it should be and private: neither it nor
+# its directory a symlink (which could send the admin password somewhere else), and neither open to
+# other users. The token server sets 0700 and 0600 itself every time it starts.
+check_control_sock() {
+  local sock dir mode path
+  sock="$(control_sock)"
+  dir="$(dirname "$sock")"
+  if [ -L "$dir" ] || [ -L "$sock" ]; then
+    die "Refusing: $dir or $sock is a symlink. The control socket's directory must be a real one; look at what put it there."
+  fi
+  for path in "$dir" "$sock"; do
+    [ -e "$path" ] || continue
+    mode="$(stat -c '%a' "$path" 2>/dev/null || true)"
+    case "$mode" in
+      ''|*00) ;;
+      *) die "Refusing: $path is open to other users (mode $mode). 'purrlor restart token-server' makes it private again; check what changed it." ;;
+    esac
+  done
+}
+
 # ctl METHOD PATH [curl form args...] -> prints the server's answer; fails unless it went through.
 # A 207 (some deletions failed) is printed and counts as done: the answer says which.
 ctl() {
   local method="$1" path="$2" out code body
   shift 2
+  check_control_sock
   local args=(-sS -m "${CTL_TIMEOUT:-300}" --unix-socket "$(control_sock)" -H 'Accept: text/plain'
     --data-urlencode "actor=${SUDO_USER:-root}")
   [ "$method" = GET ] && args+=(-G)
@@ -1064,7 +1085,9 @@ ctl() {
     || die "Couldn't talk to the control socket ($(control_sock)). Is the token server running ('purrlor status')? Its CONTROL_SOCKET must not be empty."
   code="${out##*$'\n'}"
   body="${out%$'\n'*}"
-  [ -z "$body" ] || printf '%s\n' "$body"
+  # The server already strips control characters from what it says; this is the same again here, in
+  # case anything else ever answers on that socket. Newlines and tabs stay.
+  [ -z "$body" ] || printf '%s\n' "$body" | LC_ALL=C tr -d '\000-\010\013-\037\177'
   case "$code" in
     200|207) return 0 ;;
     *) return 1 ;;

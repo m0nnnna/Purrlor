@@ -1,6 +1,6 @@
-import { chmod, lstat, mkdir, unlink } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, unlink } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
-import { dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
 import express, { type Request, type Response } from 'express';
 import { mediaDeleteCommand, withAdminSession, type AdminCredentials, type AdminSession } from './adminRoom.js';
 import type { AdminStore } from './adminStore.js';
@@ -11,6 +11,7 @@ import {
   parseMediaTarget,
   parseReportNotice,
   queueDeletions,
+  terminalSafe,
   type Report,
 } from './control.js';
 import { isMxc, localUserId, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
@@ -66,7 +67,8 @@ function reply(req: Request, res: Response, status: number, message: string, dat
   if ((req.get('accept') ?? '').includes('application/json')) {
     res.status(status).json({ ok: status < 400, message, ...data });
   } else {
-    res.status(status).type('text/plain').send(message.endsWith('\n') ? message : `${message}\n`);
+    const text = terminalSafe(message);
+    res.status(status).type('text/plain').send(text.endsWith('\n') ? text : `${text}\n`);
   }
 }
 
@@ -290,8 +292,14 @@ export function controlApp(deps: ControlDeps): express.Express {
   app.post(
     '/media/unblock',
     route(async (req, res, actor, body) => {
-      const mxcs = many(body.target).map(parseMediaTarget).filter((mxc): mxc is string => !!mxc);
-      if (mxcs.length === 0) throw new ControlError(400, 'Give each file as an mxc:// URL or its link (target=…).');
+      const targets = many(body.target);
+      const parsed = targets.map(parseMediaTarget);
+      const unknown = targets.filter((_, index) => !parsed[index]);
+      // As with a takedown: one target it can't read and nothing changes, rather than a partial undo.
+      if (targets.length === 0 || unknown.length > 0) {
+        throw new ControlError(400, `Give each file as an mxc:// URL or its link (target=…).${unknown.length ? ` Not a file: ${unknown.join(', ')}` : ''}`);
+      }
+      const mxcs = parsed as string[];
       const reason = needReason(body);
       const deleted = new Set((await deps.store.deletions()).filter((entry) => entry.status === 'deleted').map((entry) => entry.mxc));
       const changed = await deps.store.update('blockedMedia', mxcs, false);
@@ -462,6 +470,10 @@ export async function listenOnControlSocket(socketPath: string, app: express.Exp
   if (typeof process.getuid === 'function' && info.uid !== process.getuid()) {
     throw new Error(`${dir} belongs to uid ${info.uid}, not this service's (${process.getuid()})`);
   }
+  // The directory is the socket's alone. It comes from the host (PURRLOR_CONTROL_DIR), so a mistake
+  // there (`/etc`, `/var`) must not end with this service making a system directory root-only.
+  const others = (await readdir(dir)).filter((name) => name !== basename(socketPath));
+  if (others.length > 0) throw new Error(`${dir} has other things in it (${others.slice(0, 3).join(', ')}); the control socket needs a directory of its own`);
   await chmod(dir, 0o700);
   if (((await lstat(dir)).mode & 0o077) !== 0) throw new Error(`couldn't make ${dir} private`);
 

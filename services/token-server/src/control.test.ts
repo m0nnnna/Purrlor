@@ -10,6 +10,7 @@ import {
   parseMediaTarget,
   parseReportNotice,
   queueDeletions,
+  terminalSafe,
 } from './control.js';
 import { mediaDeleteCommand } from './adminRoom.js';
 import { albumMedia } from './controlServer.js';
@@ -56,6 +57,14 @@ describe('what an admin typed', () => {
 
   it('reads the block list, ignoring comments and junk', () => {
     assert.deepEqual([...parseMediaList('# blocked\nmxc://s/a\n  mxc://s/b # note\nmxc://s/bad id\nhttps://x\n')], ['mxc://s/a', 'mxc://s/b']);
+  });
+});
+
+describe('terminalSafe', () => {
+  it('keeps text, newlines and tabs, and drops escapes, C1 controls and bidi overrides', () => {
+    assert.equal(terminalSafe('a\tb\nc'), 'a\tb\nc');
+    assert.equal(terminalSafe('\u001b]52;c;eA==\u0007x\u001b[2Jy\r\u009bz\u202eq\u2066w'), ']52;c;eA==x[2Jyzqw');
+    assert.equal(terminalSafe('Ünïcødé 猫 🐱'), 'Ünïcødé 猫 🐱');
   });
 });
 

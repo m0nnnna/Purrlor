@@ -19,7 +19,17 @@ const SERVER = 'purr.example';
 const LUNA = `@luna:${SERVER}`;
 const PAGE = {
   version: 1,
-  blocks: [{ id: 'art', type: 'art', albums: [{ id: 'a1', title: 'Fan Art', pieces: [{ url: 'mxc://purr.example/fan1' }] }] }],
+  blocks: [
+    {
+      id: 'art',
+      type: 'art',
+      albums: [
+        { id: 'a1', title: 'Fan Art', pieces: [{ url: 'mxc://purr.example/fan1' }] },
+        // An owner-chosen title carrying terminal escapes: OSC 52 (write the clipboard), a colour, a bidi override.
+        { id: 'esc', title: '\u001b]52;c;cHduZWQ=\u0007Evil\u001b[31m\u202eart', pieces: [{ url: 'mxc://purr.example/evil1' }] },
+      ],
+    },
+  ],
 };
 
 function call(socketPath: string, method: string, path: string, form?: Record<string, string | string[]>) {
@@ -210,6 +220,30 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
     assert.ok((await store.lists()).blockedMedia.has('mxc://purr.example/fan1'));
     const none = await call(socketPath, 'POST', '/takedown/album/luna', { reason: 'DMCA', album: 'nope' });
     assert.equal(none.status, 404);
+  });
+
+  it("never prints another person's control characters on the admin's terminal", async () => {
+    const res = await call(socketPath, 'POST', '/takedown/album/luna', { reason: 'test', album: 'esc' });
+    assert.equal(res.status, 200, res.text);
+    // eslint-disable-next-line no-control-regex
+    assert.doesNotMatch(res.text, /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/);
+    assert.match(res.text, /Evil/);
+  });
+
+  it("won't unblock anything when one target can't be read", async () => {
+    await call(socketPath, 'POST', '/takedown/media', { reason: 'test', target: 'mxc://purr.example/keep' });
+    const res = await call(socketPath, 'POST', '/media/unblock', { reason: 'x', target: ['mxc://purr.example/keep', 'not a file'] });
+    assert.equal(res.status, 400);
+    assert.ok((await store.lists()).blockedMedia.has('mxc://purr.example/keep'));
+  });
+
+  it("won't take over a directory that has other things in it", async () => {
+    const shared = join(dir, 'shared');
+    await mkdir(shared, { mode: 0o755 });
+    await writeFile(join(shared, 'important.conf'), 'x');
+    await assert.rejects(listenOnControlSocket(join(shared, 'purrlor.sock'), controlApp(deps())), /has other things in it/);
+    // Left exactly as it was.
+    assert.equal((await lstat(shared)).mode & 0o777, 0o755);
   });
 
   it('picks up a block list edited by hand', async () => {

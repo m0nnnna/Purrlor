@@ -45,6 +45,17 @@ export function cleanReason(value: unknown): string {
   return [...value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()].slice(0, 500).join('');
 }
 
+/**
+ * Text that's safe to print on an admin's terminal: no control characters but newline and tab, no
+ * C1 controls, and no bidirectional overrides. Replies carry things other people wrote (an album's
+ * title on someone's page, a homeserver's error), and an escape sequence in one could otherwise
+ * rewrite what the admin sees, retitle the window, or (in some terminals) write to the clipboard.
+ */
+export function terminalSafe(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+}
+
 // --- The block list file ------------------------------------------------------------------------
 
 /** blocked-media.txt: one mxc:// URL per line; blank lines and `#` comments ignored. */

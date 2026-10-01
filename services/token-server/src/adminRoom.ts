@@ -74,6 +74,8 @@ export async function withAdminSession<T>(
       throw new AdminRoomError(`This homeserver has no #admins:${serverName} room, so this needs doing with its own admin tools.`);
     }
     const room = encodeURIComponent(roomId);
+    // Continuwuity answers admin commands, and posts reports, as this user (control.ts reads reports the same way).
+    const serverUser = `@conduit:${serverName}`;
     const replyTimeoutMs = options.replyTimeoutMs ?? 30_000;
     const pollMs = options.pollMs ?? 1000;
 
@@ -101,9 +103,11 @@ export async function withAdminSession<T>(
       while (Date.now() < deadline) {
         await new Promise((done) => setTimeout(done, pollMs));
         const recent = await messages(50);
+        // Only the server's own answer counts: anyone else in the admin room could reply "Deleted"
+        // to a command and have a file marked gone that's still there.
         const reply = recent.find((event) => {
           const relation = event.content?.['m.relates_to'] as { 'm.in_reply_to'?: { event_id?: string } } | undefined;
-          return relation?.['m.in_reply_to']?.event_id === sent.event_id;
+          return event.sender === serverUser && relation?.['m.in_reply_to']?.event_id === sent.event_id;
         });
         if (reply && typeof reply.content?.body === 'string') return reply.content.body;
       }
