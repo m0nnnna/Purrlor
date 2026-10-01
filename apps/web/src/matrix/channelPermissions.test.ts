@@ -164,4 +164,9 @@ describe('custom roles and channel moderators in the sync', () => {
     // A moderator can't touch a threshold set above their own level.
     expect(syncedThresholds({ ban: 100 }, { ban: 50 }, 50)).toBeUndefined();
   });
+
+  it('leaves who edits the Space’s news on the Space, not copied into its channels', () => {
+    const space = { events: { 'xyz.nekous.space_news': 25 } };
+    expect(syncedThresholds({ events: {} }, space, 100)).toBeUndefined();
+  });
 });

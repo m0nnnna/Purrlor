@@ -10,10 +10,10 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { MsgType } from 'matrix-js-sdk';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
-import { selectedRoomIdAtom } from '../../app/state/selection';
+import { channelComposerFocusAtom, selectedRoomIdAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
@@ -117,10 +117,11 @@ export function Composer({
     });
   };
 
+  const focusRequest = useAtomValue(channelComposerFocusAtom);
   useEffect(() => {
     if (!autoFocus || window.matchMedia(MOBILE_QUERY).matches) return;
     focusInput();
-  }, [autoFocus, roomId]);
+  }, [autoFocus, roomId, focusRequest]);
 
   // Clicking "Reply" on a message means the next thing typed is that reply.
   useEffect(() => {

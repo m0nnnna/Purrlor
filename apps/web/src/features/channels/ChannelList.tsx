@@ -7,7 +7,9 @@ import {
   selectedRoomIdAtom,
   selectedSpaceIdAtom,
   selectedSpaceViewAtom,
+  channelComposerFocusAtom,
   globalFeedOpenAtom,
+  openPostAtom,
   profileUserIdAtom,
 } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
@@ -15,6 +17,8 @@ import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
 import { UnreadBadge } from '../../components/UnreadBadge';
 import { useHasNewPosts } from '../../matrix/hooks/useHasNewPosts';
+import { useSpaceNews } from '../../matrix/hooks/useSpaceNews';
+import { spaceLanding } from '../../matrix/spaceNews';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
@@ -472,9 +476,11 @@ export function ChannelList() {
   const [selectedRoomId, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const [spaceView, setSpaceView] = useAtom(selectedSpaceViewAtom);
   const [globalFeedOpen, setGlobalFeedOpen] = useAtom(globalFeedOpenAtom);
-  const setProfileUserId = useSetAtom(profileUserIdAtom);
+  const [profileUserId, setProfileUserId] = useAtom(profileUserIdAtom);
+  const openPost = useAtomValue(openPostAtom);
   const space = useRoom(selectedSpaceId);
   const newPosts = useHasNewPosts(space ?? null);
+  const spaceNews = useSpaceNews(space ?? null);
   const spaceRooms = useSpaceRooms(selectedSpaceId);
   const categories = useChannelCategories(space);
   const [collapsedCategories, toggleCategoryCollapsed] = useCollapsedCategories(selectedSpaceId);
@@ -499,12 +505,26 @@ export function ChannelList() {
   // Picking a channel also leaves the Posts view, which sits alongside channels rather than
   // being one of them — otherwise the feed would stay on screen over a channel that now looks
   // selected in this list.
+  const requestComposerFocus = useSetAtom(channelComposerFocusAtom);
   const selectChannel = (roomId: string) => {
+    requestComposerFocus((n) => n + 1);
     setSelectedRoomId(roomId);
     setSpaceView(null);
     setGlobalFeedOpen(false);
     setProfileUserId(null);
   };
+
+  // Opening a Space leaves nothing selected in it (the rail's selectSpace). Its unseen news comes
+  // first, else its first text channel from the top of this list (matrix/spaceNews.ts), so a Space
+  // never opens onto an empty page. Anything already chosen — a channel, Posts, Events, a jump to
+  // a message from a notification — is left alone.
+  const nothingChosen = !!space && !selectedRoomId && spaceView === null && !globalFeedOpen && !profileUserId && !openPost;
+  useEffect(() => {
+    if (!space || !nothingChosen) return;
+    const landing = spaceLanding(mx, space, spaceRooms, categories);
+    if (landing.kind === 'news') setSpaceView('news');
+    else if (landing.kind === 'channel') setSelectedRoomId(landing.roomId);
+  }, [mx, space, nothingChosen, spaceRooms, categories, setSpaceView, setSelectedRoomId]);
 
   const isDirectMessagesView = selectedSpaceId === null;
   const canManageSpace = space ? canSendStateEvent(space, mx.getUserId() ?? '', 'm.room.name') : false;
@@ -623,6 +643,35 @@ export function ChannelList() {
             ))
           : (
               <>
+                {(spaceNews.news || spaceNews.canEdit) && (
+                  <div className="nu-channel-list__row">
+                    <button
+                      type="button"
+                      className={[
+                        'nu-channel-list__item',
+                        spaceView === 'news' && 'nu-channel-list__item--active',
+                        spaceNews.unseen && 'nu-channel-list__item--unread',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      data-nu-role="channel-list-news"
+                      onClick={() => {
+                        setGlobalFeedOpen(false);
+                        setProfileUserId(null);
+                        setSpaceView('news');
+                      }}
+                    >
+                      <span className="nu-channel-list__item-icon" aria-hidden="true">
+                        <Icon name="megaphone" size={18} />
+                      </span>
+                      <span className={spaceNews.unseen ? 'nu-channel-list__item-name nu-channel-list__item-name--unread' : 'nu-channel-list__item-name'}>
+                        News
+                      </span>
+                      {/* Updated since you last read it (matrix/spaceNews.ts). */}
+                      <UnreadBadge total={spaceNews.unseen ? 1 : 0} highlight={0} />
+                    </button>
+                  </div>
+                )}
                 <div className="nu-channel-list__row">
                   <button
                     type="button"

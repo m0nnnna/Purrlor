@@ -1,0 +1,70 @@
+.nu-news {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nu-space-5);
+  display: flex;
+  flex-direction: column;
+}
+
+/* A centered column, like Posts and Events. */
+.nu-news > * {
+  flex: none;
+  width: 100%;
+  max-width: 680px;
+  margin-inline: auto;
+}
+
+.nu-news__article {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  padding: var(--nu-space-5);
+  background: var(--nu-color-bg-secondary);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg);
+}
+
+.nu-news__body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--nu-color-text-primary);
+}
+
+.nu-news__meta {
+  margin: 0;
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-news__continue {
+  align-self: flex-start;
+}
+
+.nu-news__empty {
+  color: var(--nu-color-text-muted);
+}
+
+.nu-news__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+/* Scoped, to win over the base .nu-field__textarea's own min-height, which loads after this. */
+.nu-news__editor .nu-news__textarea {
+  min-height: 240px;
+  resize: vertical;
+}
+
+.nu-news__announce {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--nu-space-2);
+  align-items: center;
+}
+
+.nu-news__announce .nu-field__hint {
+  grid-column: 2;
+}

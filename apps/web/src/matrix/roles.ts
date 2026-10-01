@@ -1,4 +1,5 @@
 import type { MatrixClient, Room } from 'matrix-js-sdk';
+import { SPACE_NEWS_EVENT } from './spaceNews';
 
 /**
  * Named roles over Matrix's raw power levels. Matrix has no role objects of its own, only an
@@ -101,32 +102,40 @@ export function lowestRoleLevel(roles: RoleLevel[]): number {
 /**
  * The actions a Space lets its roles do, each as the minimum power level it takes — Matrix's own
  * thresholds, set on the Space and copied into its channels by the role sync, so the homeserver
- * enforces them in every room.
+ * enforces them in every room. A `spaceOnly` one is about the Space itself (its news), so it isn't
+ * copied into the channels.
  */
-export type Capability = 'redact' | 'kick' | 'ban' | 'invite' | 'pin';
+export type Capability = 'redact' | 'kick' | 'ban' | 'invite' | 'pin' | 'news';
 
-export const CAPABILITIES: { id: Capability; label: string; defaultLevel: number }[] = [
+export const CAPABILITIES: { id: Capability; label: string; defaultLevel: number; spaceOnly?: boolean }[] = [
   { id: 'redact', label: 'Delete other people’s messages', defaultLevel: 50 },
   { id: 'pin', label: 'Pin messages', defaultLevel: 50 },
   { id: 'kick', label: 'Remove members', defaultLevel: 50 },
   { id: 'ban', label: 'Ban members', defaultLevel: 50 },
   { id: 'invite', label: 'Invite people', defaultLevel: 0 },
+  { id: 'news', label: 'Edit the Space’s news', defaultLevel: 50, spaceOnly: true },
 ];
 
 type Thresholds = { redact?: number; kick?: number; ban?: number; invite?: number; events?: Record<string, number>; [key: string]: unknown };
 
-const PINNED_EVENTS = 'm.room.pinned_events';
+/** The capabilities that are a state event's own level (in `events`) rather than a named threshold. */
+const EVENT_CAPABILITIES: Partial<Record<Capability, string>> = {
+  pin: 'm.room.pinned_events',
+  news: SPACE_NEWS_EVENT,
+};
 
 /** A capability's level in a room's power levels, with the spec's defaults. Pure. */
 export function capabilityLevel(levels: Thresholds, capability: Capability): number {
-  if (capability === 'pin') return levels.events?.[PINNED_EVENTS] ?? (levels.state_default as number | undefined) ?? 50;
+  const eventType = EVENT_CAPABILITIES[capability];
+  if (eventType) return levels.events?.[eventType] ?? (levels.state_default as number | undefined) ?? 50;
   const value = levels[capability];
   return typeof value === 'number' ? value : capability === 'invite' ? 0 : 50;
 }
 
 /** Power levels with one capability set to `level`. Pure. */
 export function withCapability<T extends Thresholds>(levels: T, capability: Capability, level: number): T {
-  if (capability === 'pin') return { ...levels, events: { ...levels.events, [PINNED_EVENTS]: level } };
+  const eventType = EVENT_CAPABILITIES[capability];
+  if (eventType) return { ...levels, events: { ...levels.events, [eventType]: level } };
   return { ...levels, [capability]: level };
 }
 

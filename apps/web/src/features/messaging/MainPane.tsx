@@ -20,6 +20,7 @@ import { canInviteToRoom } from '../../matrix/permissions';
 import type { ReplyTarget } from '../../matrix/replies';
 import { FeedView } from '../feed/FeedView';
 import { CalendarView } from '../calendar/CalendarView';
+import { NewsView } from '../news/NewsView';
 import { PostPage } from '../feed/PostPage';
 import { GlobalFeedView } from '../feed/GlobalFeedView';
 import { ProfileView } from '../feed/ProfileView';
@@ -160,6 +161,8 @@ function MainPaneContent() {
   const feed = socialSpace ? 'space' : globalFeedOpen ? 'global' : feedSpace ? 'space' : null;
   const calendarSpace = spaceView === 'events' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;
   if (calendarSpace && !profileUserId && !openPost) return <CalendarView key={calendarSpace.roomId} space={calendarSpace} />;
+  const newsSpace = spaceView === 'news' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;
+  if (newsSpace && !profileUserId && !openPost) return <NewsView key={newsSpace.roomId} space={newsSpace} />;
   if (feed || profileUserId || openPost) {
     const covered = !!profileUserId || !!openPost;
     return (
