@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
 import {
@@ -20,9 +20,9 @@ import { SpaceReportsSettings } from '../features/servers/SpaceReportsSettings';
 import { MainPane } from '../features/messaging/MainPane';
 import { MessageTimeline } from '../features/messaging/MessageTimeline';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
+import { AccountSettingsModal } from '../app/AccountSettingsModal';
 import { createDemoClient } from './demoClient';
 import { SPACE_NEWS_EVENT } from '../matrix/spaceNews';
-import { act } from '@testing-library/react';
 import { DEMO_OUTSIDE_SPACE, DEMO_ROOM_IDS } from './demoWorld';
 
 const DEMO_LUNA = DEMO_OUTSIDE_SPACE.author;
@@ -315,8 +315,9 @@ describe('The social side against the demo world', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Cat Café/ }));
     expect(await screen.findByPlaceholderText(/Post something to Cat Café/)).toBeInTheDocument();
-    // Still the social sidebar, not the Space's channel list.
-    expect(screen.getByText('Notifications')).toBeInTheDocument();
+    // Still the social sidebar, not the Space's channel list. (The global feed stays mounted, hidden,
+    // behind the Space's Posts, with its own Notifications tab: the sidebar is the one meant.)
+    expect(within(document.querySelector<HTMLElement>('[data-nu-role="social-nav"]')!).getByText('Notifications')).toBeInTheDocument();
     expect(screen.queryByText('Text channels')).not.toBeInTheDocument();
     expect(store.get(globalFeedOpenAtom)).toBe(true);
     expect(store.get(socialSpaceIdAtom)).toBe(DEMO_ROOM_IDS.cafe);
@@ -402,5 +403,16 @@ describe('opening a Space in the demo world', () => {
       store.set(selectedSpaceViewAtom, null);
     });
     expect(await screen.findByText('Movie night moved to Saturday')).toBeInTheDocument();
+  });
+});
+
+describe('Account Settings against the demo world', () => {
+  it('opens, and keeps a keyword the demo can add and remove', async () => {
+    renderWithDemo(<AccountSettingsModal onClose={() => undefined} />);
+    fireEvent.change(await screen.findByPlaceholderText('A word or phrase'), { target: { value: 'movie night' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('movie night')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove movie night' }));
+    await waitFor(() => expect(screen.queryByText('movie night')).not.toBeInTheDocument());
   });
 });

@@ -65,9 +65,16 @@ const NEW_POSTS_CHECK_MS = 60_000;
  * All sources are paged together (a timeline sorted across authors can't be paged one feed at
  * a time without misordering). Joined feed rooms update live; the rest are a snapshot, re-read
  * by `refresh`.
+ *
+ * `paused`: kept loaded but out of sight (the feed stays mounted behind a chat, MainPane.tsx), so
+ * the periodic check for new posts waits, and runs as soon as it's back if one came due meanwhile.
  */
-export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PINNED): GlobalFeed {
+export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PINNED, { paused = false } = {}): GlobalFeed {
   const mx = useMatrixClient();
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const lastCheckRef = useRef(Date.now());
+  const checkRef = useRef<() => Promise<void>>(async () => undefined);
   // A string key, so a new-but-equal array from the caller doesn't reload everything.
   const pinnedKey = JSON.stringify([[...pinnedInput.users].sort(), [...pinnedInput.spaces].sort()]);
   const pinned = useMemo(() => {
@@ -295,9 +302,11 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
   useEffect(() => {
     if (!enabled) return undefined;
     let checking = false;
+    lastCheckRef.current = Date.now();
     const check = async () => {
-      if (checking || busyRef.current || document.visibilityState !== 'visible') return;
+      if (checking || busyRef.current || pausedRef.current || document.visibilityState !== 'visible') return;
       checking = true;
+      lastCheckRef.current = Date.now();
       try {
         const unjoined = [...sourcesRef.current.values()].filter(
           (source) => mx.getRoom(source.roomId)?.getMyMembership() !== 'join'
@@ -323,9 +332,15 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
         checking = false;
       }
     };
+    checkRef.current = check;
     const timer = setInterval(() => void check(), NEW_POSTS_CHECK_MS);
     return () => clearInterval(timer);
   }, [mx, enabled, generation, withEdits]);
+
+  // Back in sight after a while away: catch up now rather than at the next tick.
+  useEffect(() => {
+    if (enabled && !paused && Date.now() - lastCheckRef.current >= NEW_POSTS_CHECK_MS) void checkRef.current();
+  }, [enabled, paused]);
 
   // Following someone new mid-session adds just their feeds, rather than reloading the timeline.
   // During the initial load there's nothing to add to yet: that load reads pinnedRef itself, and

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   globalFeedOpenAtom,
@@ -74,9 +74,35 @@ function HeaderAction({
   );
 }
 
-/** Main content area — a text channel's timeline, a voice channel's call panel, or the Space's
- *  Posts feed (which isn't a channel at all, see matrix/feed.ts). */
+/**
+ * Main content area — a text channel's timeline, a voice channel's call panel, or the Space's
+ * Posts feed (which isn't a channel at all, see matrix/feed.ts).
+ *
+ * The global feed, once opened, stays mounted from then on, hidden while something else is shown:
+ * loading it reads every Space's and person's feed (useGlobalFeed), and going to a chat and back
+ * used to read them all again. Kept, coming back is instant, on the same tab and scroll position,
+ * and it doesn't check for new posts while it's out of sight.
+ */
 export function MainPane() {
+  const mx = useMatrixClient();
+  const globalFeedOpen = useAtomValue(globalFeedOpenAtom);
+  const socialSpaceId = useAtomValue(socialSpaceIdAtom);
+  const profileUserId = useAtomValue(profileUserIdAtom);
+  const openPost = useAtomValue(openPostAtom);
+  // The same test as MainPaneContent's `feed === 'global'`: open, and not showing one Space's Posts.
+  const globalShown = globalFeedOpen && !(socialSpaceId && mx.getRoom(socialSpaceId));
+  const visited = useRef(false);
+  if (globalShown) visited.current = true;
+
+  return (
+    <>
+      {visited.current && <GlobalFeedView hidden={!globalShown || !!profileUserId || !!openPost} />}
+      <MainPaneContent />
+    </>
+  );
+}
+
+function MainPaneContent() {
   const mx = useMatrixClient();
   const [selectedRoomId, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
@@ -141,7 +167,7 @@ export function MainPane() {
     const covered = !!profileUserId || !!openPost;
     return (
       <>
-        {feed === 'global' && <GlobalFeedView hidden={covered} />}
+        {/* The global feed itself is MainPane's, kept mounted there. */}
         {feed === 'space' && feedSpace && (
           <FeedView key={feedSpace.roomId} space={feedSpace} hidden={covered} onBack={socialSpace ? () => setSocialSpaceId(null) : undefined} />
         )}
