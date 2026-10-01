@@ -181,8 +181,83 @@ describe('parseProfilePage', () => {
     ).toEqual([]);
   });
 
+  it('keeps Spaces with room version 12 IDs, which have no server part', () => {
+    const spaces = [{ roomId: '!1LCLCSdyDTw4k9B7LgwtRfuRnYkXsdeE1eMz9Ik8tbE', name: 'Cat Cafe' }];
+    expect(page({ blocks: [{ id: 's', type: 'spaces', spaces }] })?.blocks).toEqual([{ id: 's', type: 'spaces', spaces }]);
+    expect(page({ blocks: [{ id: 's', type: 'spaces', spaces: [{ roomId: '!abc def', name: 'x' }, { roomId: '#alias:s', name: 'x' }] }] })?.blocks).toEqual([]);
+  });
+
   it('turns an emote divider with no emote into a line', () => {
     expect(page({ blocks: [{ id: 'd', type: 'divider', style: 'emote' }] })?.blocks).toEqual([{ id: 'd', type: 'divider', style: 'line' }]);
+  });
+});
+
+describe('music blocks', () => {
+  const track = (extra: Record<string, unknown> = {}) => ({ url: MXC, mimetype: 'audio/mpeg', title: 'Moonlight', ...extra });
+  const music = (tracks: unknown, extra: Record<string, unknown> = {}) => page({ blocks: [{ id: 'm', type: 'music', tracks, ...extra }] })?.blocks;
+
+  it('keeps a track list as the builder writes it', () => {
+    const tracks = [track({ artist: 'Luna', duration: 201, size: 4_800_000 }), track({ mimetype: 'audio/ogg', title: 'B-side' })];
+    expect(music(tracks, { title: 'My songs' })).toEqual([{ id: 'm', type: 'music', title: 'My songs', tracks }]);
+  });
+
+  it('only keeps mxc:// files', () => {
+    for (const url of ['https://example.org/song.mp3', 'http://purr.example.org/a', 'javascript:alert(1)', 'data:audio/mpeg;base64,AAAA', 'mxc://purr.example.org/../../etc', 'mxc://a/b c']) {
+      expect(music([track({ url })])).toEqual([]);
+    }
+  });
+
+  it('only keeps audio types browsers play, normalised', () => {
+    for (const mimetype of ['text/html', 'image/svg+xml', 'application/javascript', 'video/mp4', 'audio/x-shockwave', 'audio/*', '', 42, undefined]) {
+      expect(music([track({ mimetype })])).toEqual([]);
+    }
+    const kept = music([track({ mimetype: 'Audio/OGG; codecs=opus' })]);
+    expect(kept?.[0].type === 'music' && kept[0].tracks[0].mimetype).toBe('audio/ogg');
+  });
+
+  it('keeps title and artist to one line each, and needs a title', () => {
+    expect(music([track({ title: '   ' })])).toEqual([]);
+    const result = music([track({ title: 'line one\nline two\u0000<b>', artist: `${'x'.repeat(300)}\r\n` })]);
+    const kept = result?.[0].type === 'music' ? result[0].tracks[0] : undefined;
+    expect(kept?.title).toBe('line one line two <b>');
+    expect(kept?.artist).toHaveLength(LIMITS.trackTitle);
+  });
+
+  it('drops a duration or size that is not a sensible number, keeping the track', () => {
+    for (const extra of [{ duration: -1 }, { duration: Infinity }, { duration: LIMITS.trackDuration + 1 }, { duration: '200' }, { size: 1.5 }, { size: -10 }, { size: 2 ** 60 }]) {
+      const result = music([track(extra)]);
+      expect(result?.[0].type === 'music' && result[0].tracks[0]).toEqual(track());
+    }
+  });
+
+  it('drops fields it does not know', () => {
+    const result = music([track({ onplay: 'x()', autoplay: true, src: 'https://evil.example/' })], { autoplay: true, style: 'position: fixed' });
+    expect(result).toEqual([{ id: 'm', type: 'music', tracks: [track()] }]);
+  });
+
+  it('caps tracks across the whole page, and drops a music block with none left', () => {
+    const many = Array.from({ length: 50 }, (_, i) => track({ title: `${i}` }));
+    const result = page({
+      blocks: [
+        { id: 'a', type: 'music', tracks: many.slice(0, 15) },
+        { id: 'b', type: 'music', tracks: many.slice(15, 30) },
+        { id: 'c', type: 'music', tracks: many.slice(30) },
+        { id: 't', type: 'text', body: 'still here' },
+      ],
+    })?.blocks;
+    expect(result?.map((block) => (block.type === 'music' ? block.tracks.length : block.type))).toEqual([15, 5, 'text']);
+  });
+
+  it('does not count tracks toward the 20 images', () => {
+    const images = Array.from({ length: 12 }, () => ({ url: MXC }));
+    const result = page({ blocks: [{ id: 'm', type: 'music', tracks: [track()] }, { id: 'g', type: 'gallery', images }] })?.blocks;
+    expect(result?.[1].type === 'gallery' && result[1].images).toHaveLength(12);
+  });
+
+  it('drops a music block with no usable tracks', () => {
+    expect(music([])).toEqual([]);
+    expect(music('tracks')).toEqual([]);
+    expect(music([null, 'x', { title: 'no file' }])).toEqual([]);
   });
 });
 

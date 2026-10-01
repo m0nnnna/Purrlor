@@ -60,6 +60,23 @@ export type GuestbookWho = (typeof GUESTBOOK_WHO)[number];
 export const ART_RATINGS = ['general', 'mature'] as const;
 export type ArtRating = (typeof ART_RATINGS)[number];
 
+/** The kinds of audio file a music block may hold: ones browsers play, and nothing else. The public
+ *  media route (services/token-server, publicWeb.ts) serves sound from the same list. */
+export const MUSIC_AUDIO_TYPES = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/ogg',
+  'audio/opus',
+  'audio/webm',
+  'audio/flac',
+  'audio/x-flac',
+  'audio/wav',
+  'audio/x-wav',
+] as const;
+export type MusicAudioType = (typeof MUSIC_AUDIO_TYPES)[number];
+
 export type PageColors = { bg: string; text: string; accent: string; link: string; block: string };
 
 export type PageBackground =
@@ -97,7 +114,13 @@ export type PageBlock =
   /** An artist's albums of pieces, each with a rating and tags. */
   | { id: string; type: 'art'; title?: string; albums: ArtAlbum[] }
   /** Commission status, price sheet and queue, drawn from their own state events (matrix/commissions.ts). */
-  | { id: string; type: 'commissions'; title?: string };
+  | { id: string; type: 'commissions'; title?: string }
+  /** Audio the owner uploaded, played by the page's own player. Nothing loads until play. */
+  | { id: string; type: 'music'; title?: string; tracks: MusicTrack[] };
+
+/** One uploaded track: an mxc:// file of an allowed audio type, with a one-line title and artist.
+ *  `duration` (seconds) and `size` (bytes) are what the uploader measured, for the track list only. */
+export type MusicTrack = { url: string; mimetype: MusicAudioType; title: string; artist?: string; duration?: number; size?: number };
 
 export type ArtPiece = { url: string; title?: string; description?: string; tags: string[]; rating: ArtRating };
 export type ArtAlbum = { id: string; title: string; description?: string; pieces: ArtPiece[] };
@@ -127,6 +150,11 @@ export const LIMITS = {
   /** Pieces across a page's art blocks. They load only when their album is opened, so they don't
    *  count toward `images`. */
   artPieces: 60,
+  /** Tracks across a page's music blocks. They load only when played, so they don't count toward `images`. */
+  tracks: 20,
+  trackTitle: 100,
+  /** Longest track duration the list shows, seconds (6 hours); a longer claim is dropped, not the track. */
+  trackDuration: 6 * 60 * 60,
   tags: 6,
   tag: 24,
   title: 60,
@@ -163,7 +191,8 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/;
 /** `mxc://server/media-id`: the server part as the spec's server names allow, the ID as media IDs do. */
 const MXC_URL = /^mxc:\/\/[A-Za-z0-9.\-:[\]]{1,255}\/[A-Za-z0-9_-]{1,255}$/;
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,16}$/;
-const ROOM_ID = /^![A-Za-z0-9._~=+/-]{1,255}:[A-Za-z0-9.\-:[\]]{1,255}$/;
+// Room version 12 room IDs have no server part (`!<hash>`); older ones do (`!opaque:server`).
+const ROOM_ID = /^![A-Za-z0-9._~=+/-]{1,255}(:[A-Za-z0-9.\-:[\]]{1,255})?$/;
 const USER_ID = /^@[a-z0-9._=\-/+]{1,200}:[A-Za-z0-9.\-:[\]]{1,200}$/;
 const SERVER_NAME = /^[A-Za-z0-9.\-:[\]]{1,255}$/;
 
@@ -308,6 +337,28 @@ function readAlbum(raw: unknown, index: number): ArtAlbum | undefined {
   return { id, title, ...(description && { description }), pieces };
 }
 
+/** An audio type from the allowlist, lower-cased and without parameters (`audio/ogg; codecs=opus`). */
+export function readAudioType(value: unknown): MusicAudioType | undefined {
+  if (typeof value !== 'string' || value.length > 100) return undefined;
+  const type = value.split(';')[0].trim().toLowerCase();
+  return (MUSIC_AUDIO_TYPES as readonly string[]).includes(type) ? (type as MusicAudioType) : undefined;
+}
+
+function readTrack(raw: unknown): MusicTrack | undefined {
+  if (!isRecord(raw)) return undefined;
+  const url = readMxc(raw.url);
+  const mimetype = readAudioType(raw.mimetype);
+  const title = readLine(raw.title, LIMITS.trackTitle);
+  if (!url || !mimetype || !title) return undefined;
+  const artist = readLine(raw.artist, LIMITS.trackTitle);
+  const duration =
+    typeof raw.duration === 'number' && Number.isFinite(raw.duration) && raw.duration > 0 && raw.duration <= LIMITS.trackDuration
+      ? Math.round(raw.duration)
+      : undefined;
+  const size = typeof raw.size === 'number' && Number.isSafeInteger(raw.size) && raw.size > 0 ? raw.size : undefined;
+  return { url, mimetype, title, ...(artist && { artist }), ...(duration && { duration }), ...(size && { size }) };
+}
+
 function withTitle(raw: Record<string, unknown>): { title?: string } {
   const title = readLine(raw.title, LIMITS.title);
   return title ? { title } : {};
@@ -399,6 +450,13 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
     }
     case 'commissions':
       return { id, type: 'commissions', ...withTitle(raw) };
+    case 'music': {
+      const tracks = (Array.isArray(raw.tracks) ? raw.tracks.slice(0, LIMITS.tracks * 4) : [])
+        .map(readTrack)
+        .filter((track): track is MusicTrack => !!track)
+        .slice(0, LIMITS.tracks);
+      return tracks.length > 0 ? { id, type: 'music', ...withTitle(raw), tracks } : undefined;
+    }
     default:
       return undefined;
   }
@@ -437,6 +495,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
   const blocks: PageBlock[] = [];
   let images = backgroundImages;
   let artPieces = 0;
+  let tracks = 0;
   for (const [index, item] of raw.entries()) {
     if (blocks.length >= LIMITS.blocks) break;
     const rawId = isRecord(item) ? item.id : undefined;
@@ -455,6 +514,11 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
       if (!limited) continue;
       block = limited;
       artPieces += artPieceCount(block);
+    }
+    if (block.type === 'music') {
+      if (tracks >= LIMITS.tracks) continue;
+      block = { ...block, tracks: block.tracks.slice(0, LIMITS.tracks - tracks) };
+      tracks += block.tracks.length;
     }
     images += blockImageCount(block);
     seen.add(id);

@@ -1,12 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  addRoomMedia,
   collectMxc,
+  isSeekableMediaType,
   isServableMediaType,
   linkCardHtml,
   localUserId,
-  MediaAllowlist,
+  mayServeMedia,
+  MediaIndex,
+  pageMedia,
   pageOfPosts,
+  parseRange,
+  publicPageContent,
+  readFollows,
+  type AdminLists,
+  type MediaSource,
   parseHiddenList,
   publicPostsFromTimeline,
   readEmotes,
@@ -213,22 +222,191 @@ describe('pageOfPosts', () => {
   });
 });
 
-describe('MediaAllowlist', () => {
-  it('serves only media a public answer handed out, and only for a while', () => {
-    const allow = new MediaAllowlist(1000);
-    allow.allow(['mxc://s/a', 'https://evil/x'], 0);
-    assert.equal(allow.has('mxc://s/a', 500), true);
-    assert.equal(allow.has('mxc://s/b', 500), false);
-    assert.equal(allow.has('mxc://s/a', 1500), false);
-  });
+describe('which media may be served', () => {
+  const PAGE_STATE = (publicWeb: boolean, page: Record<string, unknown>): RawEvent[] => [
+    ...ROOM_STATE,
+    { type: 'xyz.nekous.public_web', state_key: '', sender: OWNER, content: { enabled: publicWeb } },
+    { type: 'xyz.nekous.profile_page', state_key: '', sender: OWNER, event_id: '$page', content: { version: 1, ...page } },
+  ];
+  const noLists = (): AdminLists => ({ hidden: new Set(), publicOff: new Set(), blockedMedia: new Set() });
+  const TRACK = 'mxc://purr.example/track1';
+  const PAGE = {
+    style: { background: { kind: 'image', url: 'mxc://purr.example/bg' } },
+    blocks: [
+      { type: 'image', url: 'mxc://purr.example/img' },
+      { type: 'gallery', images: [{ url: 'mxc://purr.example/g1' }, { url: 'not mxc' }] },
+      { type: 'links', items: [{ label: 'x', url: 'https://e.org', emote: 'mxc://purr.example/emote' }] },
+      { type: 'art', albums: [{ title: 'A', pieces: [{ url: 'mxc://purr.example/art1' }] }] },
+      { type: 'music', tracks: [{ url: TRACK, mimetype: 'audio/mpeg', title: 't' }, { url: 'mxc://purr.example/notaudio', mimetype: 'text/html', title: 'x' }] },
+      // Fields no page draws: never served because of this page.
+      { type: 'text', body: 'hi', smuggled: 'mxc://purr.example/dm-photo' },
+      { type: 'unknown', url: 'mxc://purr.example/other' },
+    ],
+    extra: { url: 'mxc://purr.example/secret' },
+  };
 
   it('collects every mxc URL in a value', () => {
     assert.deepEqual([...collectMxc({ a: 'mxc://s/1', b: [{ c: 'mxc://s/2' }, 'mxc://s/bad id'], d: 'text' })], ['mxc://s/1', 'mxc://s/2']);
   });
 
-  it('passes on pictures, video and sound, never anything a browser would run', () => {
-    for (const ok of ['image/png', 'image/gif; charset=binary', 'video/mp4', 'audio/mpeg']) assert.equal(isServableMediaType(ok), true, ok);
-    for (const bad of ['text/html', 'image/svg+xml', 'application/javascript', null, '']) assert.equal(isServableMediaType(bad), false, String(bad));
+  it("takes a page's files only from fields the page format has", () => {
+    assert.deepEqual([...pageMedia(PAGE)].sort(), [
+      'mxc://purr.example/art1',
+      'mxc://purr.example/bg',
+      'mxc://purr.example/emote',
+      'mxc://purr.example/g1',
+      'mxc://purr.example/img',
+      TRACK,
+    ]);
+  });
+
+  it("serves a page's files only while the owner is opted in", () => {
+    const snapshot = new Map<string, MediaSource[]>();
+    addRoomMedia(snapshot, { owner: OWNER, posts: [], state: PAGE_STATE(false, PAGE) });
+    assert.equal(snapshot.size, 0);
+    addRoomMedia(snapshot, { owner: OWNER, posts: [], state: PAGE_STATE(true, PAGE) });
+    const index = new MediaIndex();
+    index.setSnapshot(snapshot);
+    const sources = index.sources(TRACK);
+    assert.equal(mayServeMedia(TRACK, sources, noLists(), new Set([OWNER])), true);
+    // Switched off since the snapshot: the next snapshot drops it, and until then the live set does.
+    assert.equal(mayServeMedia(TRACK, sources, noLists(), new Set()), false);
+    assert.equal(mayServeMedia('mxc://purr.example/secret', index.sources('mxc://purr.example/secret'), noLists(), new Set([OWNER])), false);
+  });
+
+  it('never serves a file for a hidden owner, a page an admin switched off, or a blocked file', () => {
+    const snapshot = new Map<string, MediaSource[]>();
+    const posts: PublicPost[] = [
+      { eventId: '$p', author: OWNER, ts: 1, body: '', attachments: [{ kind: 'image', url: 'mxc://purr.example/postpic', mimetype: 'image/png' }], likes: 0, comments: 0 },
+    ];
+    addRoomMedia(snapshot, { owner: OWNER, posts, state: PAGE_STATE(true, PAGE) });
+    const index = new MediaIndex();
+    index.setSnapshot(snapshot);
+    const live = new Set([OWNER]);
+    const serve = (url: string, lists: AdminLists) => mayServeMedia(url, index.sources(url), lists, live);
+
+    assert.equal(serve('mxc://purr.example/postpic', noLists()), true);
+    assert.equal(serve('mxc://purr.example/postpic', { ...noLists(), hidden: new Set([OWNER]) }), false);
+    assert.equal(serve(TRACK, { ...noLists(), hidden: new Set([OWNER]) }), false);
+    // Switched off by an admin: the page's files go, Global posts' stay (they're public regardless).
+    assert.equal(serve(TRACK, { ...noLists(), publicOff: new Set([OWNER]) }), false);
+    assert.equal(serve('mxc://purr.example/postpic', { ...noLists(), publicOff: new Set([OWNER]) }), true);
+    assert.equal(serve('mxc://purr.example/postpic', { ...noLists(), blockedMedia: new Set(['mxc://purr.example/postpic']) }), false);
+    assert.equal(serve('mxc://purr.example/never-named', noLists()), false);
+  });
+
+  it('serves a shared file while any owner of it still may', () => {
+    const sources: MediaSource[] = [
+      { owner: '@a:s', kind: 'post' },
+      { owner: '@b:s', kind: 'post' },
+    ];
+    assert.equal(mayServeMedia('mxc://s/x', sources, { ...noLists(), hidden: new Set(['@a:s']) }, new Set()), true);
+    assert.equal(mayServeMedia('mxc://s/x', sources, { ...noLists(), hidden: new Set(['@a:s', '@b:s']) }, new Set()), false);
+  });
+
+  it("keeps avatars and banners for a while, a banner counting as the page's", () => {
+    const index = new MediaIndex(1000);
+    index.allowProfile(['mxc://s/avatar', 'https://evil/x'], OWNER, 'profile', 0);
+    index.allowProfile(['mxc://s/banner'], OWNER, 'page', 0);
+    assert.deepEqual(index.sources('mxc://s/avatar', 500), [{ owner: OWNER, kind: 'profile' }]);
+    assert.equal(mayServeMedia('mxc://s/banner', index.sources('mxc://s/banner', 500), noLists(), new Set()), false);
+    assert.deepEqual(index.ownedBy(OWNER, 500).sort(), ['mxc://s/avatar', 'mxc://s/banner']);
+    assert.deepEqual(index.sources('mxc://s/avatar', 1500), []);
+  });
+
+  it('passes on pictures, video and the allowed sound, never anything a browser would run', () => {
+    for (const ok of ['image/png', 'image/gif; charset=binary', 'video/mp4', 'audio/mpeg', 'audio/ogg; codecs=opus', 'AUDIO/FLAC']) {
+      assert.equal(isServableMediaType(ok), true, ok);
+    }
+    for (const bad of ['text/html', 'image/svg+xml', 'application/javascript', 'audio/x-unknown', 'audio/', null, '']) {
+      assert.equal(isServableMediaType(bad), false, String(bad));
+    }
+    assert.equal(isSeekableMediaType('audio/mpeg'), true);
+    assert.equal(isSeekableMediaType('video/webm'), true);
+    assert.equal(isSeekableMediaType('image/png'), false);
+    assert.equal(isSeekableMediaType('audio/x-unknown'), false);
+  });
+});
+
+describe('the Top 8 for signed-out visitors', () => {
+  const follow = (owner: string, target: string, following = true, sender = owner): RawEvent => ({
+    type: 'xyz.nekous.follow',
+    state_key: target,
+    sender,
+    content: { following },
+  });
+
+  it('reads who someone follows from their own follow events only', () => {
+    const state = [
+      follow(OWNER, '@a:s'),
+      follow(OWNER, 'd:s'),
+      follow(OWNER, '@b:s', false),
+      follow(OWNER, '@c:s', true, '@intruder:s'),
+      follow(OWNER, 'not a user'),
+      { type: 'xyz.nekous.follow', sender: OWNER, content: { following: true } },
+    ];
+    assert.deepEqual([...readFollows(state, OWNER)], ['@a:s', '@d:s']);
+  });
+
+  it('keeps only the friends allowed, and leaves every other block as stored', () => {
+    const content = {
+      version: 1,
+      blocks: [
+        { id: 'f', type: 'friends', users: ['@public-and-mutual:s', '@not-public:s', '@not-mutual:s', 42] },
+        { id: 't', type: 'text', body: 'hi' },
+      ],
+    };
+    const shown = publicPageContent(content, (user) => user === '@public-and-mutual:s');
+    assert.deepEqual(shown.blocks, [
+      { id: 'f', type: 'friends', users: ['@public-and-mutual:s'] },
+      { id: 't', type: 'text', body: 'hi' },
+    ]);
+    assert.ok(!JSON.stringify(shown).includes('@not-public:s'));
+    assert.equal(content.blocks[0].users?.length, 4, 'the stored page is not changed');
+  });
+});
+
+describe('mature art, signed out', () => {
+  const content = {
+    version: 1,
+    blocks: [
+      {
+        type: 'art',
+        albums: [{ title: 'A', pieces: [{ url: 'mxc://s/general', rating: 'general' }, { url: 'mxc://s/mature', rating: 'mature' }, { url: 'mxc://s/unrated' }] }],
+      },
+    ],
+  };
+
+  it('is left out of the page answer', () => {
+    assert.ok(!JSON.stringify(publicPageContent(content, () => true)).includes('mxc://s/mature'));
+    assert.ok(JSON.stringify(publicPageContent(content, () => true)).includes('mxc://s/unrated'));
+  });
+
+  it("is never one of a page's public files", () => {
+    assert.deepEqual([...pageMedia(content)].sort(), ['mxc://s/general', 'mxc://s/unrated']);
+    assert.ok(pageMedia(content, { includeMature: true }).has('mxc://s/mature'));
+  });
+});
+
+describe('parseRange', () => {
+  it('reads one range of a file', () => {
+    assert.deepEqual(parseRange('bytes=0-99', 1000), { start: 0, end: 99 });
+    assert.deepEqual(parseRange('bytes=500-', 1000), { start: 500, end: 999 });
+    assert.deepEqual(parseRange('bytes=-100', 1000), { start: 900, end: 999 });
+    assert.deepEqual(parseRange('bytes=900-5000', 1000), { start: 900, end: 999 });
+    assert.deepEqual(parseRange('bytes=-5000', 1000), { start: 0, end: 999 });
+  });
+
+  it('says when a range is past the end', () => {
+    assert.equal(parseRange('bytes=1000-', 1000), 'unsatisfiable');
+    assert.equal(parseRange('bytes=50-10', 1000), 'unsatisfiable');
+    assert.equal(parseRange('bytes=-0', 1000), 'unsatisfiable');
+  });
+
+  it('sends the whole file for anything else', () => {
+    for (const header of [undefined, '', 'bytes=-', 'bytes=0-1,5-9', 'items=0-5', 'bytes=a-b', 'bytes=1e3-', `bytes=${'9'.repeat(30)}-`]) {
+      assert.equal(parseRange(header, 1000), undefined, String(header));
+    }
   });
 });
 

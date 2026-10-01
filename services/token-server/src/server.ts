@@ -6,7 +6,9 @@ import { checkMembership, getBotUserId, mayViewParticipants } from './membership
 import { grantsForPowerLevel } from './grants.js';
 import { livekitRoomName } from './livekitRoomName.js';
 import { handleWebhook } from './webhooks.js';
-import { publicWebRouter } from './publicWebRoutes.js';
+import { controlDeps, publicWebRouter } from './publicWebRoutes.js';
+import { adminStore } from './adminStore.js';
+import { controlApp, listenOnControlSocket } from './controlServer.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -214,3 +216,16 @@ app.use('/api/public', publicWebRouter());
 app.listen(PORT, () => {
   console.log(`purrlor-token-server listening on :${PORT}`);
 });
+
+/**
+ * The admin control channel (controlServer.ts, docs/admin-control.md): a root-only Unix socket the
+ * `purrlor` command talks to. Never on the network. CONTROL_SOCKET= (empty) turns it off; if it
+ * can't be made private, it isn't started and the rest of the service carries on.
+ */
+const CONTROL_SOCKET = process.env.CONTROL_SOCKET ?? (process.platform === 'win32' ? '' : '/control/purrlor.sock');
+if (CONTROL_SOCKET) {
+  listenOnControlSocket(CONTROL_SOCKET, controlApp({ store: adminStore, ...controlDeps() })).then(
+    () => console.log(`Admin control socket at ${CONTROL_SOCKET}`),
+    (err) => console.error(`Admin control socket not started: ${(err as Error).message}`)
+  );
+}

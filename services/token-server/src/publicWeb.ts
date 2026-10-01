@@ -12,7 +12,8 @@
  *   `enabled: true` in their profile room). Otherwise it answers exactly as for a user who doesn't
  *   exist, so a signed-out visitor learns nothing from asking.
  * - **Only this homeserver's people**, and never anyone an admin has hidden.
- * - **Media** is served only if a public answer handed it out recently (MediaAllowlist).
+ * - **Media** is served only while a public post or page names it, and never once an admin has
+ *   blocked it (MediaIndex, mayServeMedia).
  *
  * This file is the pure part (unit-tested in publicWeb.test.ts); publicWebRoutes.ts does the I/O.
  */
@@ -100,6 +101,51 @@ export function readPublicWeb(state: RawEvent[]): boolean {
 export function readPageContent(state: RawEvent[]): Record<string, unknown> | undefined {
   const content = state.find((e) => e.type === PROFILE_PAGE_EVENT && e.state_key === '')?.content;
   return isRecord(content) && typeof content.version === 'number' ? content : undefined;
+}
+
+export const FOLLOW_EVENT = 'xyz.nekous.follow';
+
+/**
+ * Who a profile room's owner follows: their `xyz.nekous.follow` state, one event per person. The
+ * state key is the followed user's ID without its `@` (homeservers refuse anyone else's `@…` key);
+ * the full ID is read too. The web client's readProfileFollows reads them the same way.
+ */
+export function readFollows(state: RawEvent[], owner: string): Set<string> {
+  const follows = new Set<string>();
+  for (const event of state) {
+    if (event.type !== FOLLOW_EVENT || event.sender !== owner || !event.state_key || event.content?.following !== true) continue;
+    const userId = event.state_key.startsWith('@') ? event.state_key : `@${event.state_key}`;
+    if (USER_ID.test(userId)) follows.add(userId);
+  }
+  return follows;
+}
+
+/**
+ * A stored page as signed-out visitors get it. The Top 8 keeps only the friends `friendShown`
+ * allows (their own page public, and they follow the owner back), so the answer never carries
+ * the user ID of someone who hasn't chosen to be public, or who never chose to be this person's
+ * friend. Mature art pieces are left out: they're only for people who said they're over 18, and
+ * nobody signed out has. Everything else is passed on as stored; the client parses it.
+ */
+export function publicPageContent(content: Record<string, unknown>, friendShown: (userId: string) => boolean): Record<string, unknown> {
+  if (!Array.isArray(content.blocks)) return content;
+  return {
+    ...content,
+    blocks: content.blocks.map((block) => {
+      if (!isRecord(block)) return block;
+      if (block.type === 'friends') {
+        const users = Array.isArray(block.users) ? block.users.filter((user): user is string => typeof user === 'string' && friendShown(user)) : [];
+        return { ...block, users };
+      }
+      if (block.type === 'art' && Array.isArray(block.albums)) {
+        const albums = block.albums.map((album) =>
+          isRecord(album) && Array.isArray(album.pieces) ? { ...album, pieces: album.pieces.filter((piece) => !isRecord(piece) || piece.rating !== 'mature') } : album
+        );
+        return { ...block, albums };
+      }
+      return block;
+    }),
+  };
 }
 
 /** Every mxc:// URL anywhere in a value, for the media allowlist. */
@@ -278,46 +324,197 @@ export function pageOfPosts(posts: PublicPost[], before: number | undefined, lim
   return { posts: page, ...(older.length > limit && { next: page[page.length - 1].ts }) };
 }
 
-// --- Media allowlist ----------------------------------------------------------------------------
+// --- Which media may be served ------------------------------------------------------------------
 
 /**
- * The media this service may hand out: what its public answers referenced in the last `ttlMs`.
+ * Sound a page's music block may hold: the web client's `MUSIC_AUDIO_TYPES`
+ * (apps/web/src/matrix/profilePage.ts), which this list must match.
+ */
+export const AUDIO_TYPES: readonly string[] = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/ogg',
+  'audio/opus',
+  'audio/webm',
+  'audio/flac',
+  'audio/x-flac',
+  'audio/wav',
+  'audio/x-wav',
+];
+
+function mediaType(contentType: string | null | undefined): string {
+  return (contentType ?? '').split(';')[0].trim().toLowerCase();
+}
+
+/** Kinds of file the media endpoint passes on: pictures, video and the allowed sound, nothing a browser runs. */
+export function isServableMediaType(contentType: string | null): boolean {
+  const type = mediaType(contentType);
+  if (type === 'image/svg+xml') return false;
+  if (type.startsWith('audio/')) return AUDIO_TYPES.includes(type);
+  return /^(image|video)\/[a-z0-9.+-]+$/.test(type);
+}
+
+/** Sound and video: served from a local copy, so a player can seek with range requests. */
+export function isSeekableMediaType(contentType: string | null): boolean {
+  const type = mediaType(contentType);
+  return isServableMediaType(type) && (type.startsWith('audio/') || type.startsWith('video/'));
+}
+
+/**
+ * Where a file the public web may serve came from. `post`: a Global post (public whatever the
+ * owner's page switch says). `page`: their profile page (public only while they're opted in).
+ * `profile`: their avatar or banner, as shown beside their posts or on their page.
+ */
+export type MediaSource = { owner: string; kind: 'post' | 'page' | 'profile' };
+
+/**
+ * The files named by a stored page, from the fields the page format has and nothing else, so an
+ * owner can't get the media route to serve a file by tucking its URL into a field no page draws.
+ * Music tracks count only with an allowed sound type.
+ */
+export function pageMedia(content: Record<string, unknown> | undefined, options: { includeMature?: boolean } = {}): Set<string> {
+  const urls = new Set<string>();
+  if (!content) return urls;
+  const add = (value: unknown) => {
+    if (isMxc(value)) urls.add(value);
+  };
+  const records = (value: unknown) => (Array.isArray(value) ? value.filter(isRecord) : []);
+  const style = isRecord(content.style) ? content.style : {};
+  if (isRecord(style.background) && style.background.kind === 'image') add(style.background.url);
+  for (const block of records(content.blocks)) {
+    switch (block.type) {
+      case 'image':
+        add(block.url);
+        break;
+      case 'gallery':
+        records(block.images).forEach((image) => add(image.url));
+        break;
+      case 'links':
+        records(block.items).forEach((item) => add(item.emote));
+        break;
+      case 'spaces':
+        records(block.spaces).forEach((space) => add(space.avatarUrl));
+        break;
+      case 'divider':
+        add(block.emote);
+        break;
+      case 'art':
+        // Mature pieces are for people who said they're over 18, which nobody signed out has.
+        records(block.albums).forEach((album) =>
+          records(album.pieces).forEach((piece) => {
+            if (options.includeMature || piece.rating !== 'mature') add(piece.url);
+          })
+        );
+        break;
+      case 'music':
+        records(block.tracks).forEach((track) => {
+          if (typeof track.mimetype === 'string' && AUDIO_TYPES.includes(mediaType(track.mimetype))) add(track.url);
+        });
+        break;
+    }
+  }
+  return urls;
+}
+
+/**
+ * The files the public web may hand out, and whose they are. The snapshot is rebuilt from the
+ * profile rooms on every feed refresh, so a file stops being served within a minute of the post
+ * being deleted or the owner switching their page off. Avatars and banners, which come from
+ * profiles rather than rooms, are added as answers name them and kept for `profileTtlMs`.
  * Anything else, including media from Space posts and DMs on the same homeserver, is refused,
  * so the media endpoint can't be used to fetch arbitrary files by guessing their IDs.
  */
-export class MediaAllowlist {
-  private entries = new Map<string, number>();
+export class MediaIndex {
+  private snapshot = new Map<string, MediaSource[]>();
+  private profiles = new Map<string, { owner: string; kind: MediaSource['kind']; until: number }>();
 
   constructor(
-    private readonly ttlMs = 6 * 60 * 60 * 1000,
-    private readonly maxEntries = 50_000
+    private readonly profileTtlMs = 6 * 60 * 60 * 1000,
+    private readonly maxProfiles = 20_000
   ) {}
 
-  allow(urls: Iterable<string>, now = Date.now()): void {
-    for (const url of urls) {
-      if (!isMxc(url)) continue;
-      this.entries.delete(url);
-      this.entries.set(url, now + this.ttlMs);
-    }
-    while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
+  setSnapshot(snapshot: Map<string, MediaSource[]>): void {
+    this.snapshot = snapshot;
   }
 
-  has(url: string, now = Date.now()): boolean {
-    const until = this.entries.get(url);
-    if (until === undefined) return false;
-    if (until < now) {
-      this.entries.delete(url);
-      return false;
+  /** An avatar (`profile`), or a banner, which only a page shows (`page`). */
+  allowProfile(urls: Iterable<string>, owner: string, kind: 'profile' | 'page' = 'profile', now = Date.now()): void {
+    for (const url of urls) {
+      if (!isMxc(url)) continue;
+      this.profiles.delete(url);
+      this.profiles.set(url, { owner, kind, until: now + this.profileTtlMs });
     }
-    return true;
+    while (this.profiles.size > this.maxProfiles) this.profiles.delete(this.profiles.keys().next().value!);
+  }
+
+  sources(url: string, now = Date.now()): MediaSource[] {
+    const found = [...(this.snapshot.get(url) ?? [])];
+    const profile = this.profiles.get(url);
+    if (profile && profile.until >= now) found.push({ owner: profile.owner, kind: profile.kind });
+    else if (profile) this.profiles.delete(url);
+    return found;
+  }
+
+  /** Every file the public web serves for one person now: what a takedown of "everything" covers. */
+  ownedBy(owner: string, now = Date.now()): string[] {
+    const urls = new Set<string>();
+    for (const [url, sources] of this.snapshot) if (sources.some((source) => source.owner === owner)) urls.add(url);
+    for (const [url, profile] of this.profiles) if (profile.owner === owner && profile.until >= now) urls.add(url);
+    return [...urls];
   }
 }
 
-/** Kinds of file the media endpoint passes on: pictures, video and sound, nothing a browser runs. */
-export function isServableMediaType(contentType: string | null): boolean {
-  const type = (contentType ?? '').split(';')[0].trim().toLowerCase();
-  if (type === 'image/svg+xml') return false;
-  return /^(image|video|audio)\/[a-z0-9.+-]+$/.test(type);
+/** One profile room's contribution to the media snapshot. */
+export function addRoomMedia(
+  snapshot: Map<string, MediaSource[]>,
+  room: { owner: string; posts: PublicPost[]; state: RawEvent[] }
+): void {
+  const add = (url: string, kind: MediaSource['kind']) => {
+    const sources = snapshot.get(url) ?? [];
+    if (!sources.some((source) => source.owner === room.owner && source.kind === kind)) sources.push({ owner: room.owner, kind });
+    snapshot.set(url, sources);
+  };
+  collectMxc(room.posts).forEach((url) => add(url, 'post'));
+  if (readPublicWeb(room.state)) pageMedia(readPageContent(room.state)).forEach((url) => add(url, 'page'));
+}
+
+/** What the admin has said about who and what may be public (`purrlor pages` and `takedown`). */
+export type AdminLists = { hidden: Set<string>; publicOff: Set<string>; blockedMedia: Set<string> };
+
+/**
+ * Whether the media route may serve a file now: never a blocked file; otherwise if any of its
+ * sources still allows it. A hidden person's files go with them. A page's files (and banner) need
+ * the page to be public right now: its owner opted in (`publicPages`, from the latest snapshot)
+ * and no admin forcing that switch off.
+ */
+export function mayServeMedia(url: string, sources: MediaSource[], lists: AdminLists, publicPages: ReadonlySet<string>): boolean {
+  if (lists.blockedMedia.has(url)) return false;
+  return sources.some(
+    (source) =>
+      !lists.hidden.has(source.owner) && (source.kind !== 'page' || (publicPages.has(source.owner) && !lists.publicOff.has(source.owner)))
+  );
+}
+
+/**
+ * A `Range` header against a file of `size` bytes: the one range to send, `unsatisfiable` (416),
+ * or undefined to send the whole file. Only a single range is honoured; a list of them gets the
+ * whole file, which the spec allows.
+ */
+export function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | undefined {
+  if (!header) return undefined;
+  const match = /^bytes=(\d{0,15})-(\d{0,15})$/.exec(header.trim());
+  if (!match || (!match[1] && !match[2])) return undefined;
+  if (!match[1]) {
+    const suffix = Number(match[2]);
+    if (suffix === 0) return 'unsatisfiable';
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  const end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  if (start >= size || end < start) return 'unsatisfiable';
+  return { start, end };
 }
 
 // --- Admin hiding -------------------------------------------------------------------------------

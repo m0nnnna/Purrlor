@@ -13,7 +13,7 @@ import {
   unpublishProfilePage,
 } from '../../matrix/profilePageStore';
 import { BlockEditor } from './BlockEditor';
-import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, removeBlock, updateBlock, withFormattedText } from './editorModel';
+import { addBlock, BLOCK_LABELS, BLOCKS_NOT_IN_BUILDER, canAddBlock, imageCount, moveBlock, removeBlock, updateBlock, withFormattedText } from './editorModel';
 import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
 import { getOwnProfileRoomId } from '../../matrix/profileFeed';
@@ -199,7 +199,7 @@ export function ProfilePageEditor({
                   data-nu-role="page-editor-add-block"
                 >
                   <option value="">Choose…</option>
-                  {(Object.keys(BLOCK_LABELS) as PageBlockType[]).map((type) => (
+                  {(Object.keys(BLOCK_LABELS) as PageBlockType[]).filter((type) => !BLOCKS_NOT_IN_BUILDER.includes(type)).map((type) => (
                     <option key={type} value={type}>
                       {BLOCK_LABELS[type]}
                     </option>

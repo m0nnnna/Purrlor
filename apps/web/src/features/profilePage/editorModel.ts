@@ -67,7 +67,12 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   guestbook: 'Guestbook',
   art: 'Art gallery',
   commissions: 'Commissions',
+  music: 'Music',
 };
+
+/** Block kinds the page format and parser have but the builder can't make yet (the music block's
+ *  uploader and player are still to come), left out of the "Add a block" list. */
+export const BLOCKS_NOT_IN_BUILDER: readonly PageBlockType[] = ['music'];
 
 /** A new, empty block of a kind, at the end of the page. */
 export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
@@ -96,6 +101,8 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
         return { id, type, albums: [] };
       case 'commissions':
         return { id, type };
+      case 'music':
+        return { id, type, tracks: [] };
     }
   })();
   return { ...page, blocks: [...page.blocks, block] };

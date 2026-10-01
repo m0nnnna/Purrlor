@@ -55,18 +55,17 @@ Two blocks that depend on other people, so they're checked when the page is draw
   reads it for each name and drops anyone whose own profile doesn't list the owner. The builder
   offers only people you follow who follow you back. A page edited by hand to list someone else just
   doesn't show them.
-  - **Signed out**, the public API serves only the page, so the follow-back check can't run there.
-    The signed-out Top 8 lists only friends whose own pages are public (each is fetched from
-    `/api/public/pages`), and trusts the owner's list for who follows back. That's a known gap,
-    accepted for now: it can show someone the owner picked by hand who doesn't follow them, but only if
-    they've made their own page public. Closing it would mean the token server checking follow-back
-    (it already reads every profile room's follows) and returning the checked list.
+  - **Signed out**, the token server does the check: the page it serves keeps only friends whose own
+    page is public and whose profile room says they follow the owner back (`publicPageContent` in
+    `services/token-server/src/publicWeb.ts`), so the answer never carries the user ID of anyone
+    else. The client then draws each from its own `/api/public/pages` answer, as before.
 - **Guestbook** (`guestbook` block). Entries are `xyz.nekous.guestbook` events (`{ "body": "…" }`, 500
   characters, plain text) in the owner's profile room (`matrix/guestbook.ts`). Signing joins that room
   the way liking does. The owner's rules are on the block: **who** (`everyone` or `following`: people
   the owner follows), **slowmode** in seconds (0 to 3600) and **blockedWords** (up to 20). Matrix
   can't stop an event before it's sent, so, as in channels, the form follows the rules and the page
-  leaves out entries that break them, and the owner's client deletes entries with a blocked word as
+  leaves out entries that break them (slowmode included: an entry sent sooner after the same
+  person's last one than the slowmode allows isn't shown), and the owner's client deletes entries with a blocked word as
   it reads them. The owner removes any entry the way they remove a comment (they have power level
   100 in their own room); anyone can remove their own. To switch the guestbook off, remove the block.
   The word list is part of the page, so it's public. Signed-out visitors don't see the guestbook: it
@@ -82,7 +81,8 @@ Two more blocks, for artists.
   20 images a page shows. Tapping a tag filters an album. **Mature** pieces are hidden from anyone
   who hasn't said they're over 18 (Account Settings → Privacy, `xyz.nekous.age_confirmation` in
   account data, `matrix/ageSetting.ts`) and blurred until clicked for those who have; signed-out
-  visitors never see them, and an album that is all Mature isn't shown at all. The claim isn't
+  visitors never see them (the public API leaves them out of the page and the media route won't
+  serve them), and an album that is all Mature isn't shown at all. The claim isn't
   verified (the plan's open question).
 - **Commissions** (`commissions` block, `matrix/commissions.ts`). The block only marks where it goes
   and carries a heading; the rest are state events in the profile room, separate from the page so a
@@ -92,8 +92,10 @@ Two more blocks, for artists.
   and slots with a title, a stage and optionally a client). All are checked on reading like the page.
   - **A client's name** shows only if they agree. The artist picks a client for a slot; the client
     agrees with an `xyz.nekous.commission_consent` event of their own in the profile room (a message
-    the artist can't write for them), and until then everyone but the artist and that client sees
-    "Client". The client turns it on and off with "Show my name on this slot".
+    the artist can't write for them, `{ "slot_id", "title", "agree" }`), and until then everyone but
+    the artist and that client sees "Client". The agreement is to the slot as titled then: if the
+    artist retitles it, or reuses its ID, the client is asked again. The client turns it on and off
+    with "Show my name on this slot".
   - **Request a commission** sends the form (type, description, references, budget) to the artist as
     an encrypted DM, started if you've none. Purrlor takes no payments: the artist links their own
     Ko-fi or PayPal with a link button.
@@ -121,6 +123,7 @@ A page written by another client, or by hand, can be odd but never more than the
 | Text | labels and titles one line; text blocks up to 2,000 characters |
 | Blocks | known types only, at most 40, IDs `[A-Za-z0-9_-]` and unique |
 | Images per page | 20 in all (the background counts), 12 per gallery |
+| Music tracks | `mxc://` files of an allowed sound type, 20 per page in all, title and artist one line each (100 characters) |
 
 Unknown fields and block types are dropped, not passed through. The renderer
 (`features/profilePage/pageStyle.ts`) sets the checked values as `--page-*` custom properties on
@@ -153,11 +156,32 @@ Decided 2026-10-01 (the build is in the plan doc's "Next" table):
 
 - **Public only with the opt-in.** A profile's albums and music are public to signed-out visitors
   only when the owner has turned on "Show my page to people who aren't signed in". The public API
-  serves a page, and so the files it names, only for opted-in owners, and the media route serves
-  only files a public answer named in the last six hours. With the switch off, signed-out visitors
-  get nothing from the page. Signed-in people always see them. (Pictures in Global posts are a
+  serves a page, and so the files it names, only for opted-in owners, and the media route checks the
+  owner is still opted in (as of the last minute) before serving any of the page's files. With the
+  switch off, signed-out visitors get nothing from the page. Signed-in people always see them. (Pictures in Global posts are a
   separate matter: those are public either way.)
 - **Takedowns.** Copyright complaints go to `abuse@nekoops.net` (`TAKEDOWN_EMAIL` in
   `app/TermsOfService.tsx`, section 4 of the terms). The address has to exist before this ships.
-  Admin hiding (`purrlor pages hide`) already removes a whole page from the public web within a
-  minute; removing one track means the owner deleting it, or an admin hiding the page.
+  Admin hiding (`purrlor pages hide`) removes a whole page from the public web; a takedown blocks
+  one track, an album, or everything one person made public at once, and queues the files'
+  deletion from the homeserver (`docs/admin-control.md`).
+
+### The music block
+
+```json
+{ "id": "m1", "type": "music", "title": "Demos",
+  "tracks": [ { "url": "mxc://…", "mimetype": "audio/mpeg", "title": "Moonlight", "artist": "Luna",
+                "duration": 201, "size": 4800000 } ] }
+```
+
+`parseProfilePage` keeps a track only with an `mxc://` file, a `mimetype` from `MUSIC_AUDIO_TYPES`
+(MP3, AAC/M4A, Ogg, Opus, WebM, FLAC, WAV; lower-cased, parameters dropped) and a title. Title and
+artist are one line each, at most 100 characters. `duration` (seconds, up to six hours) and `size`
+(bytes) are what the uploader measured, for the track list only; a nonsense value is dropped and the
+track kept. A page holds 20 tracks in all, across its music blocks; they don't count toward the 20
+images. A music block with no usable tracks is dropped.
+
+The public media route serves a track only while the page is public (above) and only with one of
+those sound types, refuses files over its size limit, and answers range requests, so a player can
+seek (`docs/public-web.md`). The builder doesn't offer the block yet (`BLOCKS_NOT_IN_BUILDER`): the
+uploader and player are the next step.

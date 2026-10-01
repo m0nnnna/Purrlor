@@ -18,7 +18,8 @@ HTTP side). The web client's signed-out views (`/@name`, `/feed`) are built on t
 | A **profile page** | Only if its owner opted in. Otherwise the answer is identical to "no such user" |
 | Anyone on another homeserver | Never |
 | Anyone an admin hid | Never: their page, and their posts on the public feed |
-| Media | Only files a public answer referenced in the last six hours, and only pictures, video and sound |
+| A page an admin switched off | Not the page, whatever its owner's switch says; their Global posts still show |
+| Media | Only files a public post or a public page names now (or an avatar or banner shown in the last six hours), only pictures, video and allowed sound, never a file an admin blocked |
 
 ### Opting in
 
@@ -63,7 +64,8 @@ every reason it isn't shown: no such person, another server, not opted in, no pr
 ```
 
 `page` is the stored `xyz.nekous.profile_page` content, or `null` for an opted-in person with no
-page built: the client draws a plain profile then. **The client must put it through
+page built: the client draws a plain profile then. Two things are taken out first: Top 8 friends
+whose own page isn't public or who don't follow the owner back, and Mature art pieces. **The client must put it through
 `parseProfilePage` before drawing it**, as the signed-in app does; the service only checks it's a
 page at all.
 
@@ -91,15 +93,37 @@ One Global post, the same shape as the feed (`{ "posts": [ … ], "authors": { �
 
 ### `GET /api/public/status/:user`
 
-`{ "hidden": true | false }`: whether an admin hid this person's page. The signed-in app checks it
-so a hidden page isn't drawn there either (its owner is told instead).
+`{ "hidden": true | false, "publicOff": true | false }`: whether an admin hid this person's page, or
+switched their public page off. The signed-in app checks `hidden` so a hidden page isn't drawn there
+either (its owner is told instead).
 
 ### `GET /api/public/media/:server/:mediaId[?width=&height=]`
 
 The file behind `mxc://server/mediaId`, or a thumbnail (up to 1600×1600) with `width` and
-`height`. `404` unless a public answer above referenced it recently. Served with
-`Content-Security-Policy: default-src 'none'; sandbox` and `nosniff`; anything that isn't a picture,
-video or sound (SVG included) is refused.
+`height`. `404` unless it's servable right now:
+
+- A Global post in the latest snapshot names it (its author not hidden), or
+- a public page names it in a field the page format has (a background, image, gallery, link emote,
+  divider emote, Space avatar, art piece that isn't Mature, or music track), its owner is opted in in the latest
+  snapshot, and no admin switched that page off or hid its owner, or
+- it's the avatar (or, for a public page, the banner) of someone shown in the last six hours,
+- and in every case it isn't on the admin's block list (`purrlor takedown`).
+
+The snapshot is rebuilt every minute, so a deleted post's files, or a page's files after its owner
+switches it off, stop being served within a minute; hiding, switching off and blocking are
+immediate. Answers carry `Cache-Control: public, max-age=600`, so copies already handed out last at
+most ten minutes after a takedown.
+
+Served with `Content-Security-Policy: default-src 'none'; sandbox` and `nosniff`; anything that isn't
+a picture, video or sound (SVG included) is refused, and sound only of the types a music block
+allows. Files over `PUBLIC_MEDIA_MAX_BYTES` (default 100 MiB) are refused, not cut short.
+
+**Sound and video seek.** The homeserver ignores `Range` and sends no length, so the token server
+copies a sound or video file into `/data/media-cache` on its first request (refusing it once it
+passes the size limit) and answers from the copy, with `Accept-Ranges: bytes`, `206` and
+`Content-Range` for a range, `416` past the end. The copies use at most `PUBLIC_MEDIA_CACHE_BYTES`
+(default 1 GiB), least recently used go first, a takedown deletes its file's copy at once, and the
+folder is emptied when the service starts.
 
 ### `GET /api/public/card/:user` and `/api/public/card/post/:eventId`
 
@@ -125,7 +149,9 @@ sudo purrlor pages list
 ```
 
 It's a text file in the token server's data volume (`/data/hidden-pages.txt`, one user ID per
-line), re-read within ten seconds of a change.
+line), re-read within ten seconds of a change. Switching a public page off, taking files down,
+reading reports and the audit log go through the token server's root-only control socket:
+`docs/admin-control.md`.
 
 ## Deploying
 
