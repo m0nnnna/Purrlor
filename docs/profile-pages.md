@@ -33,7 +33,7 @@ controls on the left, the page as visitors see it on the right (one at a time on
   "style": { "colors": { "bg": "#0b0a1f", "text": "#eef0ff", "accent": "#b8a6ff", "link": "#ffd479", "block": "#16143a" },
              "background": { "kind": "gradient", "from": "#1d1450", "to": "#05040f", "angle": 170 },
              "fonts": { "heading": "handwriting", "body": "rounded" }, "corners": 18, "border": "glow",
-             "borderColor": "#7c6cff", "blockOpacity": 0.85, "columns": 1, "effect": "stars" },
+             "borderColor": "#7c6cff", "blockOpacity": 85, "columns": 1, "effect": "stars" },
   "blocks": [ { "id": "hello", "type": "text", "title": "Hi", "body": "…", "formatted": "…" },
               { "id": "links", "type": "links", "items": [ { "label": "My art", "url": "https://…", "emote": "mxc://…", "color": "#3a2a7a" } ] } ] }
 ```
@@ -121,7 +121,7 @@ A page written by another client, or by hand, can be odd but never more than the
 | Images | `mxc://` URLs whose media ID is `[A-Za-z0-9_-]` |
 | Links, song | `https://` with no user name or password, at most 500 characters |
 | Fonts, borders, effects, fits | names from a fixed list (`PAGE_FONTS` and the rest) |
-| Numbers | clamped: corners 0–32 px, see-through 0–70%, gradient angle 0–359° |
+| Numbers | clamped: corners 0–32 px, see-through 0–70%, gradient angle 0–359°. Whole numbers only in the published event (a homeserver refuses fractions), so `blockOpacity` is stored as a percentage, 30–100; a page published as a fraction (0.3–1) before that still reads |
 | Text | labels and titles one line; text blocks up to 2,000 characters |
 | Blocks | known types only, at most 40, IDs `[A-Za-z0-9_-]` and unique |
 | Images per page | 20 in all (the background counts); gallery pieces are separate, 60 per page |
@@ -171,33 +171,51 @@ Decided 2026-10-01 (the build is in the plan doc's "Next" table):
 ### The music block
 
 ```json
-{ "id": "m1", "type": "music", "title": "Demos",
-  "tracks": [ { "url": "mxc://…", "mimetype": "audio/mpeg", "title": "Moonlight", "artist": "Luna",
-                "duration": 201, "size": 4800000 } ] }
+{ "id": "m1", "type": "music", "title": "Releases",
+  "albums": [ { "id": "lp", "title": "Night Drive", "year": 2024, "description": "Recorded at home",
+                "cover": "mxc://…",
+                "tracks": [ { "url": "mxc://…", "mimetype": "audio/mpeg", "title": "Moonlight",
+                              "artist": "Luna", "duration": 201, "size": 4800000 } ] } ] }
 ```
+
+A music block is albums of tracks. An album has an ID, and optionally a title (one line, 60
+characters), a `year` (a whole year, 1900 to 2100), a one-line `description` (200 characters) and a
+`cover` (an `mxc://` page image, shown as a small square thumbnail). The older music block, a flat
+`tracks` list with no `albums`, reads as a single untitled album (ID `a0`); the builder saves the new
+shape. Album IDs are made unique, as block IDs are.
 
 `parseProfilePage` keeps a track only with an `mxc://` file, a `mimetype` from `MUSIC_AUDIO_TYPES`
 (MP3, AAC/M4A, Ogg, Opus, WebM, FLAC, WAV; lower-cased, parameters dropped) and a title. Title and
 artist are one line each, at most 100 characters. `duration` (seconds, up to six hours) and `size`
 (bytes) are what the uploader measured, for the track list only; a nonsense value is dropped and the
-track kept. A page holds 20 tracks in all, across its music blocks; they don't count toward the 20
-images. A music block with no usable tracks is dropped.
+track kept. An album holds 30 tracks; a page holds 100 tracks and 20 albums in all, across its music
+blocks. Tracks and covers don't count toward the 20 images. An album with no usable track is dropped,
+and so is a music block with no album left.
 
 The public media route serves a track only while the page is public (above) and only with one of
 those sound types, refuses files over its size limit, and answers range requests, so a player can
-seek (`docs/public-web.md`).
+seek (`docs/public-web.md`). It serves an album's cover on the same terms as the page's other images.
 
 **In the builder** ("Add a block" → Music; `BlockEditor.tsx`, `AudioPicker.tsx`,
-`matrix/musicTracks.ts`): "Add tracks…" uploads each file as is (plain, since the page is public) and
-fills in the track: the type (from the file, or its extension when the browser reports none or a
+`matrix/musicTracks.ts`): a new music block starts with one album. Each album has its title, year,
+description and cover, "Add tracks…", and buttons to move it up or down or remove it; "Add an album"
+adds another. "Add tracks…" uploads each file as is (plain, since the page is public) into that album
+and fills in the track: the type (from the file, or its extension when the browser reports none or a
 variant like `audio/mp3`; a file declared as anything but sound is refused), its length (read from the
 file's header), its size, and a title from the file name. Files over the smaller of the homeserver's
 upload limit and the public route's 100 MiB are refused with a message, since they would never play for
-signed-out visitors. Title and artist can be edited, tracks reordered or removed, and the builder
-reminds people to upload only music they have the right to share.
+signed-out visitors. Title and artist can be edited, tracks reordered or removed, and, with more than
+one album, moved to another album from the track's Album menu (a full album can't take more). An
+album left with no tracks isn't kept on publishing. The builder reminds people to upload only music
+they have the right to share.
 
-**The player** (`MusicBlock.tsx`): a track list, and once a track is pressed a play and pause button
-per track, a seek bar, and a volume slider (the same remembered volume as Listen Together). Before
-that there is no audio element at all, so a page of music costs no requests to open. Signed out, a
-track plays from the public media route; signed in, from the homeserver like any other page file
-(fetched when it's pressed, not before). A track that ends goes on to the next.
+**The player** (`MusicBlock.tsx`): with several albums, a shelf of album cards (cover, title, year,
+number of tracks and their total length); pressing one opens its track list, with "All albums" to go
+back. A block with a single album shows it open, with no shelf. An open album has "Play album" and a
+track list, and once a track is pressed a play and pause button per track, a seek bar, and a volume
+slider (the same remembered volume as Listen Together). Before that there is no audio element at all,
+so a page of music costs no requests to open beyond the covers' thumbnails. Signed out, a track plays
+from the public media route; signed in, from the homeserver like any other page file (fetched when
+it's pressed, not before). A track that ends goes on to the next in its album, and the album stops
+after its last. Music keeps playing while another album is open, and the player then says what's
+playing and from which album, with a button to pause it; the playing album's card says so too.

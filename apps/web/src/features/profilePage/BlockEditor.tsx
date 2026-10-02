@@ -17,6 +17,7 @@ import {
   type ArtRating,
   type DividerStyle,
   type GuestbookWho,
+  type MusicAlbum,
   type MusicTrack,
   type PageBlock,
   type PageLink,
@@ -37,6 +38,8 @@ type EditorProps<T extends PageBlock['type']> = {
   imagesLeft: number;
   /** Tracks the page can still take, across all its music blocks. */
   tracksLeft: number;
+  /** Albums the page can still take, across all its music blocks. */
+  musicAlbumsLeft: number;
 };
 
 function TitleField({ value, onChange }: { value?: string; onChange: (title: string | undefined) => void }) {
@@ -547,61 +550,219 @@ function GalleryEditor({ block, onChange }: EditorProps<'gallery'>) {
   );
 }
 
-function MusicEditor({ block, onChange, tracksLeft }: EditorProps<'music'>) {
-  const setTrack = (index: number, track: MusicTrack) => onChange({ ...block, tracks: block.tracks.map((t, i) => (i === index ? track : t)) });
-  const move = (index: number, delta: -1 | 1) => {
-    const to = index + delta;
-    if (to < 0 || to >= block.tracks.length) return;
-    const tracks = [...block.tracks];
-    [tracks[index], tracks[to]] = [tracks[to], tracks[index]];
-    onChange({ ...block, tracks });
+function newMusicAlbum(): MusicAlbum {
+  return { id: `a${Math.random().toString(36).slice(2, 8)}`, tracks: [] };
+}
+
+function swap<T>(list: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}
+
+/** One track in the builder: its title and artist, moving it within its album or to another, removing it. */
+function TrackEditor({
+  track,
+  first,
+  last,
+  albums,
+  albumIndex,
+  onChange,
+  onMove,
+  onMoveToAlbum,
+  onRemove,
+}: {
+  track: MusicTrack;
+  first: boolean;
+  last: boolean;
+  albums: MusicAlbum[];
+  albumIndex: number;
+  onChange: (track: MusicTrack) => void;
+  onMove: (delta: -1 | 1) => void;
+  onMoveToAlbum: (album: number) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <fieldset className="nu-page-editor__subitem" data-nu-role="page-editor-track">
+      <label className="nu-field">
+        Title
+        <input className="nu-field__input" value={track.title} maxLength={LIMITS.trackTitle} onChange={(evt) => onChange({ ...track, title: evt.target.value })} />
+      </label>
+      <label className="nu-field">
+        Artist (optional)
+        <input
+          className="nu-field__input"
+          value={track.artist ?? ''}
+          maxLength={LIMITS.trackTitle}
+          onChange={(evt) => onChange({ ...track, artist: evt.target.value || undefined })}
+        />
+      </label>
+      {albums.length > 1 && (
+        <label className="nu-field">
+          Album
+          <select
+            className="nu-field__input"
+            value={albumIndex}
+            data-nu-role="page-editor-track-album"
+            onChange={(evt) => onMoveToAlbum(Number(evt.target.value))}
+          >
+            {albums.map((album, index) => (
+              <option key={album.id} value={index} disabled={index !== albumIndex && album.tracks.length >= LIMITS.albumTracks}>
+                {album.title || `Untitled album ${index + 1}`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="nu-page-editor__row">
+        <span className="nu-field__hint">
+          {[track.duration ? formatTime(track.duration) : undefined, track.size ? formatBytes(track.size) : undefined].filter(Boolean).join(' · ')}
+        </span>
+        <button type="button" className="nu-page-editor__icon-button" aria-label="Move track up" disabled={first} onClick={() => onMove(-1)}>
+          ↑
+        </button>
+        <button type="button" className="nu-page-editor__icon-button" aria-label="Move track down" disabled={last} onClick={() => onMove(1)}>
+          ↓
+        </button>
+        <button type="button" className="nu-page-editor__inline-button" onClick={onRemove}>
+          Remove this track
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * Managing a music block: its albums (title, year, a note, a cover), their order, and each one's
+ * tracks: upload straight into an album, reorder, move a track to another album, remove. An album
+ * with no tracks isn't kept when the page is saved.
+ */
+function MusicEditor({ block, onChange, tracksLeft, musicAlbumsLeft }: EditorProps<'music'>) {
+  const albums = block.albums;
+  const setAlbums = (next: MusicAlbum[]) => onChange({ ...block, albums: next });
+  const setAlbum = (index: number, album: MusicAlbum) => setAlbums(albums.map((a, i) => (i === index ? album : a)));
+  const moveToAlbum = (from: number, trackIndex: number, to: number) => {
+    if (to === from || albums[to].tracks.length >= LIMITS.albumTracks) return;
+    const track = albums[from].tracks[trackIndex];
+    setAlbums(
+      albums.map((album, i) => {
+        if (i === from) return { ...album, tracks: album.tracks.filter((_, t) => t !== trackIndex) };
+        if (i === to) return { ...album, tracks: [...album.tracks, track] };
+        return album;
+      })
+    );
   };
   const room = Math.max(0, tracksLeft);
+  const total = albums.reduce((count, album) => count + album.tracks.length, 0);
   return (
     <>
       <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
       <p className="nu-field__hint">
-        Only upload music you have the right to share. Anyone who can see your page can play it, and a track can be taken down on a copyright
-        complaint (see the terms). Nothing plays until a visitor presses play. {block.tracks.length} on this block, {room} more fit on the page.
+        Only upload music you have the right to share. Anyone who can see your page can play it, and a track or an album can be taken down on a
+        copyright complaint (see the terms). Nothing plays until a visitor presses play. {total} {total === 1 ? 'track' : 'tracks'} in{' '}
+        {albums.length} {albums.length === 1 ? 'album' : 'albums'} here; {room} more {room === 1 ? 'track fits' : 'tracks fit'} on the page.
       </p>
-      {block.tracks.map((track, index) => (
-        <fieldset key={`${track.url}-${index}`} className="nu-page-editor__subitem" data-nu-role="page-editor-track">
+      {albums.map((album, albumIndex) => (
+        <fieldset key={album.id} className="nu-page-editor__subitem" data-nu-role="page-editor-music-album">
           <label className="nu-field">
-            Title
-            <input className="nu-field__input" value={track.title} maxLength={LIMITS.trackTitle} onChange={(evt) => setTrack(index, { ...track, title: evt.target.value })} />
-          </label>
-          <label className="nu-field">
-            Artist (optional)
+            Album title{albums.length === 1 ? ' (optional)' : ''}
             <input
               className="nu-field__input"
-              value={track.artist ?? ''}
-              maxLength={LIMITS.trackTitle}
-              onChange={(evt) => setTrack(index, { ...track, artist: evt.target.value || undefined })}
+              value={album.title ?? ''}
+              maxLength={LIMITS.title}
+              data-nu-role="page-editor-music-album-title"
+              onChange={(evt) => setAlbum(albumIndex, { ...album, title: evt.target.value || undefined })}
             />
           </label>
-          <div className="nu-page-editor__row">
-            <span className="nu-field__hint">
-              {[track.duration ? formatTime(track.duration) : undefined, track.size ? formatBytes(track.size) : undefined].filter(Boolean).join(' · ')}
+          <label className="nu-field">
+            Year (optional)
+            <input
+              className="nu-field__input"
+              type="number"
+              inputMode="numeric"
+              min={LIMITS.minYear}
+              max={LIMITS.maxYear}
+              value={album.year ?? ''}
+              onChange={(evt) => {
+                const year = Number.parseInt(evt.target.value, 10);
+                setAlbum(albumIndex, { ...album, year: Number.isFinite(year) ? year : undefined });
+              }}
+            />
+          </label>
+          <label className="nu-field">
+            About this album (optional)
+            <input
+              className="nu-field__input"
+              value={album.description ?? ''}
+              maxLength={LIMITS.caption}
+              onChange={(evt) => setAlbum(albumIndex, { ...album, description: evt.target.value || undefined })}
+            />
+          </label>
+          <div className="nu-field">
+            Cover (optional, square works best)
+            <span className="nu-page-editor__row">
+              {album.cover && <ImageThumb mxc={album.cover} onRemove={() => setAlbum(albumIndex, { ...album, cover: undefined })} />}
+              <ImagePicker label={album.cover ? 'Change cover…' : 'Upload a cover…'} onUploaded={([cover]) => setAlbum(albumIndex, { ...album, cover })} />
             </span>
-            <button type="button" className="nu-page-editor__icon-button" aria-label="Move track up" disabled={index === 0} onClick={() => move(index, -1)}>
+          </div>
+          {album.tracks.map((track, trackIndex) => (
+            <TrackEditor
+              key={`${track.url}-${trackIndex}`}
+              track={track}
+              first={trackIndex === 0}
+              last={trackIndex === album.tracks.length - 1}
+              albums={albums}
+              albumIndex={albumIndex}
+              onChange={(next) => setAlbum(albumIndex, { ...album, tracks: album.tracks.map((t, i) => (i === trackIndex ? next : t)) })}
+              onMove={(delta) => setAlbum(albumIndex, { ...album, tracks: swap(album.tracks, trackIndex, trackIndex + delta) })}
+              onMoveToAlbum={(to) => moveToAlbum(albumIndex, trackIndex, to)}
+              onRemove={() => setAlbum(albumIndex, { ...album, tracks: album.tracks.filter((_, i) => i !== trackIndex) })}
+            />
+          ))}
+          {album.tracks.length === 0 && <p className="nu-field__hint">Add tracks to this album; an empty album isn’t kept.</p>}
+          <div className="nu-page-editor__row">
+            <AudioPicker
+              max={Math.min(LIMITS.albumTracks - album.tracks.length, room)}
+              disabled={album.tracks.length >= LIMITS.albumTracks || room < 1}
+              onUploaded={(tracks) =>
+                onChange({ ...block, albums: albums.map((a, i) => (i === albumIndex ? { ...a, tracks: [...a.tracks, ...tracks] } : a)) })
+              }
+            />
+            <button
+              type="button"
+              className="nu-page-editor__icon-button"
+              aria-label="Move album up"
+              disabled={albumIndex === 0}
+              onClick={() => setAlbums(swap(albums, albumIndex, albumIndex - 1))}
+            >
               ↑
             </button>
             <button
               type="button"
               className="nu-page-editor__icon-button"
-              aria-label="Move track down"
-              disabled={index === block.tracks.length - 1}
-              onClick={() => move(index, 1)}
+              aria-label="Move album down"
+              disabled={albumIndex === albums.length - 1}
+              onClick={() => setAlbums(swap(albums, albumIndex, albumIndex + 1))}
             >
               ↓
             </button>
-            <button type="button" className="nu-page-editor__inline-button" onClick={() => onChange({ ...block, tracks: block.tracks.filter((_, i) => i !== index) })}>
-              Remove this track
+            <button type="button" className="nu-page-editor__inline-button" onClick={() => setAlbums(albums.filter((_, i) => i !== albumIndex))}>
+              Remove this album
             </button>
           </div>
         </fieldset>
       ))}
-      <AudioPicker max={room} disabled={room < 1} onUploaded={(tracks) => onChange({ ...block, tracks: [...block.tracks, ...tracks] })} />
+      {musicAlbumsLeft > 0 && (
+        <button
+          type="button"
+          className="nu-button nu-button--secondary"
+          data-nu-role="page-editor-add-music-album"
+          onClick={() => setAlbums([...albums, newMusicAlbum()])}
+        >
+          Add an album
+        </button>
+      )}
     </>
   );
 }
@@ -623,14 +784,16 @@ function Fields({
   emotes,
   imagesLeft,
   tracksLeft,
+  musicAlbumsLeft,
 }: {
   block: PageBlock;
   onChange: (block: PageBlock) => void;
   emotes: Emote[];
   imagesLeft: number;
   tracksLeft: number;
+  musicAlbumsLeft: number;
 }) {
-  const shared = { emotes, imagesLeft, tracksLeft };
+  const shared = { emotes, imagesLeft, tracksLeft, musicAlbumsLeft };
   switch (block.type) {
     case 'text':
       return <TextEditor block={block} onChange={onChange} {...shared} />;
@@ -668,6 +831,7 @@ export function BlockEditor({
   emotes,
   imagesLeft,
   tracksLeft,
+  musicAlbumsLeft,
   onToggle,
   onChange,
   onMove,
@@ -680,6 +844,7 @@ export function BlockEditor({
   emotes: Emote[];
   imagesLeft: number;
   tracksLeft: number;
+  musicAlbumsLeft: number;
   onToggle: () => void;
   onChange: (block: PageBlock) => void;
   onMove: (delta: -1 | 1) => void;
@@ -713,7 +878,7 @@ export function BlockEditor({
       </div>
       {open && (
         <div className="nu-page-editor__block-fields">
-          <Fields block={block} onChange={onChange} emotes={emotes} imagesLeft={imagesLeft} tracksLeft={tracksLeft} />
+          <Fields block={block} onChange={onChange} emotes={emotes} imagesLeft={imagesLeft} tracksLeft={tracksLeft} musicAlbumsLeft={musicAlbumsLeft} />
         </div>
       )}
     </div>

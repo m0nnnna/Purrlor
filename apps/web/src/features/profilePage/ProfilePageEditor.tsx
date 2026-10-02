@@ -13,7 +13,7 @@ import {
   unpublishProfilePage,
 } from '../../matrix/profilePageStore';
 import { BlockEditor } from './BlockEditor';
-import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, removeBlock, trackCount, updateBlock, withFormattedText } from './editorModel';
+import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, musicAlbumCount, removeBlock, trackCount, updateBlock, withFormattedText } from './editorModel';
 import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
 import { getOwnProfileRoomId } from '../../matrix/profileFeed';
@@ -74,6 +74,7 @@ export function ProfilePageEditor({
   const preview = useMemo(() => parseProfilePage(withFormattedText(page, emotes)), [page, emotes]);
   const imagesLeft = LIMITS.images - imageCount(page);
   const tracksLeft = LIMITS.tracks - trackCount(page);
+  const musicAlbumsLeft = LIMITS.musicAlbums - musicAlbumCount(page);
 
   const handlePublish = async () => {
     setBusy('publishing');
@@ -185,6 +186,7 @@ export function ProfilePageEditor({
                 emotes={emotes}
                 imagesLeft={imagesLeft}
                 tracksLeft={tracksLeft}
+                musicAlbumsLeft={musicAlbumsLeft}
                 onToggle={() => setOpenBlock(openBlock === block.id ? undefined : block.id)}
                 onChange={(next) => edit(updateBlock(page, next))}
                 onMove={(delta) => edit(moveBlock(page, block.id, delta))}

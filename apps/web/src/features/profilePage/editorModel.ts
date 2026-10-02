@@ -4,6 +4,7 @@ import {
   contrastRatio,
   DEFAULT_PAGE_STYLE,
   LIMITS,
+  musicTrackCount,
   newBlockId,
   READABLE_CONTRAST,
   type PageBlock,
@@ -95,7 +96,8 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
       case 'commissions':
         return { id, type };
       case 'music':
-        return { id, type, tracks: [] };
+        // Ready for its first tracks: uploading goes into an album.
+        return { id, type, albums: [{ id: 'a0', tracks: [] }] };
     }
   })();
   return { ...page, blocks: [...page.blocks, block] };
@@ -124,7 +126,12 @@ export function canAddBlock(page: ProfilePage): boolean {
 
 /** Tracks across the page's music blocks, against LIMITS.tracks. */
 export function trackCount(page: ProfilePage): number {
-  return page.blocks.reduce((count, block) => count + (block.type === 'music' ? block.tracks.length : 0), 0);
+  return page.blocks.reduce((count, block) => count + (block.type === 'music' ? musicTrackCount(block) : 0), 0);
+}
+
+/** Music albums across the page, against LIMITS.musicAlbums. */
+export function musicAlbumCount(page: ProfilePage): number {
+  return page.blocks.reduce((count, block) => count + (block.type === 'music' ? block.albums.length : 0), 0);
 }
 
 /** Images on the page now, the background included, against LIMITS.images. */

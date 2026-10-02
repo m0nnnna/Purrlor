@@ -100,7 +100,7 @@ function formatTime(ts: number | string): string {
   return Number.isNaN(date.getTime()) ? '?' : date.toISOString().replace('T', ' ').slice(0, 16);
 }
 
-/** Art albums and gallery or music blocks on a page matching `name` (an ID or a title, any case). */
+/** Art or music albums, and gallery or music blocks, on a page matching `name` (an ID or a title, any case). */
 export function albumMedia(content: Record<string, unknown> | undefined, name: string): { label: string; urls: string[] }[] {
   const wanted = name.trim().toLowerCase();
   if (!content || !wanted || !Array.isArray(content.blocks)) return [];
@@ -113,6 +113,12 @@ export function albumMedia(content: Record<string, unknown> | undefined, name: s
       for (const album of block.albums.filter(isRecord)) {
         if (!matches(album)) continue;
         const urls = pageMedia({ blocks: [{ type: 'gallery', albums: [album] }] }, { includeMature: true });
+        found.push({ label: `album "${String(album.title ?? album.id)}"`, urls: [...urls] });
+      }
+    } else if (block.type === 'music' && Array.isArray(block.albums) && !matches(block)) {
+      for (const album of block.albums.filter(isRecord)) {
+        if (!matches(album)) continue;
+        const urls = pageMedia({ blocks: [{ type: 'music', albums: [album] }] });
         found.push({ label: `album "${String(album.title ?? album.id)}"`, urls: [...urls] });
       }
     } else if ((block.type === 'gallery' || block.type === 'music') && matches(block)) {

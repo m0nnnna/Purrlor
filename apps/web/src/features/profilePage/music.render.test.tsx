@@ -108,3 +108,75 @@ describe('the music block', () => {
     expect(container.textContent).toContain('couldn’t be played');
   });
 });
+
+const shelf = parseProfilePage({
+  version: 1,
+  blocks: [
+    {
+      id: 'm',
+      type: 'music',
+      title: 'Releases',
+      albums: [
+        {
+          id: 'lp',
+          title: 'First LP',
+          year: 2024,
+          cover: MXC('cover'),
+          tracks: [
+            { url: MXC('lp1'), mimetype: 'audio/mpeg', title: 'Opening', duration: 60 },
+            { url: MXC('lp2'), mimetype: 'audio/mpeg', title: 'Closing', duration: 65 },
+          ],
+        },
+        { id: 'ep', title: 'Demo EP', tracks: [{ url: MXC('ep1'), mimetype: 'audio/ogg', title: 'Rough' }] },
+      ],
+    },
+  ],
+}) as ProfilePage;
+
+const role = (container: HTMLElement, name: string) => Array.from(container.querySelectorAll<HTMLElement>(`[data-nu-role="${name}"]`));
+
+describe('music albums', () => {
+  it('shows a shelf of albums with their covers, and no tracks or audio until one is opened and played', () => {
+    const { container } = render(<PageBlocks blocks={shelf.blocks} />);
+    expect(role(container, 'music-album-card').map((card) => card.textContent)).toEqual(['First LP2024 · 2 tracks · 2:05', '♪Demo EP1 track']);
+    expect(tracks(container)).toEqual([]);
+    expect(container.querySelector('audio')).toBeNull();
+    // Only the cover was asked for.
+    expect(requested.mxcs.filter(Boolean)).toEqual(requested.mxcs.filter(Boolean).map(() => MXC('cover')));
+  });
+
+  it('opens an album to its tracks, plays it through, and stops at its end', () => {
+    const { container } = render(<PageBlocks blocks={shelf.blocks} />);
+    fireEvent.click(role(container, 'music-album-card')[0]);
+    expect(tracks(container).map((track) => track.textContent)).toEqual(['▶Opening1:00', '▶Closing1:05']);
+    fireEvent.click(role(container, 'music-play-album')[0]);
+    const audio = () => container.querySelector('audio') as HTMLAudioElement;
+    expect(audio().getAttribute('src')).toContain('/lp1');
+    fireEvent.ended(audio());
+    expect(audio().getAttribute('src')).toContain('/lp2');
+    fireEvent.ended(audio());
+    // The album is over: the next album doesn't start by itself.
+    expect(audio().getAttribute('src')).toContain('/lp2');
+    expect(requested.mxcs.some((mxc) => mxc === MXC('ep1'))).toBe(false);
+  });
+
+  it('keeps playing while another album is open, and says what is playing', () => {
+    const { container } = render(<PageBlocks blocks={shelf.blocks} />);
+    fireEvent.click(role(container, 'music-album-card')[0]);
+    fireEvent.click(tracks(container)[0]);
+    fireEvent.play(container.querySelector('audio') as Element);
+    fireEvent.click(role(container, 'music-albums-back')[0]);
+    expect(role(container, 'music-album-card')[0].textContent).toContain('Playing');
+    fireEvent.click(role(container, 'music-album-card')[1]);
+    expect(tracks(container).map((track) => track.textContent)).toEqual(['▶Rough']);
+    expect(container.querySelector('audio')?.getAttribute('src')).toContain('/lp1');
+    expect(role(container, 'music-now-playing')[0].textContent).toContain('OpeningFirst LP');
+  });
+
+  it('shows a lone album open, with no shelf or way back', () => {
+    const { container } = render(<PageBlocks blocks={page.blocks} />);
+    expect(role(container, 'music-album-card')).toEqual([]);
+    expect(role(container, 'music-albums-back')).toEqual([]);
+    expect(tracks(container)).toHaveLength(2);
+  });
+});

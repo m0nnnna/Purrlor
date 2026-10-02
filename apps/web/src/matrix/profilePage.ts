@@ -115,12 +115,17 @@ export type PageBlock =
   | { id: string; type: 'guestbook'; title?: string; who: GuestbookWho; slowmode: number; blockedWords: string[] }
   /** Commission status, price sheet and queue, drawn from their own state events (matrix/commissions.ts). */
   | { id: string; type: 'commissions'; title?: string }
-  /** Audio the owner uploaded, played by the page's own player. Nothing loads until play. */
-  | { id: string; type: 'music'; title?: string; tracks: MusicTrack[] };
+  /** Albums of audio the owner uploaded, played by the page's own player. Nothing plays until
+   *  pressed. The older music block, a flat `tracks` list, reads as a single album. */
+  | { id: string; type: 'music'; title?: string; albums: MusicAlbum[] };
 
 /** One uploaded track: an mxc:// file of an allowed audio type, with a one-line title and artist.
  *  `duration` (seconds) and `size` (bytes) are what the uploader measured, for the track list only. */
 export type MusicTrack = { url: string; mimetype: MusicAudioType; title: string; artist?: string; duration?: number; size?: number };
+
+/** A release on a page: its tracks in order, with an optional title, year, note and square cover
+ *  image (an uploaded page image). A block's only album may go untitled. */
+export type MusicAlbum = { id: string; title?: string; year?: number; description?: string; cover?: string; tracks: MusicTrack[] };
 
 export type ArtPiece = { url: string; title?: string; description?: string; tags: string[]; rating: ArtRating };
 export type ArtAlbum = { id: string; title: string; description?: string; pieces: ArtPiece[] };
@@ -150,7 +155,13 @@ export const LIMITS = {
    *  don't count toward `images`. */
   galleryPieces: 60,
   /** Tracks across a page's music blocks. They load only when played, so they don't count toward `images`. */
-  tracks: 20,
+  tracks: 100,
+  /** Music albums across a page. Their covers are small thumbnails and don't count toward `images`. */
+  musicAlbums: 20,
+  albumTracks: 30,
+  /** Earliest and latest release year an album may give. */
+  minYear: 1900,
+  maxYear: 2100,
   trackTitle: 100,
   /** Longest track duration the list shows, seconds (6 hours); a longer claim is dropped, not the track. */
   trackDuration: 6 * 60 * 60,
@@ -260,6 +271,12 @@ function readBackground(raw: unknown): PageBackground {
   return { kind: 'color' };
 }
 
+/** Block opacity as stored: a whole percentage (30 to 100), or, on a page published before that, a
+ *  fraction (0.3 to 1). A value over 1 can only be a percentage, since the least allowed is 30%. */
+function readOpacity(value: unknown): unknown {
+  return typeof value === 'number' && value > 1 ? value / 100 : value;
+}
+
 export function readPageStyle(raw: unknown): PageStyle {
   const style = isRecord(raw) ? raw : {};
   const colors = isRecord(style.colors) ? style.colors : {};
@@ -281,7 +298,7 @@ export function readPageStyle(raw: unknown): PageStyle {
     corners: Math.round(readNumber(style.corners, 0, LIMITS.corners, fallback.corners)),
     border: readChoice(style.border, PAGE_BORDERS, fallback.border),
     borderColor: readColor(style.borderColor) ?? fallback.borderColor,
-    blockOpacity: Math.round(readNumber(style.blockOpacity, LIMITS.minBlockOpacity, 1, fallback.blockOpacity) * 100) / 100,
+    blockOpacity: Math.round(readNumber(readOpacity(style.blockOpacity), LIMITS.minBlockOpacity, 1, fallback.blockOpacity) * 100) / 100,
     columns: style.columns === 2 ? 2 : 1,
     effect: readChoice(style.effect, PAGE_EFFECTS, fallback.effect),
   };
@@ -387,6 +404,40 @@ function readTrack(raw: unknown): MusicTrack | undefined {
   return { url, mimetype, title, ...(artist && { artist }), ...(duration && { duration }), ...(size && { size }) };
 }
 
+function readMusicAlbum(raw: unknown, index: number): MusicAlbum | undefined {
+  if (!isRecord(raw)) return undefined;
+  const tracks = (Array.isArray(raw.tracks) ? raw.tracks.slice(0, LIMITS.albumTracks * 4) : [])
+    .map(readTrack)
+    .filter((track): track is MusicTrack => !!track)
+    .slice(0, LIMITS.albumTracks);
+  if (tracks.length === 0) return undefined;
+  const id = typeof raw.id === 'string' && BLOCK_ID.test(raw.id) ? raw.id : `a${index}`;
+  const title = readLine(raw.title, LIMITS.title);
+  const description = readLine(raw.description, LIMITS.caption);
+  const cover = readMxc(raw.cover);
+  const year =
+    typeof raw.year === 'number' && Number.isInteger(raw.year) && raw.year >= LIMITS.minYear && raw.year <= LIMITS.maxYear ? raw.year : undefined;
+  return { id, ...(title && { title }), ...(year && { year }), ...(description && { description }), ...(cover && { cover }), tracks };
+}
+
+/** A music block's albums, from `albums` or, in an older block, from its flat `tracks` (one
+ *  untitled album). Albums with no playable track are dropped. */
+function readMusicAlbums(raw: Record<string, unknown>): MusicAlbum[] {
+  const albums = Array.isArray(raw.albums)
+    ? raw.albums.slice(0, LIMITS.musicAlbums * 4).map(readMusicAlbum)
+    : [readMusicAlbum({ id: 'a0', tracks: raw.tracks }, 0)];
+  const seen = new Set<string>();
+  return albums
+    .filter((album): album is MusicAlbum => !!album)
+    .map((album) => {
+      let id = album.id;
+      while (seen.has(id)) id = `${id}_`;
+      seen.add(id);
+      return { ...album, id };
+    })
+    .slice(0, LIMITS.musicAlbums);
+}
+
 function withTitle(raw: Record<string, unknown>): { title?: string } {
   const title = readLine(raw.title, LIMITS.title);
   return title ? { title } : {};
@@ -460,11 +511,8 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
     case 'commissions':
       return { id, type: 'commissions', ...withTitle(raw) };
     case 'music': {
-      const tracks = (Array.isArray(raw.tracks) ? raw.tracks.slice(0, LIMITS.tracks * 4) : [])
-        .map(readTrack)
-        .filter((track): track is MusicTrack => !!track)
-        .slice(0, LIMITS.tracks);
-      return tracks.length > 0 ? { id, type: 'music', ...withTitle(raw), tracks } : undefined;
+      const albums = readMusicAlbums(raw);
+      return albums.length > 0 ? { id, type: 'music', ...withTitle(raw), albums } : undefined;
     }
     default:
       return undefined;
@@ -490,6 +538,26 @@ function limitGalleryPieces(block: GalleryBlock, room: number): GalleryBlock | u
   return albums.length > 0 ? { ...block, albums } : undefined;
 }
 
+type MusicBlock = Extract<PageBlock, { type: 'music' }>;
+
+/** Tracks across a music block's albums. */
+export function musicTrackCount(block: MusicBlock): number {
+  return block.albums.reduce((count, album) => count + album.tracks.length, 0);
+}
+
+/** A music block cut down to `tracks` tracks and `albums` albums, dropping albums that end up empty. */
+function limitMusic(block: MusicBlock, tracks: number, albums: number): MusicBlock | undefined {
+  let left = tracks;
+  const kept: MusicAlbum[] = [];
+  for (const album of block.albums.slice(0, Math.max(0, albums))) {
+    if (left < 1) break;
+    const albumTracks = album.tracks.slice(0, left);
+    left -= albumTracks.length;
+    kept.push({ ...album, tracks: albumTracks });
+  }
+  return kept.length > 0 ? { ...block, albums: kept } : undefined;
+}
+
 function blockImageCount(block: PageBlock): number {
   return block.type === 'image' ? 1 : 0;
 }
@@ -505,6 +573,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
   let images = backgroundImages;
   let galleryPieces = 0;
   let tracks = 0;
+  let musicAlbums = 0;
   for (const [index, item] of raw.entries()) {
     if (blocks.length >= LIMITS.blocks) break;
     const rawId = isRecord(item) ? item.id : undefined;
@@ -521,15 +590,26 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
       galleryPieces += galleryPieceCount(block);
     }
     if (block.type === 'music') {
-      if (tracks >= LIMITS.tracks) continue;
-      block = { ...block, tracks: block.tracks.slice(0, LIMITS.tracks - tracks) };
-      tracks += block.tracks.length;
+      const limited = limitMusic(block, LIMITS.tracks - tracks, LIMITS.musicAlbums - musicAlbums);
+      if (!limited) continue;
+      block = limited;
+      tracks += musicTrackCount(block);
+      musicAlbums += block.albums.length;
     }
     images += blockImageCount(block);
     seen.add(id);
     blocks.push(block);
   }
   return blocks;
+}
+
+/**
+ * A page as it's sent in the state event. Matrix events can't hold numbers with a fractional part
+ * (canonical JSON: a homeserver refuses the event), so block opacity goes out as a whole
+ * percentage; readPageStyle takes either.
+ */
+export function toStoredPage(page: ProfilePage): Omit<ProfilePage, 'style'> & { style: Omit<PageStyle, 'blockOpacity'> & { blockOpacity: number } } {
+  return { ...page, style: { ...page.style, blockOpacity: Math.round(page.style.blockOpacity * 100) } };
 }
 
 /** A page from raw event content, or undefined if there's no page there. */

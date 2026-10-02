@@ -816,6 +816,115 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Music albums: a shelf of covers, one album open at a time (MusicBlock.tsx). */
+.nu-profile-page__music-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__music-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  min-width: 0;
+  padding: var(--nu-space-2);
+  border: 2px solid transparent;
+  border-radius: calc(var(--page-corners) * 0.75);
+  background: transparent;
+  color: var(--page-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-profile-page__music-card:hover,
+.nu-profile-page__music-card:focus-visible {
+  border-color: var(--page-accent);
+  background: color-mix(in srgb, var(--page-accent) 14%, transparent);
+}
+
+.nu-profile-page__music-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-profile-page__music-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--page-corners) * 0.5);
+  background: color-mix(in srgb, var(--page-accent) 22%, transparent);
+  font-size: 2em;
+}
+
+.nu-profile-page__music-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-profile-page__music-now {
+  color: var(--page-accent);
+  font-weight: 600;
+}
+
+.nu-profile-page__music-album {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__music-back {
+  appearance: none;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--page-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nu-profile-page__music-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__music-head .nu-profile-page__music-cover {
+  flex: none;
+  width: 120px;
+}
+
+.nu-profile-page__music-head h4 {
+  margin: 0;
+}
+
+.nu-profile-page__music-play-all {
+  align-self: flex-start;
+}
+
+.nu-profile-page__music-now-playing {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__music-now-playing button {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--page-text);
+  font: inherit;
+  cursor: pointer;
+}
+
 .nu-profile-page__player {
   display: flex;
   flex-direction: column;

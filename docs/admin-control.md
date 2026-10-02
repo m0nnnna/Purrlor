@@ -102,7 +102,7 @@ homeserver admin's password and so is a separate step.
 | --- | --- |
 | `POST /takedown/media` (target…, reason) | Blocks and queues those files |
 | `POST /takedown/user/:user` (reason) | Blocks and queues every file the public web serves for them now: their Global posts' pictures and video, their page's files if it's public, their avatar, and their banner if the page is public. Their page and posts stay up; hide them too with `pages/:user/hide` if that's wanted |
-| `POST /takedown/album/:user` (album, reason) | Blocks and queues one art album, or a gallery or music block, found by its title or ID (any case). `404` if their page has none by that name |
+| `POST /takedown/album/:user` (album, reason) | Blocks and queues one art or music album (a music album's cover too), or a gallery or music block, found by its title or ID (any case). `404` if their page has none by that name |
 | `POST /media/unblock` (target…, reason) | Serves them again where a public page or post still names them, and takes them out of the deletion queue unless they're already deleted |
 | `GET /media` | The block list, with each file's deletion state |
 | `POST /deletions/run` (adminUser, adminPassword) | Logs in to the homeserver as its admin, runs `!admin media delete --mxc <file>` in `#admins:<server>` for each queued or failed file, records each answer, and logs out. A file that fails stays blocked and is tried again next time. `207` if any failed |

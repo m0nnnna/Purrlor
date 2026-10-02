@@ -19,6 +19,7 @@ the same server.
 | `chat-features.spec.ts` | A thread (replying from a message, another user's reply arriving in it), pinning and unpinning, finding a message by searching, and sending a file from the composer |
 | `news.spec.ts` | A Space's news shown on a member's first visit and then not, the Space opening on its first channel, a small fix that isn't shown again and an update that is; who may edit it set in Roles and held to by the homeserver |
 | `direct-messages.spec.ts` | "Message" on a profile opens a DM (not a shared Space's two-person #general), coming back before the other person accepts reopens it, and they reach the same DM by pressing "Message" back (which accepts the invite) or from Invites; a DM you've had for a while (members not loaded yet) is reopened rather than duplicated; leaving a DM |
+| `music-albums.spec.ts` | A creator uploads tracks into two albums in the page builder, gives one a year and a cover, moves a track between them and publishes; the page shows a shelf of both, opens one and plays it through |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
 | `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
 

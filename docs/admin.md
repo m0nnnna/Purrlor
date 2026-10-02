@@ -45,7 +45,7 @@ needs the homeserver admin's password.
 | --- | --- |
 | `purrlor takedown file <file>...` | Blocks and queues those files |
 | `purrlor takedown user <name>` | Everything the public web serves for them: Global post media, their page's files if it's public, their avatar and banner. Their page and posts stay up: add `pages hide` if that's wanted too |
-| `purrlor takedown album <name> <title>` | One art album, gallery or music block on their page, found by its title or ID |
+| `purrlor takedown album <name> <title>` | One art or music album, gallery or music block on their page, found by its title or ID |
 | `purrlor takedown restore <file>...` | Serves blocked files again, and takes them out of the deletion queue unless already deleted |
 | `purrlor takedown list` | What is blocked, and each file's deletion state |
 | `purrlor takedown run` | Deletes every queued file from the homeserver. Asks for the homeserver admin's account and password |

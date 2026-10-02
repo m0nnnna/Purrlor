@@ -1,6 +1,6 @@
 import type { MatrixClient } from 'matrix-js-sdk';
 import { ensureProfileRoom, getOwnProfileRoomId } from './profileFeed';
-import { emptyProfilePage, parseProfilePage, PROFILE_PAGE_DRAFT_ACCOUNT_DATA, PROFILE_PAGE_EVENT, type ProfilePage } from './profilePage';
+import { emptyProfilePage, parseProfilePage, PROFILE_PAGE_DRAFT_ACCOUNT_DATA, PROFILE_PAGE_EVENT, toStoredPage, type ProfilePage } from './profilePage';
 
 /**
  * Reading and writing profile pages (profilePage.ts has the format). The published page is state
@@ -40,7 +40,7 @@ export async function publishProfilePage(mx: MatrixClient, page: ProfilePage, di
   // Through the parser on the way out too, so what's published is exactly what will be drawn.
   const clean = parseProfilePage(page);
   if (!clean) throw new Error('That page couldn’t be saved.');
-  await mx.sendStateEvent(roomId, PROFILE_PAGE_EVENT as any, clean as any, '');
+  await mx.sendStateEvent(roomId, PROFILE_PAGE_EVENT as any, toStoredPage(clean) as any, '');
 }
 
 /** Takes your page down: your profile goes back to looking the way it did before. */

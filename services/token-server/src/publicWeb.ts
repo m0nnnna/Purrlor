@@ -411,11 +411,19 @@ export function pageMedia(content: Record<string, unknown> | undefined, options:
           })
         );
         break;
-      case 'music':
-        records(block.tracks).forEach((track) => {
-          if (typeof track.mimetype === 'string' && AUDIO_TYPES.includes(mediaType(track.mimetype))) add(track.url);
+      case 'music': {
+        // Albums of tracks, each with an optional cover (an older music block is a flat list of tracks).
+        const addTracks = (tracks: unknown) =>
+          records(tracks).forEach((track) => {
+            if (typeof track.mimetype === 'string' && AUDIO_TYPES.includes(mediaType(track.mimetype))) add(track.url);
+          });
+        addTracks(block.tracks);
+        records(block.albums).forEach((album) => {
+          add(album.cover);
+          addTracks(album.tracks);
         });
         break;
+      }
     }
   }
   return urls;

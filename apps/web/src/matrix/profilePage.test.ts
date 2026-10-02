@@ -10,7 +10,9 @@ import {
   readLine,
   readMxc,
   readPageStyle,
+  toStoredPage,
   type PageBlock,
+  type ProfilePage,
 } from './profilePage';
 
 const MXC = 'mxc://purr.example.org/abcDEF123';
@@ -203,9 +205,11 @@ describe('music blocks', () => {
   const track = (extra: Record<string, unknown> = {}) => ({ url: MXC, mimetype: 'audio/mpeg', title: 'Moonlight', ...extra });
   const music = (tracks: unknown, extra: Record<string, unknown> = {}) => page({ blocks: [{ id: 'm', type: 'music', tracks, ...extra }] })?.blocks;
 
-  it('keeps a track list as the builder writes it', () => {
+  const firstTracks = (blocks: ReturnType<typeof music>) => (blocks?.[0].type === 'music' ? blocks[0].albums[0].tracks : undefined);
+
+  it('reads an older flat track list as one untitled album', () => {
     const tracks = [track({ artist: 'Luna', duration: 201, size: 4_800_000 }), track({ mimetype: 'audio/ogg', title: 'B-side' })];
-    expect(music(tracks, { title: 'My songs' })).toEqual([{ id: 'm', type: 'music', title: 'My songs', tracks }]);
+    expect(music(tracks, { title: 'My songs' })).toEqual([{ id: 'm', type: 'music', title: 'My songs', albums: [{ id: 'a0', tracks }] }]);
   });
 
   it('only keeps mxc:// files', () => {
@@ -219,13 +223,13 @@ describe('music blocks', () => {
       expect(music([track({ mimetype })])).toEqual([]);
     }
     const kept = music([track({ mimetype: 'Audio/OGG; codecs=opus' })]);
-    expect(kept?.[0].type === 'music' && kept[0].tracks[0].mimetype).toBe('audio/ogg');
+    expect(firstTracks(kept)?.[0].mimetype).toBe('audio/ogg');
   });
 
   it('keeps title and artist to one line each, and needs a title', () => {
     expect(music([track({ title: '   ' })])).toEqual([]);
     const result = music([track({ title: 'line one\nline two\u0000<b>', artist: `${'x'.repeat(300)}\r\n` })]);
-    const kept = result?.[0].type === 'music' ? result[0].tracks[0] : undefined;
+    const kept = firstTracks(result)?.[0];
     expect(kept?.title).toBe('line one line two <b>');
     expect(kept?.artist).toHaveLength(LIMITS.trackTitle);
   });
@@ -233,26 +237,62 @@ describe('music blocks', () => {
   it('drops a duration or size that is not a sensible number, keeping the track', () => {
     for (const extra of [{ duration: -1 }, { duration: Infinity }, { duration: LIMITS.trackDuration + 1 }, { duration: '200' }, { size: 1.5 }, { size: -10 }, { size: 2 ** 60 }]) {
       const result = music([track(extra)]);
-      expect(result?.[0].type === 'music' && result[0].tracks[0]).toEqual(track());
+      expect(firstTracks(result)?.[0]).toEqual(track());
     }
   });
 
   it('drops fields it does not know', () => {
     const result = music([track({ onplay: 'x()', autoplay: true, src: 'https://evil.example/' })], { autoplay: true, style: 'position: fixed' });
-    expect(result).toEqual([{ id: 'm', type: 'music', tracks: [track()] }]);
+    expect(result).toEqual([{ id: 'm', type: 'music', albums: [{ id: 'a0', tracks: [track()] }] }]);
   });
 
-  it('caps tracks across the whole page, and drops a music block with none left', () => {
-    const many = Array.from({ length: 50 }, (_, i) => track({ title: `${i}` }));
+  const albumOf = (n: number, extra: Record<string, unknown> = {}) => ({ tracks: Array.from({ length: n }, (_, i) => track({ title: `${i}` })), ...extra });
+  const albums = (list: unknown[]) => page({ blocks: [{ id: 'm', type: 'music', albums: list }] })?.blocks;
+  const shape = (blocks: ReturnType<typeof music>) =>
+    blocks?.map((block) => (block.type === 'music' ? block.albums.map((album) => album.tracks.length) : block.type));
+
+  it('keeps albums as the builder writes them', () => {
+    const lp = { id: 'lp', title: 'First LP', year: 2024, description: 'Recorded at home', cover: MXC, tracks: [track(), track({ title: 'Two' })] };
+    expect(albums([lp, { id: 'ep', tracks: [track()] }])).toEqual([{ id: 'm', type: 'music', albums: [lp, { id: 'ep', tracks: [track()] }] }]);
+  });
+
+  it('drops an album with no playable track, and a block with no album left', () => {
+    expect(shape(albums([albumOf(0), albumOf(2)]))).toEqual([[2]]);
+    expect(albums([albumOf(0), { tracks: [track({ mimetype: 'text/html' })] }])).toEqual([]);
+  });
+
+  it('keeps a cover only as an mxc:// file, and a year only as a whole year in range', () => {
+    for (const cover of ['https://example.org/c.png', 'javascript:alert(1)', 42]) {
+      const result = albums([albumOf(1, { cover })]);
+      expect(result?.[0].type === 'music' && 'cover' in result[0].albums[0]).toBe(false);
+    }
+    for (const year of [1899, 2101, 2024.5, '2024', NaN]) {
+      const result = albums([albumOf(1, { year })]);
+      expect(result?.[0].type === 'music' && 'year' in result[0].albums[0]).toBe(false);
+    }
+  });
+
+  it('gives albums unique IDs', () => {
+    const result = albums([albumOf(1, { id: 'x' }), albumOf(1, { id: 'x' }), albumOf(1, { id: 'bad id!' })]);
+    expect(result?.[0].type === 'music' && result[0].albums.map((album) => album.id)).toEqual(['x', 'x_', 'a2']);
+  });
+
+  it('caps tracks per album', () => {
+    expect(shape(albums([albumOf(LIMITS.albumTracks + 5)]))).toEqual([[LIMITS.albumTracks]]);
+  });
+
+  it('caps tracks and albums across the whole page, and drops a music block with none left', () => {
     const result = page({
       blocks: [
-        { id: 'a', type: 'music', tracks: many.slice(0, 15) },
-        { id: 'b', type: 'music', tracks: many.slice(15, 30) },
-        { id: 'c', type: 'music', tracks: many.slice(30) },
+        { id: 'a', type: 'music', albums: [albumOf(30), albumOf(30)] },
+        { id: 'b', type: 'music', albums: [albumOf(30), albumOf(30)] },
+        { id: 'c', type: 'music', tracks: albumOf(5).tracks },
         { id: 't', type: 'text', body: 'still here' },
       ],
     })?.blocks;
-    expect(result?.map((block) => (block.type === 'music' ? block.tracks.length : block.type))).toEqual([15, 5, 'text']);
+    expect(shape(result)).toEqual([[30, 30], [30, 10], 'text']);
+    const lots = page({ blocks: [{ id: 'a', type: 'music', albums: Array.from({ length: LIMITS.musicAlbums + 3 }, () => albumOf(1)) }] })?.blocks;
+    expect(shape(lots)?.[0]).toHaveLength(LIMITS.musicAlbums);
   });
 
   it('does not count tracks toward the 20 images', () => {
@@ -266,6 +306,34 @@ describe('music blocks', () => {
     expect(music([])).toEqual([]);
     expect(music('tracks')).toEqual([]);
     expect(music([null, 'x', { title: 'no file' }])).toEqual([]);
+  });
+});
+
+describe('toStoredPage', () => {
+  const fractions = (value: unknown, path = ''): string[] => {
+    if (typeof value === 'number') return Number.isInteger(value) ? [] : [path];
+    if (value && typeof value === 'object') return Object.entries(value).flatMap(([key, v]) => fractions(v, `${path}.${key}`));
+    return [];
+  };
+  const full = page({
+    style: { blockOpacity: 0.85, corners: 12, background: { kind: 'gradient', from: '#112233', to: '#445566', angle: 45 } },
+    blocks: [
+      { id: 'm', type: 'music', albums: [{ id: 'lp', title: 'LP', year: 2024, tracks: [{ url: MXC, mimetype: 'audio/mpeg', title: 't', duration: 201, size: 4_800_000 }] }] },
+      { id: 'g', type: 'guestbook', slowmode: 30 },
+    ],
+  }) as ProfilePage;
+
+  it('has no number with a fractional part, which a homeserver refuses in an event', () => {
+    expect(fractions(full.style)).toEqual(['.blockOpacity']);
+    expect(fractions(toStoredPage(full))).toEqual([]);
+  });
+
+  it('reads back as the same page, and a page stored the older way still reads', () => {
+    expect(page(toStoredPage(full) as unknown as Record<string, unknown>)).toEqual(full);
+    expect(readPageStyle({ blockOpacity: 85 }).blockOpacity).toBe(0.85);
+    expect(readPageStyle({ blockOpacity: 0.85 }).blockOpacity).toBe(0.85);
+    expect(readPageStyle({ blockOpacity: 1 }).blockOpacity).toBe(1);
+    expect(readPageStyle({ blockOpacity: 100 }).blockOpacity).toBe(1);
   });
 });
 

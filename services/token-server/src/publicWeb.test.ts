@@ -238,6 +238,10 @@ describe('which media may be served', () => {
       { type: 'links', items: [{ label: 'x', url: 'https://e.org', emote: 'mxc://purr.example/emote' }] },
       { type: 'art', albums: [{ title: 'A', pieces: [{ url: 'mxc://purr.example/art1' }] }] },
       { type: 'music', tracks: [{ url: TRACK, mimetype: 'audio/mpeg', title: 't' }, { url: 'mxc://purr.example/notaudio', mimetype: 'text/html', title: 'x' }] },
+      {
+        type: 'music',
+        albums: [{ title: 'LP', cover: 'mxc://purr.example/cover', tracks: [{ url: 'mxc://purr.example/track2', mimetype: 'audio/ogg', title: 'u' }, { url: 'mxc://purr.example/notaudio2', mimetype: 'image/png', title: 'y' }] }],
+      },
       // Fields no page draws: never served because of this page.
       { type: 'text', body: 'hi', smuggled: 'mxc://purr.example/dm-photo' },
       { type: 'unknown', url: 'mxc://purr.example/other' },
@@ -253,10 +257,12 @@ describe('which media may be served', () => {
     assert.deepEqual([...pageMedia(PAGE)].sort(), [
       'mxc://purr.example/art1',
       'mxc://purr.example/bg',
+      'mxc://purr.example/cover',
       'mxc://purr.example/emote',
       'mxc://purr.example/g1',
       'mxc://purr.example/img',
       TRACK,
+      'mxc://purr.example/track2',
     ]);
   });
 
