@@ -1333,7 +1333,7 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         if (\$purrlor_unfurl) {
-            rewrite ^/@[^/]+/post/([^/]+)\$ /api/public/card/post/\$1 break;
+            rewrite ^/@([^/]+)/post/([^/]+)\$ /api/public/card/post/\$2?author=\$1 break;
             rewrite ^/@([^/]+)/((music|art|commissions)/.+)\$ /api/public/card/\$1/\$2 break;
             rewrite ^/@([^/]+)\$ /api/public/card/\$1 break;
             proxy_pass http://$UPSTREAM:3001;

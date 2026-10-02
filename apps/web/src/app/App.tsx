@@ -23,7 +23,7 @@ export function App() {
   const [boot, setBoot] = useState<BootState>({ phase: 'checking-session' });
   // A signed-out visitor at /@name, /@name/post/<id> or /feed sees the public web (docs/public-web.md)
   // until they choose to sign in or join; signing in reloads the same address into the app.
-  const [publicRoute] = useState(() => (isDemoMode() ? undefined : parsePublicRoute(window.location.pathname)));
+  const [publicRoute] = useState(() => (isDemoMode() ? undefined : parsePublicRoute(window.location.pathname, window.location.search)));
   const [authView, setAuthView] = useState<'public' | 'login' | 'register'>(publicRoute ? 'public' : 'login');
 
   useEffect(() => {

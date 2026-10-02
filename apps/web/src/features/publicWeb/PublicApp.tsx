@@ -13,7 +13,7 @@ export function PublicApp({ route, onSignIn, onRegister }: { route: PublicRoute;
     <PublicChrome onSignIn={onSignIn} onRegister={onRegister}>
       {route.kind === 'feed' && <PublicFeed onSignIn={onSignIn} onRegister={onRegister} />}
       {route.kind === 'page' && <PublicPage user={route.user} target={route.target} onSignIn={onSignIn} onRegister={onRegister} />}
-      {route.kind === 'post' && <PublicPostView eventId={route.eventId} onSignIn={onSignIn} onRegister={onRegister} />}
+      {route.kind === 'post' && <PublicPostView eventId={route.eventId} author={route.user} onSignIn={onSignIn} onRegister={onRegister} />}
     </PublicChrome>
   );
 }

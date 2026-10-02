@@ -5,6 +5,8 @@ import { openPostAtom } from '../../app/state/selection';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
+import { shareLink } from '../../components/ShareLinkButton';
+import { postLink } from '../../matrix/publicWeb';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   buildPostContent,
@@ -97,6 +99,13 @@ export function InteractivePost({
   const [error, setError] = useState<string>();
   // Why Like/Report did nothing — shown in the card, since a tooltip never shows on a phone.
   const [notice, setNotice] = useState<string>();
+  // "Link copied", for a moment.
+  const [linkNotice, setLinkNotice] = useState<string>();
+  useEffect(() => {
+    if (!linkNotice) return;
+    const timer = setTimeout(() => setLinkNotice(undefined), 3000);
+    return () => clearTimeout(timer);
+  }, [linkNotice]);
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [reporting, setReporting] = useState<{ eventId: string; what: 'post' | 'comment' }>();
 
@@ -421,6 +430,13 @@ export function InteractivePost({
   // Only a post anyone can read can be pinned to your public profile.
   const canPin = isPostOwner && isPublic;
   const isPinned = pinned?.eventId === postId;
+  // A Global post's link opens for anyone; a Space post's names its room and opens for members only.
+  const handleCopyLink = async () => {
+    const result = await shareLink(postLink(card.author.userId, postId, sourceOrigin.kind === 'space' ? roomId : undefined));
+    if (result === 'copied') setLinkNotice(sourceOrigin.kind === 'global' ? 'Link copied.' : 'Link copied. Only members of the Space can open it.');
+    else if (result === 'failed') setLinkNotice('Couldn’t copy the link.');
+  };
+
   const handlePin = async () => {
     setError(undefined);
     try {
@@ -531,6 +547,9 @@ export function InteractivePost({
                 {isPinned ? 'Unpin from profile' : 'Pin to profile'}
               </MenuItem>
             )}
+            <MenuItem icon="link" role="post-copy-link" onSelect={() => void handleCopyLink()}>
+              {sourceOrigin.kind === 'global' ? 'Copy link' : 'Copy link (members only)'}
+            </MenuItem>
             {extraMenuItems}
             {/* Anyone can mute a post: its author, or someone getting its thread replies. */}
             <MenuItem icon={notifications.muted ? 'bell' : 'bellOff'} role="post-mute" onSelect={() => void handleMute()}>
@@ -605,6 +624,11 @@ export function InteractivePost({
           {notice && (
             <p className="nu-post__notice" data-nu-role="post-interaction-notice">
               {notice}
+            </p>
+          )}
+          {linkNotice && (
+            <p className="nu-post__notice" data-nu-role="post-link-notice" role="status">
+              {linkNotice}
             </p>
           )}
           {reporting && (

@@ -45,7 +45,13 @@ The service reads it on each feed refresh, so switching it off takes effect with
   only friends whose own pages are public, drawn from their page answers; the guestbook says
   "Sign in to read and sign this guestbook": the API doesn't serve entries.
 - **Signed in**, the same addresses open inside the app: `/@name` is that person's profile,
-  `/feed` the global feed (`useOpenPublicRoute`).
+  `/@name/post/<id>` that post's own page over it (`loadLinkedPost`: read on its own from the
+  author's profile room when you've never joined it), `/feed` the global feed (`useOpenPublicRoute`).
+- **Sharing a post**: "Copy link" in a post's ⋯ menu (the share sheet on a touch screen). A Global
+  post's link is `/@name/post/<id>`, which anyone can open. A Space post's link adds `?room=<feed
+  room>` and the menu says "Copy link (members only)": only the Space's members can open it, and
+  anyone else, signed in or out, gets "Post not found" with nothing about it (the public API never
+  reads Space posts).
 - **The switch** is in Account Settings → Privacy and in the page builder. It writes
   `xyz.nekous.public_web` to the owner's profile room (creating it if they've never posted).
 - The composer's Global option says "Anyone on the web can see this, even without signing in".
@@ -92,6 +98,10 @@ narrows it to one person (their posts below their page).
 ### `GET /api/public/posts/:eventId`
 
 One Global post, the same shape as the feed (`{ "posts": [ … ], "authors": { … } }`), or `404`.
+`?author=<name>` (the link's `/@name`, which the app and nginx's card rewrite pass on) finds a post
+older than the snapshot reaches: it's read on its own from that person's profile room, with what
+relates to it (edits, likes, comments: up to 100), through the same rules as the feed. Never a hidden
+person's, and never a Space post: only profile rooms are read.
 
 ### `GET /api/public/status/:user`
 
@@ -188,7 +198,7 @@ location ~ ^/@[^/]+(/post/[^/]+|/(music|art|commissions)/[A-Za-z0-9_-]+(/[0-9]+)
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     if ($purrlor_unfurl) {
-        rewrite ^/@[^/]+/post/([^/]+)$ /api/public/card/post/$1 break;
+        rewrite ^/@([^/]+)/post/([^/]+)$ /api/public/card/post/$2?author=$1 break;
         rewrite ^/@([^/]+)/((music|art|commissions)/.+)$ /api/public/card/$1/$2 break;
         rewrite ^/@([^/]+)$ /api/public/card/$1 break;
         proxy_pass http://127.0.0.1:3001;

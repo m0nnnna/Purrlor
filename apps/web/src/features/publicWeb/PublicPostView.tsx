@@ -5,19 +5,29 @@ import { PublicPostCard } from './PublicPostCard';
 
 type State = { answer?: PublicPostsAnswer; status: 'loading' | 'ok' | 'not_found' | 'error' };
 
-/** One Global post at /@name/post/<id>. */
-export function PublicPostView({ eventId, onSignIn, onRegister }: { eventId: string; onSignIn: () => void; onRegister: () => void }) {
+/** One Global post at /@name/post/<id>. The `/@name` lets the service find a post older than its feed reaches. */
+export function PublicPostView({
+  eventId,
+  author,
+  onSignIn,
+  onRegister,
+}: {
+  eventId: string;
+  author?: string;
+  onSignIn: () => void;
+  onRegister: () => void;
+}) {
   const [state, setState] = useState<State>({ status: 'loading' });
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
-    void fetchPublicPost(eventId).then((result) => {
+    void fetchPublicPost(eventId, author).then((result) => {
       if (!cancelled) setState(result.status === 'ok' ? { answer: result.value, status: 'ok' } : { status: result.status });
     });
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, author]);
 
   const post = state.answer?.posts[0];
   return (

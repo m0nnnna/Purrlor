@@ -87,7 +87,9 @@ export function fetchPublicFeed(options: { before?: number; author?: string } = 
   return getPublic<PublicPostsAnswer>(`/feed${suffix ? `?${suffix}` : ''}`);
 }
 
-export const fetchPublicPost = (eventId: string) => getPublic<PublicPostsAnswer>(`/posts/${encodeURIComponent(eventId)}`);
+/** One Global post. `author` (the link's `/@name`) lets the service find one older than its feed reaches. */
+export const fetchPublicPost = (eventId: string, author?: string) =>
+  getPublic<PublicPostsAnswer>(`/posts/${encodeURIComponent(eventId)}${author ? `?author=${encodeURIComponent(author)}` : ''}`);
 
 /** `mxc://server/id` as the public media route (a thumbnail when a size is given), or null. */
 export function publicMediaUrl(mxcUrl: string, width?: number, height?: number): string | null {
@@ -112,7 +114,8 @@ export type PageTarget =
 export type PublicRoute =
   | { kind: 'feed' }
   | { kind: 'page'; user: string; target?: PageTarget }
-  | { kind: 'post'; user: string; eventId: string };
+  /** `roomId`: a Space post's link names its feed room (`?room=`), for members' apps to find it. */
+  | { kind: 'post'; user: string; eventId: string; roomId?: string };
 
 const ITEM_ID = /^[A-Za-z0-9_-]{1,16}$/;
 
@@ -125,12 +128,20 @@ function readTarget(kind: string, id: string, number: string | undefined): PageT
   return number === undefined ? { kind: 'commission', type: id } : undefined;
 }
 
-export function parsePublicRoute(pathname: string): PublicRoute | undefined {
+export function parsePublicRoute(pathname: string, search = ''): PublicRoute | undefined {
   const path = pathname.replace(/\/+$/, '');
   if (path === '/feed') return { kind: 'feed' };
   try {
     const post = /^\/@([^/]+)\/post\/([^/]+)$/.exec(path);
-    if (post) return { kind: 'post', user: decodeURIComponent(post[1]), eventId: decodeURIComponent(post[2]) };
+    if (post) {
+      const roomId = new URLSearchParams(search).get('room');
+      return {
+        kind: 'post',
+        user: decodeURIComponent(post[1]),
+        eventId: decodeURIComponent(post[2]),
+        ...(roomId && /^![^\s/]{1,255}$/.test(roomId) && { roomId }),
+      };
+    }
     const page = /^\/@([^/]+)$/.exec(path);
     if (page) return { kind: 'page', user: decodeURIComponent(page[1]) };
     const item = /^\/@([^/]+)\/(music|art|commissions)\/([^/]+)(?:\/(\d+))?$/.exec(path);
@@ -160,4 +171,14 @@ export function pageTargetPath(user: string, target: PageTarget): string {
 /** A full link to someone's page, or a thing on it, on this deployment. */
 export function pageLink(user: string, target?: PageTarget): string {
   return `${window.location.origin}${target ? pageTargetPath(user, target) : publicPagePath(user)}`;
+}
+
+/**
+ * A full link to a post: `/@name/post/<id>`, which anyone can open for a Global post. A Space
+ * post's link also names its room (`?room=`): only the Space's members can open it, and anyone
+ * else, signed in or out, is told to sign in, with nothing about the post.
+ */
+export function postLink(author: string, postId: string, spaceRoomId?: string): string {
+  const path = `${publicPagePath(author)}/post/${encodeURIComponent(postId)}`;
+  return `${window.location.origin}${path}${spaceRoomId ? `?room=${encodeURIComponent(spaceRoomId)}` : ''}`;
 }

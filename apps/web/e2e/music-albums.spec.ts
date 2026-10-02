@@ -152,7 +152,7 @@ test('a creator sorts tracks into albums; visitors browse them, play on while mo
 
   // Signed out: the same link, once the public web has picked the page up.
   await expect
-    .poll(async () => (await fetch(`${TOKEN_SERVER}/api/public/pages/${artist.localpart}`)).status, { timeout: 90_000, intervals: [2000] })
+    .poll(async () => (await fetch(`${TOKEN_SERVER}/api/public/pages/${artist.localpart}`)).status, { timeout: 90_000, intervals: [3000] })
     .toBe(200);
   const visitor = await browser.newContext();
   const visitorPage = await visitor.newPage();

@@ -3,7 +3,29 @@ import { Icon } from './Icon';
 import './ShareLinkButton.css';
 
 /**
- * Hands out a link: the phone's own share sheet where there is one (a touch screen), otherwise
+ * Hands a link out: the phone's own share sheet where there is one (a touch screen), otherwise
+ * the clipboard. `cancelled` when the person closed the share sheet; `failed` when neither works.
+ */
+export async function shareLink(url: string, title?: string): Promise<'shared' | 'copied' | 'cancelled' | 'failed'> {
+  const touch = window.matchMedia?.('(pointer: coarse)').matches;
+  if (touch && navigator.share) {
+    try {
+      await navigator.share({ url, ...(title && { title }) });
+      return 'shared';
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * A button that hands out a link: the phone's own share sheet where there is one (a touch screen), otherwise
  * copied to the clipboard, saying so for a moment. If neither works the link is shown to copy by
  * hand.
  */
@@ -32,21 +54,8 @@ export function ShareLinkButton({
   }, [state]);
 
   const share = async () => {
-    const touch = window.matchMedia?.('(pointer: coarse)').matches;
-    if (touch && navigator.share) {
-      try {
-        await navigator.share({ url, ...(title && { title }) });
-        return;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setState('copied');
-    } catch {
-      setState('failed');
-    }
+    const result = await shareLink(url, title);
+    if (result === 'copied' || result === 'failed') setState(result);
   };
 
   const text = state === 'copied' ? 'Link copied' : label;

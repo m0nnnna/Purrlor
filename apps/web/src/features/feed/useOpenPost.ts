@@ -6,6 +6,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { applyPostEdits, readFeedMarker, readPost } from '../../matrix/feed';
 import { editsFromRaw } from '../../matrix/globalFeed';
 import { isListedInDirectory } from '../../matrix/spaceDirectory';
+import { getExtendedProfile } from '../../matrix/extendedProfile';
 import { useOpenFeedRoom } from './useOpenFeedRoom';
 
 /**
@@ -44,6 +45,37 @@ export async function loadOpenPost(mx: MatrixClient, roomId: string, postId: str
         ? { kind: 'space', spaceId: marker.spaceId, spaceName: space?.name ?? marker.spaceId }
         : { kind: 'global' },
     showOrigin: true,
+  };
+}
+
+/**
+ * A post from its link (`/@name/post/<id>`, and `?room=` for a Space post). A Global post lives in
+ * its author's profile room, which you may never have joined: then it's read on its own (profile
+ * rooms can be read by anyone), as the global feed does. A Space post opens only for the Space's
+ * members. Undefined when it can't be read, isn't a post, or isn't the linked author's.
+ */
+export async function loadLinkedPost(mx: MatrixClient, author: string, postId: string, spaceRoomId?: string): Promise<OpenPost | undefined> {
+  const roomId = spaceRoomId ?? (await getExtendedProfile(mx, author)).profileRoom;
+  if (!roomId) return undefined;
+  if (mx.getRoom(roomId)?.getMyMembership() === 'join') return loadOpenPost(mx, roomId, postId);
+  if (spaceRoomId) return undefined;
+  const raw = (await mx.fetchRoomEvent(roomId, postId)) as Record<string, any>;
+  const event = new MatrixEvent(raw);
+  applyPostEdits([event], editsFromRaw([raw]));
+  const content = readPost(event);
+  if (!content || event.getSender() !== author) return undefined;
+  const profile = await mx.getProfileInfo(author).catch(() => ({}) as { displayname?: string; avatar_url?: string });
+  return {
+    roomId,
+    postId,
+    isPublic: true,
+    canInteract: true,
+    content,
+    author: { userId: author, name: profile.displayname ?? author, avatarUrl: profile.avatar_url ?? null },
+    ts: event.getTs(),
+    edited: !!event.replacingEventId(),
+    sourceOrigin: { kind: 'global' },
+    showOrigin: false,
   };
 }
 

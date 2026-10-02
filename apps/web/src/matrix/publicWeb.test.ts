@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPageHidden, fetchPublicFeed, fetchPublicPage, pageTargetPath, parsePublicRoute, publicMediaUrl, publicPagePath } from './publicWeb';
+import { fetchPageHidden, fetchPublicFeed, fetchPublicPage, pageTargetPath, parsePublicRoute, postLink, publicMediaUrl, publicPagePath } from './publicWeb';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -36,6 +36,15 @@ describe('parsePublicRoute', () => {
     expect(parsePublicRoute('/@a/b')).toBeUndefined();
     expect(parsePublicRoute('/@%E0%A4%A')).toBeUndefined();
     expect(parsePublicRoute('/settings')).toBeUndefined();
+  });
+
+  it("reads a Space post's room from its link, and builds post links", () => {
+    expect(parsePublicRoute('/@luna/post/%24abc', '?room=%21feed%3Apurr.example')).toEqual({ kind: 'post', user: 'luna', eventId: '$abc', roomId: '!feed:purr.example' });
+    expect(parsePublicRoute('/@luna/post/%24abc', '?room=nonsense')).toEqual({ kind: 'post', user: 'luna', eventId: '$abc' });
+    const global = new URL(postLink('@luna:purr.example', '$abc'));
+    expect(parsePublicRoute(global.pathname, global.search)).toEqual({ kind: 'post', user: 'luna', eventId: '$abc' });
+    const space = new URL(postLink('@luna:purr.example', '$abc', '!feed:purr.example'));
+    expect(parsePublicRoute(space.pathname, space.search)).toEqual({ kind: 'post', user: 'luna', eventId: '$abc', roomId: '!feed:purr.example' });
   });
 
   it('reads links to things on a page, and builds them back', () => {

@@ -44,7 +44,7 @@ import { RateLimiter } from './webhooks.js';
  *
  *   GET /api/public/pages/:user           a profile page, if its owner opted in
  *   GET /api/public/feed?before=&author=  Global posts, newest first
- *   GET /api/public/posts/:eventId        one Global post
+ *   GET /api/public/posts/:eventId        one Global post (?author=name finds one older than the feed reaches)
  *   GET /api/public/status/:user          { hidden } — whether an admin hid this person's page
  *   GET /api/public/media/:server/:id     media a public answer referenced (?width=&height= for a thumbnail)
  *   GET /api/public/card/:user            link-preview HTML for /@name (nginx sends unfurling bots here)
@@ -340,7 +340,7 @@ export function publicWebRouter(): Router {
   router.get('/posts/:eventId', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
     try {
-      const post = await findPost(req.params.eventId);
+      const post = await findPost(req.params.eventId, authorParam(req));
       if (!post) return void res.status(404).json({ error: 'Sign in to see this post', code: 'not_found' });
       const mx = await getServiceClient();
       res.set('Cache-Control', 'public, max-age=60').json(await withAuthors(mx, [post]));
@@ -412,7 +412,7 @@ export function publicWebRouter(): Router {
   router.get('/card/post/:eventId', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
     try {
-      const post = await findPost(req.params.eventId);
+      const post = await findPost(req.params.eventId, authorParam(req));
       const name = await serverName();
       if (!post) return void sendCard(res, { title: `Purrlor on ${name}`, description: 'Sign in to see this post.', url: baseUrl(req), siteName: 'Purrlor' });
       const mx = await getServiceClient();
@@ -516,7 +516,13 @@ export function controlDeps(): Omit<ControlDeps, 'store'> {
   };
 }
 
-async function findPost(eventId: string): Promise<PublicPost | undefined> {
+/**
+ * A Global post by its ID: from the snapshot, or, for one older than the snapshot reaches (each
+ * profile room's latest events only), read on its own from its author's profile room when the
+ * link names the author: the post, and what relates to it (its edits, likes and comments), through
+ * the same rules as the feed. Never anyone hidden, never a Space post (only profile rooms are read).
+ */
+async function findPost(eventId: string, author?: string): Promise<PublicPost | undefined> {
   if (!/^\$[A-Za-z0-9_\-+/=:.]{1,255}$/.test(eventId)) return undefined;
   const feed = await getFeed();
   const hiddenSet = await hiddenUsers();
@@ -525,7 +531,29 @@ async function findPost(eventId: string): Promise<PublicPost | undefined> {
     const post = room.posts.find((p) => p.eventId === eventId);
     if (post) return post;
   }
-  return undefined;
+  const userId = author ? localUserId(author, await serverName()) : undefined;
+  const room = userId && !hiddenSet.has(userId) ? feed.byOwner.get(userId) : undefined;
+  return room ? readOlderPost(room, eventId) : undefined;
+}
+
+async function readOlderPost(room: ProfileRoom, eventId: string): Promise<PublicPost | undefined> {
+  const mx = await getServiceClient();
+  const get = async (path: string) => {
+    const res = await fetch(`${mx.baseUrl}${path}`, { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } });
+    return res.ok ? ((await res.json()) as Record<string, unknown>) : undefined;
+  };
+  const roomPath = encodeURIComponent(room.roomId);
+  const event = await get(`/_matrix/client/v3/rooms/${roomPath}/event/${encodeURIComponent(eventId)}`);
+  if (!event) return undefined;
+  const related = await get(`/_matrix/client/v1/rooms/${roomPath}/relations/${encodeURIComponent(eventId)}?limit=100`);
+  const chunk = Array.isArray(related?.chunk) ? (related.chunk as RawEvent[]) : [];
+  return publicPostsFromTimeline([event as RawEvent, ...chunk], room.owner).find((post) => post.eventId === eventId);
+}
+
+/** `?author=` on a post's routes: whose profile room an older post is in (the link's `/@name`). */
+function authorParam(req: Request): string | undefined {
+  const author = req.query.author;
+  return typeof author === 'string' && author.length <= 255 ? author : undefined;
 }
 
 function sendCard(res: Response, card: Parameters<typeof linkCardHtml>[0]): void {
