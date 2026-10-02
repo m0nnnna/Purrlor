@@ -3,7 +3,7 @@ import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { isPostEvent } from '../../matrix/feed';
 import { addMentionToInbox } from '../../matrix/mentionInbox';
-import { COMMENT_EVENT_TYPE } from '../../matrix/postInteractions';
+import { COMMENT_EVENT_TYPE, COMMENT_LIKE_TYPE } from '../../matrix/postInteractions';
 
 /**
  * Watches every live incoming message across every room for a real @-mention of you
@@ -34,7 +34,8 @@ export function MentionInboxCollector() {
       // edit is a post event too, but it isn't a new mention.
       const isChat = event.getType() === 'm.room.message';
       const isPost = isPostEvent(event);
-      const isComment = event.getType() === COMMENT_EVENT_TYPE;
+      // A comment like mentions the comment's author, so it's logged here like a mention.
+      const isComment = event.getType() === COMMENT_EVENT_TYPE || event.getType() === COMMENT_LIKE_TYPE;
       if (!isChat && !isPost && !isComment) return;
       const myUserId = mx.getUserId();
       // Also sidesteps a real bug found while testing this with only one account available: a

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canRepost, feedJoinVia } from './feed';
 import {
   buildCommentContent,
+  buildCommentLikeContent,
   COMMENT_EVENT_TYPE,
   COMMENT_LIKE_TYPE,
   LIKE_KEY,
@@ -10,6 +11,8 @@ import {
   summarizeCommentStats,
   summarizeRelations,
   summarizeReposts,
+  threadFor,
+  type PostComment,
   type RawRelationEvent,
 } from './postInteractions';
 
@@ -256,5 +259,70 @@ describe('summarizeCommentStats', () => {
   it("keeps a comment's reposts out of the post's own count", () => {
     const summary = summarizeReposts([commentRepost('@a:x', '$c1', '$r1')], POST, '@me:x');
     expect(summary.repostCount).toBe(0);
+  });
+});
+
+describe('threads', () => {
+  const c = (eventId: string, sender: string, replyTo?: string, thread?: string): PostComment => ({
+    eventId,
+    sender,
+    ts: 0,
+    content: { body: eventId },
+    ...(replyTo && { replyTo: { eventId: replyTo, sender: '?' } }),
+    ...(thread && { thread }),
+  });
+
+  it('finds the thread a reply joins, and everyone who has written in it', () => {
+    const comments = [
+      c('$a', '@ann:x'),
+      c('$b', '@bob:x', '$a', '$a'),
+      c('$x', '@xen:x'), // another thread under the same post
+      c('$c', '@cat:x', '$b', '$a'),
+      c('$y', '@yul:x', '$x', '$x'),
+    ];
+    expect(threadFor(comments, { eventId: '$c', sender: '@cat:x' })).toEqual({ root: '$a', participants: ['@ann:x', '@bob:x', '@cat:x'] });
+    expect(threadFor(comments, { eventId: '$x', sender: '@xen:x' })).toEqual({ root: '$x', participants: ['@xen:x', '@yul:x'] });
+  });
+
+  it('follows the reply chain for comments from before threads were recorded', () => {
+    const comments = [c('$a', '@ann:x'), c('$b', '@bob:x', '$a'), c('$c', '@cat:x', '$b')];
+    expect(threadFor(comments, { eventId: '$c', sender: '@cat:x' }).root).toBe('$a');
+  });
+
+  it("starts from the comment itself when it isn't loaded", () => {
+    expect(threadFor([], { eventId: '$gone', sender: '@ann:x' })).toEqual({ root: '$gone', participants: ['@ann:x'] });
+  });
+
+  it('a reply names its thread and mentions everyone in it but you', () => {
+    const content = buildCommentContent(
+      POST,
+      { body: 'same' },
+      { replyTo: { eventId: '$b', sender: '@bob:x' }, thread: { root: '$a', participants: ['@ann:x', '@bob:x', '@me:x'] }, myUserId: '@me:x' }
+    );
+    expect(content['xyz.nekous.thread']).toBe('$a');
+    expect(content['m.mentions']).toEqual({ user_ids: ['@bob:x', '@ann:x'] });
+  });
+
+  it('reads a reply’s thread back', () => {
+    const reply = comment('@b:x', 'hi', 5, {
+      content: {
+        body: 'hi',
+        'xyz.nekous.reply_to': { event_id: '$a', sender: '@a:x' },
+        'xyz.nekous.thread': '$a',
+        'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+      },
+    });
+    expect(summarizeRelations([reply], POST, '').comments[0]).toMatchObject({ thread: '$a', replyTo: { eventId: '$a' } });
+  });
+});
+
+describe('buildCommentLikeContent', () => {
+  it("names the comment and mentions its author, but not when it's your own", () => {
+    expect(buildCommentLikeContent(POST, { eventId: '$c', sender: '@bob:x' }, '@me:x')).toEqual({
+      'xyz.nekous.comment': '$c',
+      'm.mentions': { user_ids: ['@bob:x'] },
+      'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+    });
+    expect(buildCommentLikeContent(POST, { eventId: '$c', sender: '@me:x' }, '@me:x')['m.mentions']).toBeUndefined();
   });
 });

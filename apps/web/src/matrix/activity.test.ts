@@ -93,6 +93,34 @@ describe('buildMentionActivity', () => {
     ]);
   });
 
+  it('tells a reply in your thread, and a like on your comment', () => {
+    const inThread = ev('xyz.nekous.comment', '@a:x', 1, {
+      body: 'me too',
+      'xyz.nekous.reply_to': { event_id: '$b', sender: '@b:x' },
+      'xyz.nekous.thread': '$root',
+      'm.mentions': { user_ids: ['@b:x', ME] },
+      'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+    });
+    const named = ev('xyz.nekous.comment', '@a:x', 2, {
+      body: `hey ${ME}`,
+      'xyz.nekous.reply_to': { event_id: '$b', sender: '@b:x' },
+      'xyz.nekous.thread': '$root',
+      'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+    });
+    const liked = ev('xyz.nekous.comment_like', '@c:x', 3, {
+      'xyz.nekous.comment': '$mine',
+      'm.mentions': { user_ids: [ME] },
+      'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+    });
+    const rows = buildMentionActivity(
+      [{ event: inThread, postId: POST }, { event: named, postId: POST }, { event: liked, postId: POST }],
+      new Set(),
+      ME
+    );
+    expect(rows.map((row) => row.kind)).toEqual(['thread', 'mention', 'commentLike']);
+    expect(rows[2]).toMatchObject({ commentId: '$mine', postId: POST });
+  });
+
   it('skips what your own rooms already showed, your own messages, and deleted ones', () => {
     const shown = comment('@a:x', 1);
     const mine = ev('m.room.message', ME, 2, { body: '@me' });

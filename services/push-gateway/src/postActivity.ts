@@ -29,6 +29,8 @@ export function describePostActivity({
     // A reply also mentions the person replied to, so it's checked first.
     const isReplyToRecipient = recipient ? repliedTo === recipient : !!repliedTo && highlight;
     if (isReplyToRecipient) return withText('Replied to your comment');
+    // A reply in a thread mentions everyone who has written in it (the web app's postInteractions.ts).
+    if (mentionsRecipient && typeof content?.['xyz.nekous.thread'] === 'string') return withText('Replied in a thread you’re in');
     if (mentionsRecipient) return withText('Mentioned you in a comment');
     return withText('Commented on your post');
   }
@@ -40,5 +42,7 @@ export function describePostActivity({
     return 'Mentioned you in a post';
   }
   if (type === 'm.reaction') return 'Liked your post';
+  // Only ever reaches the comment's author, through the mention it carries.
+  if (type === 'xyz.nekous.comment_like') return 'Liked your comment';
   return undefined;
 }

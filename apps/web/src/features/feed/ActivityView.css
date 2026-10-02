@@ -67,12 +67,14 @@
   color: var(--nu-color-accent-2);
 }
 
-.nu-activity__icon--like {
+.nu-activity__icon--like,
+.nu-activity__icon--commentLike {
   color: var(--nu-color-danger);
 }
 
 .nu-activity__icon--mention,
-.nu-activity__icon--reply {
+.nu-activity__icon--reply,
+.nu-activity__icon--thread {
   color: var(--nu-color-accent);
 }
 

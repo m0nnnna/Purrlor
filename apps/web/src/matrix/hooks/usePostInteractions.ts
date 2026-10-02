@@ -13,6 +13,7 @@ import {
   mergeNewestPage,
   sendComment,
   summarizeCommentStats,
+  threadFor,
   unlikePost,
   type CommentStats,
   type MyRepost,
@@ -206,8 +207,10 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
         bump(-1);
         await unlikePost(mx, roomId, likeId);
       } else {
+        const comment = state.comments.find((c) => c.eventId === commentId);
+        if (!comment) return;
         bump(1, 'pending');
-        await likeComment(mx, roomId, postId, commentId, ownerId);
+        await likeComment(mx, roomId, postId, { eventId: commentId, sender: comment.sender }, ownerId);
       }
     });
 
@@ -220,7 +223,7 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
     toggleLike,
     toggleCommentLike,
     addComment: (content: PostContent, replyTo?: ReplyTarget) =>
-      act(() => sendComment(mx, roomId, postId, ownerId, content, replyTo)),
+      act(() => sendComment(mx, roomId, postId, ownerId, content, replyTo, replyTo && threadFor(state.comments, replyTo))),
     removeComment: (commentId: string) =>
       act(async () => {
         await deleteComment(mx, roomId, commentId);

@@ -27,6 +27,8 @@ const ICONS: Record<ActivityKind, IconName> = {
   quote: 'repost',
   comment: 'comment',
   reply: 'reply',
+  thread: 'threads',
+  commentLike: 'heart',
   mention: 'at',
   follow: 'userPlus',
 };
@@ -37,6 +39,8 @@ const VERBS: Record<ActivityKind, string> = {
   quote: 'quoted your post',
   comment: 'commented on your post',
   reply: 'replied to you',
+  thread: 'replied in a thread you’re in',
+  commentLike: 'liked your comment',
   mention: 'mentioned you',
   follow: 'followed you',
 };
@@ -122,8 +126,11 @@ function snippetTarget(item: ActivityItem): { roomId: string; eventId?: string }
   switch (item.kind) {
     case 'comment':
     case 'reply':
+    case 'thread':
     case 'mention':
       return { roomId: item.roomId, eventId: item.eventId };
+    case 'commentLike':
+      return { roomId: item.roomId, eventId: item.commentId };
     case 'quote':
       return item.quote ?? { roomId: item.roomId, eventId: item.postId };
     case 'like':
@@ -146,7 +153,7 @@ function ActivityRow({ item, unread }: { item: ActivityItem; unread: boolean }) 
   const setSelectedRoomId = useSetAtom(selectedRoomIdAtom);
   const setPendingJump = useSetAtom(pendingJumpTargetAtom);
   const setSpaceView = useSetAtom(selectedSpaceViewAtom);
-  const quiet = item.kind === 'like' || item.kind === 'repost';
+  const quiet = item.kind === 'like' || item.kind === 'commentLike' || item.kind === 'repost';
   // A mention in a channel or DM rather than in a post: it opens at the message.
   const inChat = item.kind === 'mention' && !item.postId;
 
@@ -185,7 +192,7 @@ function ActivityRow({ item, unread }: { item: ActivityItem; unread: boolean }) 
         <span className="nu-activity__avatar">
           <Avatar name={first.name} mxcUrl={first.avatarUrl} size={36} />
           <span className={`nu-activity__icon nu-activity__icon--${item.kind}`} aria-hidden="true">
-            <Icon name={ICONS[item.kind]} size={11} filled={item.kind === 'like'} />
+            <Icon name={ICONS[item.kind]} size={11} filled={item.kind === 'like' || item.kind === 'commentLike'} />
           </span>
         </span>
         <span className="nu-activity__body">
@@ -212,7 +219,7 @@ function ActivityRow({ item, unread }: { item: ActivityItem; unread: boolean }) 
 
 type Filter = 'all' | 'mentions';
 
-const isMention = (item: ActivityItem) => item.kind === 'mention' || item.kind === 'reply';
+const isMention = (item: ActivityItem) => item.kind === 'mention' || item.kind === 'reply' || item.kind === 'thread';
 
 /**
  * The Notifications page (Activity in the code): what people did with your posts and profile, and

@@ -48,6 +48,17 @@ export const LIKE_KEY = '❤️';
 const REPLY_TO_KEY = 'xyz.nekous.reply_to';
 
 /**
+ * Threads. A comment straight on the post starts a thread; a reply to any comment joins that
+ * comment's thread, so one post can hold several. A reply names its thread's first comment in
+ * `xyz.nekous.thread` and mentions everyone who has written in that thread (`m.mentions`, capped),
+ * which is what notifies them: the same mention rule a reply already relied on. A reply to a
+ * comment from before threads were recorded finds its thread by following the reply chain.
+ */
+export const THREAD_KEY = 'xyz.nekous.thread';
+/** Most people one reply notifies, beyond those mentioned by name. */
+const MAX_THREAD_NOTIFY = 50;
+
+/**
  * A repost's marker on the original. The repost itself lives in the reposter's own feed (feed.ts),
  * which the original's author may never read, so reposting also drops this small event into the
  * *original's* room, related to the post like a like is. It's what counts reposts, what tells the
@@ -80,7 +91,43 @@ function commentNamed(event: RawRelationEvent): string | undefined {
 /** The comment a reply answers, and who wrote it. */
 export type ReplyTarget = { eventId: string; sender: string };
 
-export type PostComment = { eventId: string; sender: string; ts: number; content: PostContent; replyTo?: ReplyTarget };
+export type PostComment = {
+  eventId: string;
+  sender: string;
+  ts: number;
+  content: PostContent;
+  replyTo?: ReplyTarget;
+  /** The first comment of the thread this one is in, when it's a reply that recorded it. */
+  thread?: string;
+};
+
+/** A reply's thread: its first comment, and who has written in it (oldest first). */
+export type ThreadInfo = { root: string; participants: string[] };
+
+/** The thread a reply to `replyTo` joins, from the comments loaded. Pure, so it's tested directly. */
+export function threadFor(comments: PostComment[], replyTo: ReplyTarget): ThreadInfo {
+  const byId = new Map(comments.map((comment) => [comment.eventId, comment]));
+  const rootOf = (eventId: string): string => {
+    const seen = new Set<string>();
+    let id = eventId;
+    for (;;) {
+      const comment = byId.get(id);
+      if (!comment || seen.has(id)) return id;
+      seen.add(id);
+      if (comment.thread) return comment.thread;
+      if (!comment.replyTo) return id;
+      id = comment.replyTo.eventId;
+    }
+  };
+  const root = rootOf(replyTo.eventId);
+  const participants = [
+    ...new Set([
+      ...comments.filter((comment) => comment.eventId === root || rootOf(comment.eventId) === root).map((comment) => comment.sender),
+      replyTo.sender,
+    ]),
+  ];
+  return { root, participants };
+}
 
 function readReplyTo(raw: unknown): ReplyTarget | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
@@ -193,12 +240,14 @@ export function summarizeRelations(events: RawRelationEvent[], postId: string, m
       if (content) {
         const { repostOf: _ignored, ...rest } = content;
         const replyTo = readReplyTo(event.content[REPLY_TO_KEY]);
+        const thread = event.content[THREAD_KEY];
         comments.push({
           eventId: event.event_id,
           sender: event.sender,
           ts: event.origin_server_ts,
           content: rest,
           ...(replyTo && { replyTo }),
+          ...(replyTo && typeof thread === 'string' && { thread }),
         });
       }
     }
@@ -329,12 +378,26 @@ export async function fetchCommentLikes(mx: MatrixClient, roomId: string, postId
   return events;
 }
 
-export async function likeComment(mx: MatrixClient, roomId: string, postId: string, commentId: string, ownerId: string): Promise<string> {
-  await ensureJoined(mx, roomId, ownerId);
-  const { event_id: eventId } = await mx.sendEvent(roomId, COMMENT_LIKE_TYPE as any, {
-    [COMMENT_KEY]: commentId,
+/** A comment like's event content. It mentions the comment's author, which is what tells them
+ *  (nobody is told they liked their own). */
+export function buildCommentLikeContent(postId: string, comment: { eventId: string; sender: string }, myUserId?: string): Record<string, unknown> {
+  return {
+    [COMMENT_KEY]: comment.eventId,
+    ...(comment.sender !== myUserId && { 'm.mentions': { user_ids: [comment.sender] } }),
     'm.relates_to': { rel_type: RelationType.Reference, event_id: postId },
-  } as any);
+  };
+}
+
+export async function likeComment(
+  mx: MatrixClient,
+  roomId: string,
+  postId: string,
+  comment: { eventId: string; sender: string },
+  ownerId: string
+): Promise<string> {
+  await ensureJoined(mx, roomId, ownerId);
+  const content = buildCommentLikeContent(postId, comment, mx.getUserId() ?? undefined);
+  const { event_id: eventId } = await mx.sendEvent(roomId, COMMENT_LIKE_TYPE as any, content as any);
   return eventId;
 }
 
@@ -422,20 +485,24 @@ export async function unlikePost(mx: MatrixClient, roomId: string, likeId: strin
 }
 
 /**
- * A comment's event content. A reply also names the comment it answers and mentions its author —
- * unless that's you, since nobody needs telling they replied to themselves.
+ * A comment's event content. A reply also names the comment it answers and its thread, and
+ * mentions the comment's author and everyone else in the thread — never you, since nobody needs
+ * telling they replied to themselves.
  */
 export function buildCommentContent(
   postId: string,
   content: PostContent,
-  { replyTo, myUserId }: { replyTo?: ReplyTarget; myUserId?: string } = {}
+  { replyTo, thread, myUserId }: { replyTo?: ReplyTarget; thread?: ThreadInfo; myUserId?: string } = {}
 ): Record<string, unknown> {
   const { repostOf: _ignored, mentions = [], ...commentContent } = content;
-  // Whoever was picked from the autocomplete, plus the author of the comment being answered.
-  const mentioned = [...new Set([...mentions, ...(replyTo ? [replyTo.sender] : [])])].filter((id) => id !== myUserId);
+  // Whoever was picked from the autocomplete, the author of the comment being answered, then the
+  // rest of the thread (the most recent writers, if it's long).
+  const threadPeople = replyTo && thread ? thread.participants.filter((id) => id !== replyTo.sender).slice(-MAX_THREAD_NOTIFY) : [];
+  const mentioned = [...new Set([...mentions, ...(replyTo ? [replyTo.sender] : []), ...threadPeople])].filter((id) => id !== myUserId);
   return {
     ...toEventContent(commentContent),
     ...(replyTo && { [REPLY_TO_KEY]: { event_id: replyTo.eventId, sender: replyTo.sender } }),
+    ...(replyTo && thread && { [THREAD_KEY]: thread.root }),
     ...(mentioned.length > 0 && { 'm.mentions': { user_ids: mentioned } }),
     'm.relates_to': { rel_type: RelationType.Reference, event_id: postId },
   };
@@ -447,10 +514,11 @@ export async function sendComment(
   postId: string,
   ownerId: string,
   content: PostContent,
-  replyTo?: ReplyTarget
+  replyTo?: ReplyTarget,
+  thread?: ThreadInfo
 ): Promise<void> {
   await ensureJoined(mx, roomId, ownerId);
-  const eventContent = buildCommentContent(postId, content, { replyTo, myUserId: mx.getUserId() ?? undefined });
+  const eventContent = buildCommentContent(postId, content, { replyTo, thread, myUserId: mx.getUserId() ?? undefined });
   await mx.sendEvent(roomId, COMMENT_EVENT_TYPE as any, eventContent as any);
 }
 

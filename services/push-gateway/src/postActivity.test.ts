@@ -28,6 +28,16 @@ describe('describePostActivity', () => {
     assert.equal(describePostActivity({ type: 'xyz.nekous.comment', content, highlight: false }), 'Commented on your post: look');
   });
 
+  it('words a reply in a thread the recipient is in, and a like on their comment', () => {
+    const content = { body: 'same', 'xyz.nekous.reply_to': { sender: '@bob:x' }, 'xyz.nekous.thread': '$root', 'm.mentions': { user_ids: ['@bob:x', ALICE] } };
+    assert.equal(describePostActivity({ type: 'xyz.nekous.comment', content, recipient: ALICE, highlight: true }), 'Replied in a thread you’re in: same');
+    assert.equal(describePostActivity({ type: 'xyz.nekous.comment', content, recipient: '@bob:x', highlight: true }), 'Replied to your comment: same');
+    assert.equal(
+      describePostActivity({ type: 'xyz.nekous.comment_like', content: { 'm.mentions': { user_ids: [ALICE] } }, recipient: ALICE, highlight: true }),
+      'Liked your comment'
+    );
+  });
+
   it('words a mention in a post, and a like', () => {
     assert.equal(describePostActivity({ type: 'xyz.nekous.post', content: { body: 'hi @Alice' }, recipient: ALICE, highlight: true }), 'Mentioned you in a post: hi @Alice');
     assert.equal(describePostActivity({ type: 'm.reaction', content: {}, recipient: ALICE, highlight: false }), 'Liked your post');

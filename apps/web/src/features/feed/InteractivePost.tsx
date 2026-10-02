@@ -25,6 +25,7 @@ import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useIgnoredUsers } from '../../matrix/hooks/useIgnoredUsers';
 import { useOwnProfile } from '../../matrix/hooks/useOwnProfile';
 import { usePostInteractions } from '../../matrix/hooks/usePostInteractions';
+import { usePostMuted } from '../../matrix/hooks/usePostMuted';
 import { forgetLike, recordLike } from '../../matrix/likedPosts';
 import { repostToTarget, undoRepost } from '../../matrix/postPublishing';
 import { CharCounter, isOverLimit } from './CharCounter';
@@ -130,6 +131,7 @@ export function InteractivePost({
   const [showLikers, setShowLikers] = useState(false);
   const { displayName } = useOwnProfile();
   const { pinned, pin } = useMyPinnedPost();
+  const notifications = usePostMuted(roomId, postId);
   const liked = !!interactions.myLikeId;
   const reposted = !!interactions.myRepost;
   const isPostOwner = card.author.userId === card.myUserId;
@@ -407,6 +409,15 @@ export function InteractivePost({
     );
   };
 
+  const handleMute = async () => {
+    setError(undefined);
+    try {
+      await notifications.toggle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t change this post’s notifications');
+    }
+  };
+
   // Only a post anyone can read can be pinned to your public profile.
   const canPin = isPostOwner && isPublic;
   const isPinned = pinned?.eventId === postId;
@@ -521,6 +532,10 @@ export function InteractivePost({
               </MenuItem>
             )}
             {extraMenuItems}
+            {/* Anyone can mute a post: its author, or someone getting its thread replies. */}
+            <MenuItem icon={notifications.muted ? 'bell' : 'bellOff'} role="post-mute" onSelect={() => void handleMute()}>
+              {notifications.muted ? 'Unmute notifications' : 'Mute notifications'}
+            </MenuItem>
             {interactions.likeCount > 0 && (
               <MenuItem icon="heart" role="post-likers" onSelect={() => setShowLikers(true)}>
                 See who liked

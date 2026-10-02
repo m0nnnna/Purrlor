@@ -1,6 +1,6 @@
-import { EventType, PushRuleKind, type IPushRule, type MatrixClient } from 'matrix-js-sdk';
+import { EventType, Method, PushRuleKind, type IPushRule, type MatrixClient } from 'matrix-js-sdk';
 import { listOwnFeedRoomIds, POST_EVENT_TYPE } from './feed';
-import { COMMENT_EVENT_TYPE } from './postInteractions';
+import { COMMENT_EVENT_TYPE, COMMENT_LIKE_TYPE } from './postInteractions';
 import { getOwnProfileRoomId } from './profileFeed';
 
 /**
@@ -86,6 +86,61 @@ function isManaged(ruleId: string): boolean {
 }
 
 /**
+ * Muting one post: a push rule with no actions for everything related to it in its room — its
+ * likes and comments, replies in its threads, likes on its comments, reposts of either. It sits
+ * above the rules that would notify (your feed rules above, and the server's mention rule, which
+ * user rules always beat), so the homeserver itself stays quiet: no phone push, no in-app
+ * notification. Checked against Continuwuity: a mention under a muted post doesn't count, one
+ * under another post does. The rules themselves are the list of muted posts, so it follows you
+ * to every device.
+ *
+ * The key is escaped (`m\.relates_to`) because the field name has a dot in it; both Continuwuity
+ * and matrix-js-sdk read the escape.
+ */
+const MUTE_RULE_PREFIX = 'xyz.nekous.mute_post.';
+
+export function muteRuleBody(roomId: string, postId: string): Pick<IPushRule, 'conditions' | 'actions'> {
+  return {
+    conditions: [
+      { kind: 'event_match', key: 'room_id', pattern: roomId },
+      { kind: 'event_match', key: 'content.m\\.relates_to.event_id', pattern: postId },
+    ] as IPushRule['conditions'],
+    actions: [] as IPushRule['actions'],
+  };
+}
+
+/** The posts you've muted, from your push rules. */
+export function mutedPostIds(mx: MatrixClient): Set<string> {
+  return new Set(
+    (mx.pushRules?.global?.override ?? [])
+      .filter((rule) => rule.rule_id.startsWith(MUTE_RULE_PREFIX))
+      .map((rule) => rule.rule_id.slice(MUTE_RULE_PREFIX.length))
+  );
+}
+
+/** Adds an override rule at a chosen place: matrix-js-sdk's addPushRule always puts it first. */
+async function putOverrideRule(
+  mx: MatrixClient,
+  ruleId: string,
+  body: Pick<IPushRule, 'conditions' | 'actions'>,
+  place: { before?: string; after?: string } = {}
+): Promise<void> {
+  const query = place.before ? { before: place.before } : place.after ? { after: place.after } : undefined;
+  await mx.http.authedRequest(Method.Put, `/pushrules/global/override/${encodeURIComponent(ruleId)}`, query, body);
+}
+
+export async function setPostMuted(mx: MatrixClient, roomId: string, postId: string, muted: boolean): Promise<void> {
+  const ruleId = MUTE_RULE_PREFIX + postId;
+  if (!muted) {
+    await mx.deletePushRule('global', PushRuleKind.Override, ruleId);
+    return;
+  }
+  // Ahead of every rule of yours, so nothing of yours that notifies can win over it.
+  const first = (mx.pushRules?.global?.override ?? []).find((rule) => !rule.rule_id.startsWith('.') && rule.rule_id !== ruleId);
+  await putOverrideRule(mx, ruleId, muteRuleBody(roomId, postId), first ? { before: first.rule_id } : {});
+}
+
+/**
  * Makes your push rules match your feed rooms and settings: adds what's missing, removes what's no
  * longer wanted (a setting turned off, a feed you no longer own). Reads the rules the client already
  * has from sync — Continuwuity doesn't implement listing a single rule kind — and changes nothing
@@ -100,9 +155,12 @@ export async function syncPostNotificationRules(
   const wanted = wantedPostRules(ownFeedRoomIds(mx), settings);
   const wantedIds = new Set(wanted.map((rule) => rule.ruleId));
 
+  // New rules go below any muted post's rule, or they'd win over it.
+  const mutes = (mx.pushRules?.global?.override ?? []).filter((rule) => rule.rule_id.startsWith(MUTE_RULE_PREFIX));
+  const lastMute = mutes[mutes.length - 1]?.rule_id;
   for (const rule of wanted) {
     if (!existingIds.has(rule.ruleId)) {
-      await mx.addPushRule('global', PushRuleKind.Override, rule.ruleId, rule.body);
+      await putOverrideRule(mx, rule.ruleId, rule.body, lastMute ? { after: lastMute } : {});
     }
   }
   for (const rule of existing) {
@@ -114,9 +172,10 @@ export async function syncPostNotificationRules(
 
 /** For DesktopNotifications: an event about posts. A post itself only notifies when it mentions
  *  you (the spec's mention rule); comments and likes through the rules above, or a mention. */
-export function isPostActivity(eventType: string): 'post' | 'comment' | 'like' | undefined {
+export function isPostActivity(eventType: string): 'post' | 'comment' | 'like' | 'commentLike' | undefined {
   if (eventType === POST_EVENT_TYPE) return 'post';
   if (eventType === COMMENT_EVENT_TYPE) return 'comment';
   if (eventType === EventType.Reaction) return 'like';
+  if (eventType === COMMENT_LIKE_TYPE) return 'commentLike';
   return undefined;
 }

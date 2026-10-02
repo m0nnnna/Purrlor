@@ -10,8 +10,10 @@ import {
   isActivityEventType,
   ownFeedRoomIds,
   readActivitySeen,
+  type ActivityItem,
 } from '../../matrix/activity';
 import { MENTION_INBOX_EVENT } from '../../matrix/mentionInbox';
+import { mutedPostIds } from '../../matrix/postNotifications';
 
 /** New activity arrives in bursts (several likes at once); one re-read covers the burst. */
 const RELOAD_DELAY_MS = 1500;
@@ -37,9 +39,14 @@ export function ActivityWatcher() {
     // Feed rooms something happened in since the last read; undefined = read them all.
     let changedRooms: Set<string> | undefined = new Set();
 
+    // A muted post's activity is left out, so it doesn't light the bell either.
+    const unmuted = (items: ActivityItem[]) => {
+      const muted = mutedPostIds(mx);
+      return muted.size ? items.filter((item) => !item.postId || !muted.has(item.postId)) : items;
+    };
     const load = async (rooms?: Set<string>) => {
       const items = await reader.read(rooms ? { rooms: [...rooms] } : {}).catch(() => undefined);
-      if (!cancelled && items) setActivity((prev) => ({ ...prev, items, loaded: true }));
+      if (!cancelled && items) setActivity((prev) => ({ ...prev, items: unmuted(items), loaded: true }));
     };
     const reloadSoon = (roomId?: string) => {
       if (roomId && changedRooms) changedRooms.add(roomId);
@@ -77,6 +84,8 @@ export function ActivityWatcher() {
       // A new mention is read by itself; the feed rooms are left as they were.
       if (event.getType() === MENTION_INBOX_EVENT) reloadSoon();
       if (event.getType() === ACTIVITY_SEEN_ACCOUNT_DATA) setActivity((prev) => ({ ...prev, seenTs: readActivitySeen(mx) }));
+      // A post muted or unmuted (its push rule, postNotifications.ts).
+      if (event.getType() === 'm.push_rules') reloadSoon();
     };
     // The safety net reads every feed room again.
     const interval = setInterval(() => {

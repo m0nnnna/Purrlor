@@ -2,7 +2,7 @@ import { Direction, EventType, Method, RelationType, type MatrixClient } from 'm
 import { listOwnFeedRoomIds } from './feed';
 import { readFreshAccountData } from './freshAccountData';
 import { readMentionInbox, type MentionRef } from './mentionInbox';
-import { COMMENT_EVENT_TYPE, LIKE_KEY, REPOST_RECEIPT_TYPE } from './postInteractions';
+import { COMMENT_EVENT_TYPE, COMMENT_LIKE_TYPE, LIKE_KEY, REPOST_RECEIPT_TYPE } from './postInteractions';
 import { FOLLOWED_EVENT, getOwnProfileRoomId } from './profileFeed';
 
 /**
@@ -22,7 +22,7 @@ import { FOLLOWED_EVENT, getOwnProfileRoomId } from './profileFeed';
  *
  * What you've seen is a timestamp in account data, so the unread dot clears on every device.
  */
-export type ActivityKind = 'like' | 'comment' | 'reply' | 'mention' | 'repost' | 'quote' | 'follow';
+export type ActivityKind = 'like' | 'comment' | 'reply' | 'thread' | 'commentLike' | 'mention' | 'repost' | 'quote' | 'follow';
 
 export type ActivityItem = {
   /** Stable key: the event for a single item, the post (or day) for a grouped one. */
@@ -40,6 +40,8 @@ export type ActivityItem = {
   postId?: string;
   /** A quote: the quoting post (it lives in the quoter's own feed). */
   quote?: { roomId: string; eventId: string };
+  /** A like on your comment: the comment (in the same room). */
+  commentId?: string;
   /** A chat mention you've already read in its channel (markChannelReads): it stops counting as new. */
   readInChannel?: boolean;
 };
@@ -207,18 +209,37 @@ async function readMention(mx: MatrixClient, ref: MentionRef): Promise<MentionEv
 }
 
 /**
+ * What a mention of you in a comment means: a reply to your comment, a reply in a thread you've
+ * written in (threads mention everyone in them, postInteractions.ts), or a plain @-mention.
+ */
+function commentMentionKind(content: Record<string, unknown>, myUserId: string): ActivityKind {
+  const replyTo = content['xyz.nekous.reply_to'] as { sender?: unknown } | undefined;
+  if (replyTo?.sender === myUserId) return 'reply';
+  // In a thread, and not named in the words themselves: it reached you as one of the thread.
+  const body = typeof content.body === 'string' ? content.body : '';
+  const formatted = typeof content.formatted_body === 'string' ? content.formatted_body : '';
+  const named = body.includes(myUserId) || formatted.includes(myUserId) || formatted.includes(encodeURIComponent(myUserId));
+  if (typeof content['xyz.nekous.thread'] === 'string' && !named) return 'thread';
+  return 'mention';
+}
+
+/**
  * Mention inbox entries → activity rows, leaving out what your own rooms already showed (a comment
- * on your post that also mentions you is one row, not two). A comment answering you is a reply;
- * anything else is a mention. Pure, so it's tested without a server.
+ * on your post that also mentions you is one row, not two). A comment answering you is a reply,
+ * one in your thread a thread reply, a like on your comment a comment like; anything else is a
+ * mention. Pure, so it's tested without a server.
  */
 export function buildMentionActivity(mentions: MentionEvent[], alreadyShown: Set<string>, myUserId: string): ActivityItem[] {
   return mentions
     .filter(({ event }) => !alreadyShown.has(event.event_id) && event.sender !== myUserId && !event.unsigned?.redacted_because)
     .map(({ event, postId }): ActivityItem => {
-      const replyTo = event.content['xyz.nekous.reply_to'] as { sender?: unknown } | undefined;
+      const commentId = event.content['xyz.nekous.comment'];
+      const kind: ActivityKind =
+        event.type === COMMENT_LIKE_TYPE ? 'commentLike' : event.type === COMMENT_EVENT_TYPE ? commentMentionKind(event.content, myUserId) : 'mention';
       return {
         key: event.event_id,
-        kind: event.type === COMMENT_EVENT_TYPE && replyTo?.sender === myUserId ? 'reply' : 'mention',
+        kind,
+        ...(kind === 'commentLike' && typeof commentId === 'string' && { commentId }),
         senders: [event.sender],
         ts: event.origin_server_ts,
         roomId: event.room_id,

@@ -63,16 +63,21 @@ export function DesktopNotifications() {
         const repliedTo = (content['xyz.nekous.reply_to'] as { sender?: string } | undefined)?.sender;
         const mentioned = (content['m.mentions'] as { user_ids?: unknown } | undefined)?.user_ids;
         const mentionsMe = Array.isArray(mentioned) && mentioned.includes(myUserId);
+        // A thread mentions everyone in it (postInteractions.ts).
+        const inThread = typeof content['xyz.nekous.thread'] === 'string';
         const verb =
           postActivity === 'post'
             ? 'Mentioned you in a post'
             : repliedTo === myUserId
               ? 'Replied to your comment'
-              : mentionsMe
-                ? 'Mentioned you in a comment'
-                : 'Commented on your post';
+              : mentionsMe && inThread
+                ? 'Replied in a thread you’re in'
+                : mentionsMe
+                  ? 'Mentioned you in a comment'
+                  : 'Commented on your post';
+        const quietBody = postActivity === 'like' ? 'Liked your post' : postActivity === 'commentLike' ? 'Liked your comment' : undefined;
         const notification = new Notification(senderName, {
-          body: postActivity === 'like' ? 'Liked your post' : text ? `${verb}: ${text}` : verb,
+          body: quietBody ?? (text ? `${verb}: ${text}` : verb),
           tag: `${room.roomId}:${postActivity}`,
         });
         // The post itself for a mention in it; the post they're on for a comment or a like.
