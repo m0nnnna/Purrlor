@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RoomType, type IPublicRoomsChunkRoom, type MatrixClient } from 'matrix-js-sdk';
-import { browsePublicRooms, isSpaceEntry, joinPublicRoom } from './directory';
+import { browsePublicSpaces, isSpaceEntry, joinPublicRoom } from './directory';
 
 function fakeChunkRoom(overrides: Partial<IPublicRoomsChunkRoom> = {}): IPublicRoomsChunkRoom {
   return {
@@ -22,26 +22,34 @@ describe('isSpaceEntry', () => {
   });
 });
 
-describe('browsePublicRooms', () => {
-  it('omits the filter entirely when no search term is given', async () => {
+describe('browsePublicSpaces', () => {
+  it('asks the directory for Spaces only when no search term is given', async () => {
     const publicRooms = vi.fn().mockResolvedValue({ chunk: [] });
     const mx = { publicRooms } as unknown as MatrixClient;
 
-    await browsePublicRooms(mx, {});
+    await browsePublicSpaces(mx, {});
 
     expect(publicRooms).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: undefined, since: undefined })
+      expect.objectContaining({ filter: { room_types: [RoomType.Space] }, since: undefined })
     );
+  });
+
+  it("leaves out channels and anything else a server lists anyway, keeping the page's token", async () => {
+    const space = fakeChunkRoom({ room_id: '!space:example.org', room_type: RoomType.Space });
+    const publicRooms = vi.fn().mockResolvedValue({ chunk: [fakeChunkRoom(), space, fakeChunkRoom({ room_type: 'xyz.nekous.profile' })], next_batch: 'next' });
+    const mx = { publicRooms } as unknown as MatrixClient;
+
+    expect(await browsePublicSpaces(mx)).toEqual({ chunk: [space], next_batch: 'next' });
   });
 
   it('passes a trimmed search term as generic_search_term', async () => {
     const publicRooms = vi.fn().mockResolvedValue({ chunk: [] });
     const mx = { publicRooms } as unknown as MatrixClient;
 
-    await browsePublicRooms(mx, { searchTerm: '  music  ' });
+    await browsePublicSpaces(mx, { searchTerm: '  music  ' });
 
     expect(publicRooms).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { generic_search_term: 'music' } })
+      expect.objectContaining({ filter: { room_types: [RoomType.Space], generic_search_term: 'music' } })
     );
   });
 
@@ -49,7 +57,7 @@ describe('browsePublicRooms', () => {
     const publicRooms = vi.fn().mockResolvedValue({ chunk: [] });
     const mx = { publicRooms } as unknown as MatrixClient;
 
-    await browsePublicRooms(mx, { since: 'batch-token' });
+    await browsePublicSpaces(mx, { since: 'batch-token' });
 
     expect(publicRooms).toHaveBeenCalledWith(expect.objectContaining({ since: 'batch-token' }));
   });

@@ -52,16 +52,6 @@
   white-space: nowrap;
 }
 
-.nu-discover__row-badge {
-  flex: none;
-  font-size: var(--nu-font-size-xs);
-  font-weight: 700;
-  color: var(--nu-color-on-accent);
-  background: var(--nu-gradient-accent);
-  border-radius: var(--nu-radius-sm);
-  padding: 0 var(--nu-space-1);
-}
-
 .nu-discover__row-topic {
   font-size: var(--nu-font-size-xs);
   color: var(--nu-color-text-secondary);

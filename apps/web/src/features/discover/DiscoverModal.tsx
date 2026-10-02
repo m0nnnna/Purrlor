@@ -3,7 +3,7 @@ import type { IPublicRoomsChunkRoom } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { Avatar } from '../../components/Avatar';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { browsePublicRooms, isBrowsableEntry, isSpaceEntry, joinPublicRoom } from '../../matrix/directory';
+import { browsePublicSpaces, joinPublicRoom } from '../../matrix/directory';
 import './DiscoverModal.css';
 
 function DirectoryRow({
@@ -22,7 +22,6 @@ function DirectoryRow({
       <div className="nu-discover__row-info">
         <div className="nu-discover__row-name">
           {name}
-          {isSpaceEntry(entry) && <span className="nu-discover__row-badge">Space</span>}
         </div>
         {entry.topic && <div className="nu-discover__row-topic">{entry.topic}</div>}
         <div className="nu-discover__row-meta">
@@ -44,22 +43,17 @@ function DirectoryRow({
 }
 
 /**
- * Browses this account's own homeserver's public room directory (`GET /publicRooms`) — public
- * Spaces (Discord "servers") and plain public rooms mixed together, badged by type. The one
- * discovery mechanism this app previously had none of: joining anything required already
- * knowing a room ID/alias or getting invited. Joining navigates there the same way every other
- * "create/join something" flow in this app does (CreateSpaceModal, StartDmModal): a Space
- * selects into the server rail, a plain room lands in the spaceless Direct-Messages-style list
- * (see useSpacelessRooms — membership alone is what puts it there, no special-casing needed here).
+ * Browses this account's own homeserver's public Spaces (Discord "servers") from its room
+ * directory (`GET /publicRooms`). Only Spaces: their channels are in the directory too, but you
+ * find those inside a Space once you've joined it. Joining selects the Space in the server rail,
+ * the same way every other "create/join something" flow in this app does (CreateSpaceModal).
  */
 export function DiscoverModal({
   onClose,
   onJoinedSpace,
-  onJoinedRoom,
 }: {
   onClose: () => void;
   onJoinedSpace: (roomId: string) => void;
-  onJoinedRoom: (roomId: string) => void;
 }) {
   const mx = useMatrixClient();
   const [term, setTerm] = useState('');
@@ -74,8 +68,8 @@ export function DiscoverModal({
     setLoading(true);
     setError(undefined);
     try {
-      const response = await browsePublicRooms(mx, { searchTerm });
-      setEntries(response.chunk.filter(isBrowsableEntry));
+      const response = await browsePublicSpaces(mx, { searchTerm });
+      setEntries(response.chunk);
       setNextBatch(response.next_batch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load the room directory');
@@ -98,8 +92,8 @@ export function DiscoverModal({
     if (!nextBatch || loadingMore) return;
     setLoadingMore(true);
     try {
-      const response = await browsePublicRooms(mx, { searchTerm: term, since: nextBatch });
-      setEntries((prev) => [...prev, ...response.chunk.filter(isBrowsableEntry)]);
+      const response = await browsePublicSpaces(mx, { searchTerm: term, since: nextBatch });
+      setEntries((prev) => [...prev, ...response.chunk]);
       setNextBatch(response.next_batch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more');
@@ -114,8 +108,7 @@ export function DiscoverModal({
     try {
       const roomId = await joinPublicRoom(mx, entry.canonical_alias || entry.room_id);
       onClose();
-      if (isSpaceEntry(entry)) onJoinedSpace(roomId);
-      else onJoinedRoom(roomId);
+      onJoinedSpace(roomId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join');
       setJoiningRoomId(undefined);
@@ -123,14 +116,14 @@ export function DiscoverModal({
   };
 
   return (
-    <Modal title="Discover Public Servers & Channels" onClose={onClose} wide>
+    <Modal title="Discover Spaces" onClose={onClose} wide>
       <form className="nu-discover__search" onSubmit={handleSearchSubmit}>
         <input
           className="nu-field__input"
           data-nu-role="discover-search-input"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="Search the public directory…"
+          placeholder="Search public Spaces…"
           autoFocus
         />
         <button type="submit" className="nu-button nu-button--secondary" disabled={loading}>
@@ -145,7 +138,7 @@ export function DiscoverModal({
       {loading ? (
         <p className="nu-discover__status">Loading…</p>
       ) : entries.length === 0 ? (
-        <p className="nu-discover__status">Nothing found in this homeserver's public directory.</p>
+        <p className="nu-discover__status">No public Spaces found on this homeserver.</p>
       ) : (
         <div className="nu-discover__list" data-nu-role="discover-list">
           {entries.map((entry) => (

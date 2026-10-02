@@ -234,8 +234,8 @@ Picking **Global** as a post's destination sends it to the author's **profile fe
 
 - **Listed in the directory** under room type `xyz.nekous.profile`, world-readable, join rule
   public. The directory listing is how the global feed finds every profile on the server.
-  Discover filters that room type out (`isBrowsableEntry`), and its `feed` channel type keeps it
-  out of Direct Messages.
+  Discover lists only Spaces (`browsePublicSpaces`), so it never shows, and its `feed` channel
+  type keeps it out of Direct Messages.
 - Its ID is also published on the author's extended profile (`xyz.nekous.profile_room`) and kept
   in their account data.
 - Ownership comes from the feed marker, cross-checked against the room's creator, so a

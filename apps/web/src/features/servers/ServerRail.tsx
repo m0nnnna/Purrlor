@@ -228,10 +228,6 @@ export function ServerRail() {
         <DiscoverModal
           onClose={() => setShowDiscover(false)}
           onJoinedSpace={(roomId) => selectSpace(roomId)}
-          onJoinedRoom={(roomId) => {
-            setSelectedSpaceId(null);
-            setSelectedRoomId(roomId);
-          }}
         />
       )}
       {showInvites && (

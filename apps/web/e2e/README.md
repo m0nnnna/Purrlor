@@ -15,6 +15,7 @@ the same server.
 | `moderation.spec.ts` | A report reaching the Space's moderators, who delete the message from the queue; automod refusing a blocked word in Purrlor and deleting one sent from elsewhere |
 | `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
 | `webhooks.spec.ts` | A webhook posting through a real token server under its own name (APP), wrong tokens refused, deleting it, and a person unable to pose as one |
+| `discover.spec.ts` | Discover lists a public Space but not its public channel, and joining it puts it on the server rail |
 | `encryption-settings.spec.ts` | New private channels and DMs are created encrypted, public channels aren't, and turning encryption on for an existing channel warns first |
 | `chat-features.spec.ts` | A thread (replying from a message, another user's reply arriving in it), pinning and unpinning, finding a message by searching, and sending a file from the composer |
 | `news.spec.ts` | A Space's news shown on a member's first visit and then not, the Space opening on its first channel, a small fix that isn't shown again and an update that is; who may edit it set in Roles and held to by the homeserver |
