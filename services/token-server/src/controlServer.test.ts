@@ -1,4 +1,5 @@
 import { after, before, describe, it } from 'node:test';
+import { IpWatch } from './ipWatch.js';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { chmod, chown, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
@@ -62,6 +63,7 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
   const commands: string[] = [];
   let adminMessages: Record<string, unknown>[] = [];
 
+  const watch = new IpWatch(new Set(['192.168.1.7']));
   const deps = (): ControlDeps => ({
     store,
     serverName: async () => SERVER,
@@ -72,6 +74,8 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
     profileRoomOwner: async (roomId) => (roomId === '!luna-profile:purr.example' ? LUNA : undefined),
     forgetCopy: async (mxc) => void forgotten.push(mxc),
     counts: async () => ({ online: 2, publicPages: 1, profiles: 3, serviceAccounts: ['@bot:purr.example'] }),
+    ipWatch: watch,
+    realIpFrom: new Set(['192.168.1.7']),
     adminSession: async (credentials, fn) => {
       if (credentials.password !== 'right') throw new Error(`Couldn't log in as ${credentials.user}: Invalid password`);
       const session: AdminSession = {
@@ -281,6 +285,22 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
     assert.equal(res.status, 200, res.text);
     assert.equal((await store.lists()).blockedMedia.has('mxc://purr.example/oops'), false);
     assert.equal((await store.deletions()).some((entry) => entry.mxc === 'mxc://purr.example/oops'), false);
+  });
+
+  it('watches which addresses come in through which hops, then says what it means', async () => {
+    const pending = call(socketPath, 'POST', '/ips/watch', { seconds: '1' });
+    // While it watches: two requests through the edge, from the tunnel's address.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    for (let i = 0; i < 2; i += 1) watch.record({ socket: { remoteAddress: '192.168.1.7' }, headers: { 'x-real-ip': '10.40.40.2' }, ip: '192.168.1.7' });
+    const res = await pending;
+    assert.equal(res.status, 200);
+    assert.match(res.text, /^10\.40\.40\.2 {2}\(2 requests,/m);
+    assert.match(res.text, /connected from {2}192\.168\.1\.7 {2}\(REAL_IP_FROM\)/);
+    assert.match(res.text, /PROXY protocol/);
+    const [entry] = (await store.readAudit(1)).map((line) => JSON.parse(line));
+    assert.equal(entry.action, 'ips.watch');
+    // The log says a watch happened, not what it saw.
+    assert.ok(!JSON.stringify(entry).includes('10.40.40.2'));
   });
 
   it('gives totals only: registered people, online now, public pages', async () => {

@@ -121,6 +121,15 @@ original on the homeserver, so signed-in people stop seeing it too.
 post or guestbook entry in their profile room, or something else. Copyright complaints come by
 email to the address in the terms; they aren't in the admin room.
 
+### Addresses
+
+`POST /ips/watch` (`seconds`, default 60, at most 240) records, for that long and in memory only,
+each distinct combination of the connecting address, `X-Real-IP`, `X-Forwarded-For` and the address
+`clientIp` settled on, with a count (`ipWatch.ts`; a middleware ahead of every route does nothing
+while no watch runs). Then it answers with the list and `diagnose`'s notes, and drops it. Watches
+started together share one recording. Audited as `ips.watch` with the duration and how many distinct
+lines, never the addresses.
+
 ### Stats
 
 `POST /stats` (adminUser, adminPassword) logs in as the admin, asks the homeserver for its account

@@ -96,6 +96,26 @@ random and new each time the service starts, so the hashes can't be matched to a
 is dropped 2½ minutes after its last ping, and nothing is written to disk or logged (no address,
 no device). Running `stats` goes in the audit log, as `stats`, without the numbers.
 
+## Checking visitors' addresses
+
+`purrlor ips [seconds]` shows what addresses reach the token server, for setting up the proxies in
+front of it (`REAL_IP_FROM`, docs/public-web.md, "Deploying"). It watches for that long (default 60,
+at most 240) while you browse the site, ideally from a phone off Wi-Fi as well, then prints each
+address it counted (the one its rate limits use) with:
+
+- **connected from**: the last hop before the token server, marked if it's in `REAL_IP_FROM`
+- **X-Real-IP** and **X-Forwarded-For**: what that hop said the visitor was
+
+and then what it means: visitors' own addresses are coming through; or `REAL_IP_FROM` names a hop
+that never connects; or the edge sends no `X-Real-IP`; or the edge's `X-Real-IP` is itself a private
+address, so the hop in front of the edge (a tunnel or relay that rewrites the source) is losing
+them and needs to pass them on (the PROXY protocol). Every visitor counted as one private address
+means everyone shares one rate limit.
+
+Nothing is recorded except while it runs, and only in memory: the list goes to your terminal and
+the token server keeps none of it. The audit log notes that a watch ran (`ips.watch`), not what it
+saw.
+
 ## The audit log
 
 `purrlor audit` shows the last 50 things done (`purrlor audit 200` for more): time, who, what, the

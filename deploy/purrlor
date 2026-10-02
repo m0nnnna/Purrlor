@@ -144,6 +144,7 @@ Moderation (root; docs/admin.md) — every change needs a reason, which goes in 
   purrlor reports [--pages]            page reports from the homeserver's admin room (admin password)
   purrlor audit [N]                    the last N things done (default 50)
   purrlor stats                        registered accounts, online now, public pages: totals only (admin password)
+  purrlor ips [seconds]                watch which addresses reach the token server, and through which hops (default 60)
   Options: --reason "why" (else asked), --yes (skip the confirmation). A <file> is its mxc:// address
   or the public media link.
 HELP
@@ -1316,6 +1317,19 @@ cmd_takedown() {
   esac
 }
 
+# cmd_ips [seconds]: records what addresses reach the token server for that long (default 60, at
+# most 240), then prints them by hop with what it means. Browse the site meanwhile. Nothing is
+# recorded except while this runs, and the token server keeps none of it afterwards.
+cmd_ips() {
+  local usage="Usage: purrlor ips [seconds]   (default 60, at most 240; browse the site while it watches)"
+  need_root ips "$@"
+  [ "$#" -le 1 ] || die "$usage"
+  local seconds="${1:-60}"
+  printf '%s' "$seconds" | grep -Eq '^[0-9]{1,3}$' && [ "$seconds" -ge 1 ] && [ "$seconds" -le 240 ] || die "$usage"
+  echo "Watching for ${seconds}s. Open the site now (the global feed, a profile), from a phone off Wi-Fi too if you can..."
+  CTL_TIMEOUT=$((seconds + 30)) ctl POST /ips/watch --data-urlencode "seconds=$seconds"
+}
+
 # cmd_stats: totals only (docs/admin.md). The registered count comes from the homeserver, so it asks
 # for its admin; online and public-page counts are the token server's own.
 cmd_stats() {
@@ -1374,6 +1388,7 @@ case "${1:-help}" in
   reports) shift; cmd_reports "$@" ;;
   audit) shift; cmd_audit "$@" ;;
   stats) shift; cmd_stats "$@" ;;
+  ips) shift; cmd_ips "$@" ;;
   matrix-dns) write_matrix_resolv ;;
   *) warn "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac; exit $?

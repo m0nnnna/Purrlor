@@ -24,9 +24,9 @@ export function parseRealIpFrom(value: string | undefined): Set<string> {
   );
 }
 
-const REAL_IP_FROM = parseRealIpFrom(process.env.REAL_IP_FROM);
+export const REAL_IP_FROM = parseRealIpFrom(process.env.REAL_IP_FROM);
 
-type RequestLike = Pick<Request, 'ip' | 'headers'> & { socket: { remoteAddress?: string } };
+export type RequestLike = Pick<Request, 'ip' | 'headers'> & { socket: { remoteAddress?: string } };
 
 export function clientIp(req: RequestLike, realIpFrom: Set<string> = REAL_IP_FROM): string {
   const peer = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');

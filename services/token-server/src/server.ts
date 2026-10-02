@@ -1,4 +1,5 @@
 import express from 'express';
+import { ipWatch } from './ipWatch.js';
 import cors from 'cors';
 import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import { validateOpenIdToken } from './openid.js';
@@ -44,6 +45,11 @@ const app = express();
 // public web's per-address rate limits need. Only proxies on private and loopback addresses are
 // believed, so a visitor can't pick their own address by sending the header.
 app.set('trust proxy', process.env.TRUST_PROXY ?? 'loopback, linklocal, uniquelocal');
+// `purrlor ips`: records nothing unless an admin is watching (ipWatch.ts).
+app.use((req, _res, next) => {
+  ipWatch.record(req);
+  next();
+});
 app.use(cors({ origin: corsOriginAllowed }));
 app.use(express.json());
 

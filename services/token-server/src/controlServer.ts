@@ -15,6 +15,8 @@ import {
   terminalSafe,
   type Report,
 } from './control.js';
+import { REAL_IP_FROM } from './clientIp.js';
+import { diagnose, ipWatch, MAX_WATCH_SECONDS, type IpWatch } from './ipWatch.js';
 import { isMxc, localUserId, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
 
 /**
@@ -52,6 +54,9 @@ export type ControlDeps = {
   /** Drops the local copy of a file (the media route's cache) at once. */
   forgetCopy(mxc: string): Promise<void>;
   adminSession?: <T>(credentials: AdminCredentials, fn: (session: AdminSession) => Promise<T>) => Promise<T>;
+  /** `purrlor ips`: the watch and REAL_IP_FROM (the service's own unless a test gives them). */
+  ipWatch?: IpWatch;
+  realIpFrom?: Set<string>;
   /** Counts for `purrlor stats`: totals only, never who. */
   counts?(): Promise<{ online: number; publicPages: number; profiles: number; serviceAccounts: string[] }>;
 };
@@ -383,6 +388,41 @@ export function controlApp(deps: ControlDeps): express.Express {
         ...(failed.length ? ['They stay blocked on the public web; run it again to retry.'] : []),
       ].join('\n');
       reply(req, res, failed.length ? 207 : 200, text, { results });
+    })
+  );
+
+  // --- What addresses the token server sees -----------------------------------------------------
+
+  // Records for a while (only then: ipWatch.ts), then says what came through each hop and what it
+  // means. The addresses go to the admin's terminal and aren't kept; the audit log notes the watch.
+  app.post(
+    '/ips/watch',
+    route(async (req, res, actor, body) => {
+      const seconds = Math.min(Math.max(Number(one(body.seconds)) || 60, 1), MAX_WATCH_SECONDS);
+      const watch = deps.ipWatch ?? ipWatch;
+      const realIpFrom = deps.realIpFrom ?? REAL_IP_FROM;
+      const seen = await watch.watch(seconds);
+      await deps.store.audit({ actor, action: 'ips.watch', target: `${seconds}s`, result: `ok (${seen.length} distinct)` });
+      const time = (ts: number) => new Date(ts).toISOString().slice(11, 19);
+      const rows = seen.map((s) =>
+        [
+          `${s.decided}  (${s.requests} request${s.requests === 1 ? '' : 's'}, last ${time(s.lastSeen)})`,
+          `    connected from  ${s.peer}${realIpFrom.has(s.peer) ? '  (REAL_IP_FROM)' : ''}`,
+          `    X-Real-IP       ${s.realIp ?? '-'}`,
+          `    X-Forwarded-For ${s.forwardedFor ?? '-'}`,
+        ].join('\n')
+      );
+      const text = [
+        `What the token server saw in ${seconds}s, by the address it counted (the one its rate limits use):`,
+        `REAL_IP_FROM: ${realIpFrom.size ? [...realIpFrom].join(', ') : '(not set)'}`,
+        '',
+        ...(rows.length ? rows : ['(nothing)']),
+        '',
+        ...diagnose(seen, realIpFrom),
+        '',
+        'Recorded only while watching, in memory; not kept.',
+      ].join('\n');
+      reply(req, res, 200, text, { seconds, seen });
     })
   );
 

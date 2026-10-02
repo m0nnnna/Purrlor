@@ -236,5 +236,10 @@ edge sets to the visitor's own address (`proxy_set_header X-Real-IP $remote_addr
 itself reading Cloudflare's header). The header is ignored from anywhere else, so nobody can claim
 an address by sending it.
 
+To see what actually arrives, run `sudo purrlor ips` and browse the site meanwhile (docs/admin.md,
+"Checking visitors' addresses"): it lists each address the token server counted, with the hop
+that connected, the `X-Real-IP` and `X-Forwarded-For` it carried, and which hop is losing visitors'
+addresses if any is.
+
 Uploads: the bundled homeserver accepts files up to 100 MiB (`MATRIX_MAX_UPLOAD_BYTES` in `.env`),
 and nginx's homeserver blocks need the same `client_max_body_size 100M`.
