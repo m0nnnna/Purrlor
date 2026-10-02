@@ -61,6 +61,22 @@ const REPLY_TO_KEY = 'xyz.nekous.reply_to';
 export const REPOST_RECEIPT_TYPE = 'xyz.nekous.repost';
 const REPOST_RECEIPT_KEY = 'xyz.nekous.repost_event';
 
+/**
+ * Liking or reposting a **comment**. Both relate to the *post* (`m.reference`), like a comment
+ * does, and name the comment in `xyz.nekous.comment` — so one read of the post's relations counts
+ * them for its whole thread, instead of a read per comment, and a new one wakes the card the same
+ * way a new comment does (usePostInteractions). A comment's like is its own event type rather than
+ * an `m.reaction`, since a reaction can only point at what it's about. A comment's repost marker is
+ * the post's marker type with the comment named, and the post's own counts leave those out.
+ */
+export const COMMENT_LIKE_TYPE = 'xyz.nekous.comment_like';
+const COMMENT_KEY = 'xyz.nekous.comment';
+
+function commentNamed(event: RawRelationEvent): string | undefined {
+  const id = event.content[COMMENT_KEY];
+  return typeof id === 'string' ? id : undefined;
+}
+
 /** The comment a reply answers, and who wrote it. */
 export type ReplyTarget = { eventId: string; sender: string };
 
@@ -230,6 +246,7 @@ export function summarizeReposts(events: RawRelationEvent[], postId: string, myU
   let mine: MyRepost | undefined;
   for (const event of events) {
     if (event.type !== REPOST_RECEIPT_TYPE || !relatesTo(event, postId, RelationType.Reference)) continue;
+    if (commentNamed(event)) continue; // a comment's repost (summarizeCommentReposts)
     reposters.add(event.sender);
     const target = event.content[REPOST_RECEIPT_KEY] as { room_id?: unknown; event_id?: unknown } | undefined;
     if (!mine && event.sender === myUserId && typeof target?.room_id === 'string' && typeof target.event_id === 'string') {
@@ -239,11 +256,86 @@ export function summarizeReposts(events: RawRelationEvent[], postId: string, myU
   return { repostCount: reposters.size, ...(mine && { mine }) };
 }
 
-/** One page of markers is plenty: past it the count reads "100+". */
-export async function fetchReposts(mx: MatrixClient, roomId: string, postId: string): Promise<RepostSummary> {
+/** What one comment has had: its likes and reposts, and yours of each. */
+export type CommentStats = { likeCount: number; myLikeId?: string; repostCount: number; myRepost?: MyRepost };
+
+/** Comment likes and comment repost markers out of a post's raw relations, per comment. Pure, so
+ *  it's tested without a server. One like and one repost per person per comment. */
+export function summarizeCommentStats(events: RawRelationEvent[], postId: string, myUserId: string): Record<string, CommentStats> {
+  const likers = new Map<string, Map<string, string>>();
+  const reposters = new Map<string, Set<string>>();
+  const mine = new Map<string, MyRepost>();
+  for (const event of events) {
+    if (!relatesTo(event, postId, RelationType.Reference)) continue;
+    const commentId = commentNamed(event);
+    if (!commentId) continue;
+    if (event.type === COMMENT_LIKE_TYPE) {
+      const people = likers.get(commentId) ?? new Map<string, string>();
+      if (!people.has(event.sender)) people.set(event.sender, event.event_id);
+      likers.set(commentId, people);
+    } else if (event.type === REPOST_RECEIPT_TYPE) {
+      const people = reposters.get(commentId) ?? new Set<string>();
+      people.add(event.sender);
+      reposters.set(commentId, people);
+      const target = event.content[REPOST_RECEIPT_KEY] as { room_id?: unknown; event_id?: unknown } | undefined;
+      if (!mine.has(commentId) && event.sender === myUserId && typeof target?.room_id === 'string' && typeof target.event_id === 'string') {
+        mine.set(commentId, { receiptId: event.event_id, roomId: target.room_id, eventId: target.event_id });
+      }
+    }
+  }
+  const stats: Record<string, CommentStats> = {};
+  for (const commentId of new Set([...likers.keys(), ...reposters.keys()])) {
+    const people = likers.get(commentId);
+    const myLikeId = people?.get(myUserId);
+    const myRepost = mine.get(commentId);
+    stats[commentId] = {
+      likeCount: people?.size ?? 0,
+      repostCount: reposters.get(commentId)?.size ?? 0,
+      ...(myLikeId && { myLikeId }),
+      ...(myRepost && { myRepost }),
+    };
+  }
+  return stats;
+}
+
+/** One page of markers is plenty: past it the count reads "100+". The same page holds the
+ *  thread's comment reposts, handed back raw for summarizeCommentStats. */
+export async function fetchReposts(
+  mx: MatrixClient,
+  roomId: string,
+  postId: string
+): Promise<RepostSummary & { events: RawRelationEvent[] }> {
   const res = await mx.fetchRelations(roomId, postId, RelationType.Reference, REPOST_RECEIPT_TYPE, { limit: 100 });
   const chunk = res.chunk as unknown as RawRelationEvent[];
-  return { ...summarizeReposts(chunk, postId, mx.getUserId() ?? ''), repostsTruncated: !!res.next_batch && chunk.length > 0 };
+  return {
+    ...summarizeReposts(chunk, postId, mx.getUserId() ?? ''),
+    repostsTruncated: !!res.next_batch && chunk.length > 0,
+    events: chunk,
+  };
+}
+
+/** Every comment like in a post's thread, read like the post's own likes: the newest page from
+ *  `/relations`, older ones from the timeline, up to the same cap. */
+export async function fetchCommentLikes(mx: MatrixClient, roomId: string, postId: string, postTs: number): Promise<RawRelationEvent[]> {
+  const first = await mx.fetchRelations(roomId, postId, RelationType.Reference, COMMENT_LIKE_TYPE, { limit: 100 });
+  const events = [...(first.chunk as unknown as RawRelationEvent[])];
+  let next: OlderCursor | undefined =
+    first.next_batch && events.length ? { beforeEventId: events[events.length - 1].event_id } : undefined;
+  for (let round = 1; round < MAX_LIKE_PAGES && next; round += 1) {
+    const older = await readOlderRelations(mx, roomId, postId, COMMENT_LIKE_TYPE, next, { want: 100, postTs });
+    events.push(...older.events);
+    next = older.next;
+  }
+  return events;
+}
+
+export async function likeComment(mx: MatrixClient, roomId: string, postId: string, commentId: string, ownerId: string): Promise<string> {
+  await ensureJoined(mx, roomId, ownerId);
+  const { event_id: eventId } = await mx.sendEvent(roomId, COMMENT_LIKE_TYPE as any, {
+    [COMMENT_KEY]: commentId,
+    'm.relates_to': { rel_type: RelationType.Reference, event_id: postId },
+  } as any);
+  return eventId;
 }
 
 export async function sendRepostReceipt(
@@ -251,11 +343,14 @@ export async function sendRepostReceipt(
   roomId: string,
   postId: string,
   ownerId: string,
-  repost: { roomId: string; eventId: string; quote: boolean }
+  repost: { roomId: string; eventId: string; quote: boolean },
+  /** Reposting one of the post's comments rather than the post. */
+  commentId?: string
 ): Promise<void> {
   await ensureJoined(mx, roomId, ownerId);
   await mx.sendEvent(roomId, REPOST_RECEIPT_TYPE as any, {
     [REPOST_RECEIPT_KEY]: { room_id: repost.roomId, event_id: repost.eventId, quote: repost.quote },
+    ...(commentId && { [COMMENT_KEY]: commentId }),
     'm.relates_to': { rel_type: RelationType.Reference, event_id: postId },
   } as any);
 }

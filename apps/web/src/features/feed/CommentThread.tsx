@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -10,7 +10,7 @@ import type { Emote } from '../../matrix/emotes';
 import { buildPostContent, POST_MAX_LENGTH, postLength, type PostContent } from '../../matrix/feed';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { ACCEPTED_MEDIA_TYPES } from '../../matrix/postMedia';
-import type { PostComment, ReplyTarget } from '../../matrix/postInteractions';
+import type { CommentStats, PostComment, ReplyTarget } from '../../matrix/postInteractions';
 import { renderMessageText } from '../messaging/renderMessageText';
 import { useMentionAutocomplete, type MentionPerson } from '../messaging/useMentionAutocomplete';
 import { CharCounter, isOverLimit } from './CharCounter';
@@ -45,6 +45,9 @@ function CommentItem({
   onReply,
   onReport,
   onOpenProfile,
+  stats,
+  onLike,
+  renderRepost,
 }: {
   comment: PostComment;
   myUserId: string;
@@ -56,9 +59,14 @@ function CommentItem({
   onReply: (target: ReplyTarget) => void;
   onReport?: () => void;
   onOpenProfile?: (userId: string) => void;
+  stats?: CommentStats;
+  onLike?: () => void;
+  renderRepost?: (comment: PostComment, authorName: string) => ReactNode;
 }) {
   const author = useUserProfile(comment.sender, members);
   const hiddenMxcUrls = useHiddenLibraryImages();
+  const liked = !!stats?.myLikeId;
+  const likeCount = stats?.likeCount ?? 0;
   return (
     <li className="nu-comment" data-nu-role="post-comment">
       <Avatar name={author.name} mxcUrl={author.avatarUrl} size={28} />
@@ -80,6 +88,21 @@ function CommentItem({
             {formatPostTime(comment.ts)}
           </time>
           <span className="nu-comment__actions">
+            {onLike && (
+              <button
+                type="button"
+                className={liked ? 'nu-post__action nu-post__action--active' : 'nu-post__action'}
+                data-nu-role="post-comment-like"
+                aria-pressed={liked}
+                title={liked ? 'Unlike' : 'Like'}
+                aria-label={liked ? 'Unlike' : 'Like'}
+                onClick={onLike}
+              >
+                <Icon name="heart" size={12} filled={liked} />
+                {likeCount > 0 && likeCount}
+              </button>
+            )}
+            {renderRepost?.(comment, author.name)}
             {canReply && (
               <button
                 type="button"
@@ -162,6 +185,9 @@ export function CommentThread({
   inlineLimit,
   onViewAll,
   totalLabel,
+  commentStats = {},
+  onLikeComment,
+  renderRepost,
 }: {
   /** Everything loaded so far, oldest first. */
   comments: PostComment[];
@@ -190,6 +216,11 @@ export function CommentThread({
   onViewAll?: () => void;
   /** The comment count as the card shows it ("12", or "50+" while more are unloaded). */
   totalLabel?: string;
+  /** Each comment's likes and reposts, by comment ID. */
+  commentStats?: Record<string, CommentStats>;
+  onLikeComment?: (commentId: string) => void;
+  /** A comment's repost button, drawn by the post (which knows where it may be reposted). */
+  renderRepost?: (comment: PostComment, authorName: string) => ReactNode;
 }) {
   const mx = useMatrixClient();
   const myUserId = mx.getUserId() ?? '';
@@ -308,6 +339,9 @@ export function CommentThread({
               onOpenProfile={onOpenProfile}
               {...(onReport && comment.sender !== myUserId && { onReport: () => onReport(comment.eventId) })}
               onReply={startReply}
+              stats={commentStats[comment.eventId]}
+              {...(onLikeComment && { onLike: () => onLikeComment(comment.eventId) })}
+              renderRepost={renderRepost}
             />
           ))}
         </ul>

@@ -47,6 +47,15 @@ describe('buildActivity', () => {
     expect(rows[0].quote).toEqual({ roomId: '!theirs', eventId: '$q4' });
   });
 
+  it("doesn't count a repost of a comment under your post as a repost of the post", () => {
+    const ofComment = ev('xyz.nekous.repost', '@c:x', 5, {
+      'xyz.nekous.repost_event': { room_id: '!theirs', event_id: '$r', quote: false },
+      'xyz.nekous.comment': '$c',
+      'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+    });
+    expect(buildActivity([ofComment], ME)).toEqual([]);
+  });
+
   it('skips your own actions, undone ones, and other reactions', () => {
     const undone = { ...like('@a:x', 2), unsigned: { redacted_because: {} } };
     const laugh = ev('m.reaction', '@b:x', 3, { 'm.relates_to': { rel_type: 'm.annotation', event_id: POST, key: '😂' } });

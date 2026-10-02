@@ -108,6 +108,8 @@ function classify(event: RawActivityEvent, myUserId: string): Classified | undef
   }
   if (event.type === REPOST_RECEIPT_TYPE) {
     if (relation?.rel_type !== RelationType.Reference || !postId) return undefined;
+    // A repost of a comment under your post isn't a repost of your post.
+    if (typeof event.content['xyz.nekous.comment'] === 'string') return undefined;
     const target = event.content['xyz.nekous.repost_event'] as
       | { room_id?: unknown; event_id?: unknown; quote?: unknown }
       | undefined;

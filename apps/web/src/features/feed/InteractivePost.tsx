@@ -6,9 +6,19 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { buildPostContent, deletePost, editPost, POST_EVENT_TYPE, readFeedMarker, type PostContent, type PostOrigin, type RepostOf } from '../../matrix/feed';
+import {
+  buildPostContent,
+  deletePost,
+  editPost,
+  POST_EVENT_TYPE,
+  readFeedMarker,
+  repostOfComment,
+  type PostContent,
+  type PostOrigin,
+  type RepostOf,
+} from '../../matrix/feed';
 import type { FeedSource } from '../../matrix/globalFeed';
-import { COMMENT_EVENT_TYPE } from '../../matrix/postInteractions';
+import { COMMENT_EVENT_TYPE, type MyRepost, type PostComment } from '../../matrix/postInteractions';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canModerateFeed, isRemovedFromSpace } from '../../matrix/feedGovernance';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
@@ -114,7 +124,8 @@ export function InteractivePost({
     });
     return { event, space };
   };
-  const [quoting, setQuoting] = useState(false);
+  // Quoting the post (true), or one of its comments (that comment's copy).
+  const [quoting, setQuoting] = useState<boolean | RepostOf>(false);
   const [reposting, setReposting] = useState(false);
   const [showLikers, setShowLikers] = useState(false);
   const { displayName } = useOwnProfile();
@@ -309,6 +320,93 @@ export function InteractivePost({
     }
   };
 
+  const handleLikeComment = async (commentId: string) => {
+    if (!canInteract) {
+      setNotice(cannotInteractReason);
+      return;
+    }
+    setError(undefined);
+    try {
+      await interactions.toggleCommentLike(commentId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t update that like');
+    }
+  };
+
+  const commentCopy = (comment: PostComment, authorName: string) =>
+    repostOfComment(
+      { roomId, eventId: postId, sender: card.author.userId, origin: sourceOrigin },
+      { eventId: comment.eventId, sender: comment.sender, senderName: authorName, ts: comment.ts, content: comment.content }
+    );
+
+  // A comment reposts to the same places its post may go, the same way: at once, or quoted.
+  const handleRepostComment = async (comment: PostComment, authorName: string) => {
+    if (!repost || reposting) return;
+    const target = repost.targets.find((t) => t.id === GLOBAL_TARGET_ID) ?? repost.targets[0];
+    if (!target) return;
+    setReposting(true);
+    setError(undefined);
+    try {
+      const { source } = await repostToTarget(mx, target.target, commentCopy(comment, authorName), displayName || card.myUserId, target.isPublic);
+      onReposted?.(source);
+      await interactions.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t repost that');
+    } finally {
+      setReposting(false);
+    }
+  };
+
+  const handleUndoCommentRepost = async (mine: MyRepost) => {
+    if (reposting) return;
+    setReposting(true);
+    setError(undefined);
+    try {
+      await undoRepost(mx, roomId, mine);
+      await interactions.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Couldn’t undo that repost');
+    } finally {
+      setReposting(false);
+    }
+  };
+
+  const renderCommentRepost = (comment: PostComment, authorName: string) => {
+    const stats = interactions.commentStats[comment.eventId];
+    const mine = stats?.myRepost;
+    if (!repost && !mine) return null;
+    const count = stats?.repostCount ?? 0;
+    return (
+      <Menu
+        label={mine ? 'Reposted' : 'Repost or quote'}
+        role="post-comment-repost"
+        align="end"
+        triggerClassName={mine ? 'nu-post__action nu-post__action--reposted' : 'nu-post__action'}
+        trigger={
+          <>
+            <Icon name="repost" size={12} />
+            {count > 0 && count}
+          </>
+        }
+      >
+        {mine ? (
+          <MenuItem icon="repost" role="post-comment-undo-repost" onSelect={() => void handleUndoCommentRepost(mine)}>
+            Undo repost
+          </MenuItem>
+        ) : (
+          <MenuItem icon="repost" role="post-comment-repost-now" onSelect={() => void handleRepostComment(comment, authorName)}>
+            Repost
+          </MenuItem>
+        )}
+        {repost && (
+          <MenuItem icon="pencil" role="post-comment-quote" onSelect={() => setQuoting(commentCopy(comment, authorName))}>
+            Quote
+          </MenuItem>
+        )}
+      </Menu>
+    );
+  };
+
   // Only a post anyone can read can be pinned to your public profile.
   const canPin = isPostOwner && isPublic;
   const isPinned = pinned?.eventId === postId;
@@ -480,7 +578,7 @@ export function InteractivePost({
           )}
           {quoting && repost && (
             <RepostDialog
-              repostOf={repost.repostOf}
+              repostOf={quoting === true ? repost.repostOf : quoting}
               targets={repost.targets}
               onClose={() => setQuoting(false)}
               onReposted={(source) => {
@@ -530,6 +628,9 @@ export function InteractivePost({
               hasOlder={!!interactions.older}
               loadingOlder={interactions.loadingOlder}
               onLoadOlder={interactions.loadOlder}
+              commentStats={interactions.commentStats}
+              onLikeComment={(commentId) => void handleLikeComment(commentId)}
+              renderRepost={renderCommentRepost}
               {...(!onPage && { inlineLimit: INLINE_COMMENT_LIMIT, onViewAll: openPage, totalLabel: commentCount })}
             />
           )}

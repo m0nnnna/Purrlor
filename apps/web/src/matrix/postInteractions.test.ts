@@ -3,9 +3,11 @@ import { canRepost, feedJoinVia } from './feed';
 import {
   buildCommentContent,
   COMMENT_EVENT_TYPE,
+  COMMENT_LIKE_TYPE,
   LIKE_KEY,
   mergeNewestPage,
   REPOST_RECEIPT_TYPE,
+  summarizeCommentStats,
   summarizeRelations,
   summarizeReposts,
   type RawRelationEvent,
@@ -189,5 +191,70 @@ describe('summarizeReposts', () => {
       content: { 'm.relates_to': { rel_type: 'm.reference', event_id: '$other' } },
     });
     expect(summarizeReposts([undone, elsewhere], POST, '@me:x')).toEqual({ repostCount: 0 });
+  });
+});
+
+describe('summarizeCommentStats', () => {
+  const commentLike = (sender: string, commentId: string, extra: Partial<RawRelationEvent> = {}): RawRelationEvent => {
+    seq += 1;
+    return {
+      event_id: `$clike${seq}`,
+      type: COMMENT_LIKE_TYPE,
+      sender,
+      origin_server_ts: seq,
+      content: { 'xyz.nekous.comment': commentId, 'm.relates_to': { rel_type: 'm.reference', event_id: POST } },
+      ...extra,
+    };
+  };
+  const commentRepost = (sender: string, commentId: string, repostId: string): RawRelationEvent => {
+    seq += 1;
+    return {
+      event_id: `$creceipt${seq}`,
+      type: REPOST_RECEIPT_TYPE,
+      sender,
+      origin_server_ts: seq,
+      content: {
+        'xyz.nekous.repost_event': { room_id: '!theirs', event_id: repostId, quote: false },
+        'xyz.nekous.comment': commentId,
+        'm.relates_to': { rel_type: 'm.reference', event_id: POST },
+      },
+    };
+  };
+
+  it('counts likes and reposts per comment, one each per person, and finds yours', () => {
+    const mineLike = commentLike('@me:x', '$c1');
+    const stats = summarizeCommentStats(
+      [
+        commentLike('@a:x', '$c1'),
+        commentLike('@a:x', '$c1'),
+        mineLike,
+        commentLike('@b:x', '$c2'),
+        commentRepost('@me:x', '$c2', '$r1'),
+        commentRepost('@b:x', '$c2', '$r2'),
+      ],
+      POST,
+      '@me:x'
+    );
+    expect(stats.$c1).toEqual({ likeCount: 2, repostCount: 0, myLikeId: mineLike.event_id });
+    expect(stats.$c2.likeCount).toBe(1);
+    expect(stats.$c2.repostCount).toBe(2);
+    expect(stats.$c2.myRepost).toMatchObject({ roomId: '!theirs', eventId: '$r1' });
+  });
+
+  it('leaves out redacted likes and anything about another post', () => {
+    const stats = summarizeCommentStats(
+      [
+        commentLike('@a:x', '$c1', { unsigned: { redacted_because: {} } }),
+        commentLike('@b:x', '$c1', { content: { 'xyz.nekous.comment': '$c1', 'm.relates_to': { rel_type: 'm.reference', event_id: '$other' } } }),
+      ],
+      POST,
+      '@me:x'
+    );
+    expect(stats).toEqual({});
+  });
+
+  it("keeps a comment's reposts out of the post's own count", () => {
+    const summary = summarizeReposts([commentRepost('@a:x', '$c1', '$r1')], POST, '@me:x');
+    expect(summary.repostCount).toBe(0);
   });
 });

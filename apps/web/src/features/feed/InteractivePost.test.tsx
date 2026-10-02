@@ -38,6 +38,8 @@ const hook = {
   loaded: true,
   busy: false,
   toggleLike: vi.fn(async () => undefined),
+  commentStats: {} as Record<string, { likeCount: number; myLikeId?: string; repostCount: number; myRepost?: { receiptId: string; roomId: string; eventId: string } }>,
+  toggleCommentLike: vi.fn(async () => undefined),
   addComment: vi.fn(async () => undefined),
   removeComment: vi.fn(async () => undefined),
   reload: vi.fn(),
@@ -119,6 +121,7 @@ afterEach(() => {
   hook.likesTruncated = false;
   hook.repostCount = 0;
   hook.myRepost = undefined;
+  hook.commentStats = {};
   ignoredUsers = [];
 });
 
@@ -383,6 +386,59 @@ describe('reposting', () => {
     expect(q(container, 'post-repost-now')).toBeNull();
     fireEvent.click(q(container, 'post-undo-repost')!);
     await vi.waitFor(() => expect(publishing.undoRepost).toHaveBeenCalledWith(expect.anything(), '!feed', hook.myRepost));
+  });
+});
+
+describe('liking and reposting a comment', () => {
+  const openThread = (container: HTMLElement) => fireEvent.click(q(container, 'post-comment-toggle')!);
+
+  it("likes a comment, and shows each comment's counts", async () => {
+    hook.commentStats = { $c1: { likeCount: 4, repostCount: 2 } };
+    const { container } = renderPost({ repost });
+    openThread(container);
+    expect(q(container, 'post-comment-like')?.textContent).toBe('4');
+    expect(q(container, 'post-comment-repost')?.textContent).toBe('2');
+    fireEvent.click(q(container, 'post-comment-like')!);
+    await vi.waitFor(() => expect(hook.toggleCommentLike).toHaveBeenCalledWith('$c1'));
+  });
+
+  it("explains instead of liking where you can't join the feed", () => {
+    const { container } = renderPost({ canInteract: false, cannotInteractReason: 'Join the Space to like.' });
+    openThread(container);
+    fireEvent.click(q(container, 'post-comment-like')!);
+    expect(hook.toggleCommentLike).not.toHaveBeenCalled();
+    expect(q(container, 'post-interaction-notice')?.textContent).toBe('Join the Space to like.');
+  });
+
+  it('reposts a comment as a copy that names the post it is under', async () => {
+    const { container } = renderPost({ repost });
+    openThread(container);
+    fireEvent.click(q(container, 'post-comment-repost')!);
+    fireEvent.click(q(container, 'post-comment-repost-now')!);
+    await vi.waitFor(() => expect(publishing.repostToTarget).toHaveBeenCalledOnce());
+    expect(publishing.repostToTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      { kind: 'global' },
+      expect.objectContaining({ roomId: '!feed', eventId: '$c1', sender: '@bob:x', body: 'first!', commentOn: { eventId: '$post', sender: '@alice:x' } }),
+      expect.any(String),
+      true
+    );
+  });
+
+  it('offers Undo on a comment you reposted', async () => {
+    const mine = { receiptId: '$creceipt', roomId: '!me', eventId: '$r' };
+    hook.commentStats = { $c1: { likeCount: 0, repostCount: 1, myRepost: mine } };
+    const { container } = renderPost({ repost });
+    openThread(container);
+    fireEvent.click(q(container, 'post-comment-repost')!);
+    fireEvent.click(q(container, 'post-comment-undo-repost')!);
+    await vi.waitFor(() => expect(publishing.undoRepost).toHaveBeenCalledWith(expect.anything(), '!feed', mine));
+  });
+
+  it('has no repost button on a comment whose post cannot be reposted', () => {
+    const { container } = renderPost();
+    openThread(container);
+    expect(q(container, 'post-comment-repost')).toBeNull();
   });
 });
 

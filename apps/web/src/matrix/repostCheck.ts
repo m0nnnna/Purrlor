@@ -1,6 +1,7 @@
 import { RelationType, type MatrixClient } from 'matrix-js-sdk';
 import { POST_EVENT_TYPE, readPostContent, type RepostOf } from './feed';
 import { attachmentMxc, type PostAttachment } from './postMedia';
+import { COMMENT_EVENT_TYPE } from './postInteractions';
 
 /**
  * Checking a repost's embedded copy against the post it claims to be.
@@ -40,7 +41,15 @@ function sameAttachments(a: PostAttachment[] = [], b: PostAttachment[] = []): bo
  */
 export function compareRepost(repostOf: RepostOf, original: RawEvent, edits: RawEvent[] = []): RepostStatus {
   if (original.unsigned?.redacted_because) return 'deleted';
-  if (original.type !== POST_EVENT_TYPE || original.sender !== repostOf.sender) return 'mismatch';
+  // A reposted comment is a comment, and under the post the copy says (comments aren't edited).
+  if (repostOf.commentOn) {
+    const relation = original.content?.['m.relates_to'] as { event_id?: unknown } | undefined;
+    if (original.type !== COMMENT_EVENT_TYPE || original.sender !== repostOf.sender || relation?.event_id !== repostOf.commentOn.eventId) {
+      return 'mismatch';
+    }
+  } else if (original.type !== POST_EVENT_TYPE || original.sender !== repostOf.sender) {
+    return 'mismatch';
+  }
   const content = readPostContent(original.content ?? {});
   // A post redacted by a server that doesn't set redacted_because has no content left.
   if (!content) return 'deleted';

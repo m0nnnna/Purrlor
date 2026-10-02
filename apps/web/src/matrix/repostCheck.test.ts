@@ -68,3 +68,37 @@ describe('compareRepost with edits', () => {
     expect(compareRepost({ ...repostOf, body: 'retracted' }, original, [edit('@alice:x', 'retracted', true)])).toBe('mismatch');
   });
 });
+
+describe('compareRepost — a reposted comment', () => {
+  const commentCopy: RepostOf = {
+    roomId: '!feed:x',
+    eventId: '$comment',
+    sender: '@bob:x',
+    senderName: 'Bob',
+    origin: { kind: 'global' },
+    ts: 2,
+    body: 'nice',
+    commentOn: { eventId: '$post', sender: '@alice:x' },
+  };
+  const theComment = {
+    type: 'xyz.nekous.comment',
+    sender: '@bob:x',
+    content: { body: 'nice', 'm.relates_to': { rel_type: 'm.reference', event_id: '$post' } },
+  };
+
+  it('verifies a comment under the post the copy names', () => {
+    expect(compareRepost(commentCopy, theComment)).toBe('verified');
+  });
+
+  it('refuses a post passed off as a comment, or a comment under another post', () => {
+    expect(compareRepost(commentCopy, { ...theComment, type: POST_EVENT_TYPE })).toBe('mismatch');
+    expect(
+      compareRepost(commentCopy, { ...theComment, content: { ...theComment.content, 'm.relates_to': { rel_type: 'm.reference', event_id: '$elsewhere' } } })
+    ).toBe('mismatch');
+  });
+
+  it('refuses a comment copy whose original is a post', () => {
+    const { commentOn: _gone, ...asPost } = commentCopy;
+    expect(compareRepost(asPost, theComment)).toBe('mismatch');
+  });
+});

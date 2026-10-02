@@ -69,11 +69,16 @@ export async function repostToTarget(
     displayName,
     isPublic
   );
-  await sendRepostReceipt(mx, repostOf.roomId, repostOf.eventId, repostOf.sender, {
-    roomId: published.source.roomId,
-    eventId: published.eventId,
-    quote: !!body,
-  }).catch(() => undefined);
+  // A comment's marker goes on the post it's under, naming the comment.
+  const onPost = repostOf.commentOn ?? { eventId: repostOf.eventId, sender: repostOf.sender };
+  await sendRepostReceipt(
+    mx,
+    repostOf.roomId,
+    onPost.eventId,
+    onPost.sender,
+    { roomId: published.source.roomId, eventId: published.eventId, quote: !!body },
+    repostOf.commentOn && repostOf.eventId
+  ).catch(() => undefined);
   return published;
 }
 

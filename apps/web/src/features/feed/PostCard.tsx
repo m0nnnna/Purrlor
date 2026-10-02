@@ -133,8 +133,8 @@ function RepostQuote({
     return (
       <blockquote className="nu-post__quote nu-post__quote--unavailable" data-nu-role="post-repost-unavailable">
         {status === 'deleted'
-          ? 'This post was removed.'
-          : 'This repost doesn’t match the original post, so it isn’t shown.'}
+          ? `This ${repost.commentOn ? 'comment' : 'post'} was removed.`
+          : `This repost doesn’t match the original ${repost.commentOn ? 'comment' : 'post'}, so it isn’t shown.`}
       </blockquote>
     );
   }
@@ -144,6 +144,11 @@ function RepostQuote({
         <AuthorName author={{ userId: repost.sender, name: repost.senderName }} onOpenProfile={onOpenProfile} />
         <OriginChip origin={repost.origin} onOpen={openerFor(repost.origin)} />
         {repost.ts > 0 && <time className="nu-post__time">{formatPostTime(repost.ts)}</time>}
+        {repost.commentOn && (
+          <span className="nu-post__badge" data-nu-role="post-repost-comment" title="A comment on a post">
+            Comment
+          </span>
+        )}
         {status === 'unknown' && (
           <span className="nu-post__badge" data-nu-role="post-repost-unchecked" title="Couldn’t reach the original to check this copy">
             Unchecked

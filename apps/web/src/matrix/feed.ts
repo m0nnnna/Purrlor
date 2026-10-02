@@ -97,7 +97,9 @@ export type RepostOf = {
   /** The original's content warning and sensitive-media flag travel with the copy, so a repost
    *  never shows uncovered what its author covered. */
   warning?: string;
-  sensitive?: boolean;
+  sensitive?: boolean;  /** Set when what was reposted is a comment: the post it's under (same room). Its repost marker
+   *  goes on that post, naming the comment (postInteractions.ts). */
+  commentOn?: { eventId: string; sender: string };
 };
 
 export type PostContent = {
@@ -226,6 +228,11 @@ function readRepostOf(raw: unknown): RepostOf | undefined {
   const attachments = readAttachments(r.attachments);
   const body = typeof r.body === 'string' ? r.body : '';
   if (!body && attachments.length === 0) return undefined;
+  const on = r.commentOn as Record<string, unknown> | undefined;
+  const commentOn =
+    on && typeof on === 'object' && typeof on.eventId === 'string' && typeof on.sender === 'string'
+      ? { eventId: on.eventId, sender: on.sender }
+      : undefined;
   return {
     roomId: r.roomId,
     eventId: r.eventId,
@@ -237,6 +244,7 @@ function readRepostOf(raw: unknown): RepostOf | undefined {
     ...(attachments.length && { attachments }),
     ...(typeof r.warning === 'string' && r.warning.trim() && { warning: r.warning.trim() }),
     ...(r.sensitive === true && { sensitive: true }),
+    ...(commentOn && { commentOn }),
   };
 }
 
@@ -320,6 +328,27 @@ export function repostOfPost(
     ...(content.attachments?.length && { attachments: content.attachments }),
     ...(content.warning && { warning: content.warning }),
     ...(content.sensitive && { sensitive: true }),
+  };
+}
+
+/** The embedded copy for reposting one of a post's comments. It lives where the post does, so it
+ *  may go wherever the post may (canRepost). */
+export function repostOfComment(
+  post: { roomId: string; eventId: string; sender: string; origin: PostOrigin },
+  comment: { eventId: string; sender: string; senderName: string; ts: number; content: PostContent }
+): RepostOf {
+  return {
+    roomId: post.roomId,
+    eventId: comment.eventId,
+    sender: comment.sender,
+    senderName: comment.senderName,
+    origin: post.origin,
+    ts: comment.ts,
+    body: comment.content.body,
+    ...(comment.content.attachments?.length && { attachments: comment.content.attachments }),
+    ...(comment.content.warning && { warning: comment.content.warning }),
+    ...(comment.content.sensitive && { sensitive: true }),
+    commentOn: { eventId: post.eventId, sender: post.sender },
   };
 }
 

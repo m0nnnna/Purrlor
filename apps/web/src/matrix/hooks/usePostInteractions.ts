@@ -3,14 +3,18 @@ import { EventType, RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk
 import { useMatrixClient } from '../MatrixClientContext';
 import {
   deleteComment,
+  fetchCommentLikes,
   fetchComments,
   fetchLikes,
   fetchOlderComments,
   fetchReposts,
+  likeComment,
   likePost,
   mergeNewestPage,
   sendComment,
+  summarizeCommentStats,
   unlikePost,
+  type CommentStats,
   type MyRepost,
   type OlderCursor,
   type PostComment,
@@ -52,9 +56,19 @@ type State = {
   comments: PostComment[];
   /** Set while older comments exist on the server that haven't been loaded. */
   older?: OlderCursor;
+  /** Each comment's likes and reposts, by comment ID; a comment with neither isn't listed. */
+  commentStats: Record<string, CommentStats>;
 };
 
-const EMPTY: State = { likeCount: 0, likesTruncated: false, likers: [], repostCount: 0, repostsTruncated: false, comments: [] };
+const EMPTY: State = {
+  likeCount: 0,
+  likesTruncated: false,
+  likers: [],
+  repostCount: 0,
+  repostsTruncated: false,
+  comments: [],
+  commentStats: {},
+};
 
 /**
  * A post's likes and comments, and the actions on them. A card reads its likes and the newest page
@@ -76,14 +90,20 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
 
   const reload = useCallback(async () => {
     try {
-      const [likes, newest, reposts] = await Promise.all([
+      const [likes, newest, reposts, commentLikes] = await Promise.all([
         limited(() => fetchLikes(mx, roomId, postId, postTs)),
         limited(() => fetchComments(mx, roomId, postId)),
-        // A server that can't answer this just shows no repost count.
+        // A server that can't answer these just shows no repost count, or no counts on comments.
         limited(() => fetchReposts(mx, roomId, postId)).catch(() => undefined),
+        limited(() => fetchCommentLikes(mx, roomId, postId, postTs)).catch(() => undefined),
       ]);
       if (!alive.current) return;
+      const commentStats =
+        reposts || commentLikes
+          ? summarizeCommentStats([...(commentLikes ?? []), ...(reposts?.events ?? [])], postId, mx.getUserId() ?? '')
+          : undefined;
       setState((prev) => ({
+        commentStats: commentStats ?? prev.commentStats,
         ...likes,
         repostCount: reposts?.repostCount ?? prev.repostCount,
         repostsTruncated: reposts?.repostsTruncated ?? prev.repostsTruncated,
@@ -171,6 +191,26 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
       }
     });
 
+  const toggleCommentLike = (commentId: string) =>
+    act(async () => {
+      const stats = state.commentStats[commentId];
+      const bump = (delta: number, myLikeId?: string) =>
+        setState((s) => {
+          const prev = s.commentStats[commentId] ?? { likeCount: 0, repostCount: 0 };
+          const { myLikeId: _old, ...rest } = prev;
+          const next = { ...rest, likeCount: Math.max(0, prev.likeCount + delta), ...(myLikeId && { myLikeId }) };
+          return { ...s, commentStats: { ...s.commentStats, [commentId]: next } };
+        });
+      if (stats?.myLikeId) {
+        const likeId = stats.myLikeId;
+        bump(-1);
+        await unlikePost(mx, roomId, likeId);
+      } else {
+        bump(1, 'pending');
+        await likeComment(mx, roomId, postId, commentId, ownerId);
+      }
+    });
+
   return {
     ...state,
     loaded,
@@ -178,6 +218,7 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
     loadingOlder,
     loadOlder,
     toggleLike,
+    toggleCommentLike,
     addComment: (content: PostContent, replyTo?: ReplyTarget) =>
       act(() => sendComment(mx, roomId, postId, ownerId, content, replyTo)),
     removeComment: (commentId: string) =>
