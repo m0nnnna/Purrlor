@@ -44,6 +44,7 @@ import { WatchPartyCard } from '../calendar/WatchPartyCard';
 import { NOTICE_EVENT_KEY } from '../../matrix/watchParty';
 import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
+import { CollapsibleText } from './CollapsibleText';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
 import { VoiceMessage } from './VoiceMessage';
@@ -419,12 +420,12 @@ function MessageRow({
           </div>
         ) : (
           <>
-            <div className="nu-timeline__message-text">
+            <CollapsibleText className="nu-timeline__message-text" text={String(content.body ?? '')}>
               {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined, {
                 formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
                 hiddenMxcUrls,
               })}
-            </div>
+            </CollapsibleText>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
             {content.msgtype === 'm.notice' && typeof content[NOTICE_EVENT_KEY] === 'string' && (
               <WatchPartyCard room={room} eventId={content[NOTICE_EVENT_KEY]} />

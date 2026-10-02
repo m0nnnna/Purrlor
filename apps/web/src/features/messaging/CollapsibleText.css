@@ -1,0 +1,31 @@
+/* A folded long message (CollapsibleText.tsx): its first lines, fading out at the bottom. */
+.nu-collapsible--collapsed {
+  max-height: 12lh;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+
+/* Browsers without the lh unit: about twelve lines of body text. */
+@supports not (max-height: 1lh) {
+  .nu-collapsible--collapsed {
+    max-height: 16.5em;
+  }
+}
+
+.nu-collapsible__toggle {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  margin-top: 2px;
+  font: inherit;
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+  color: var(--nu-color-text-link);
+  cursor: pointer;
+}
+
+.nu-collapsible__toggle:hover,
+.nu-collapsible__toggle:focus-visible {
+  text-decoration: underline;
+}

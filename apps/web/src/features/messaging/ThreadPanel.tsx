@@ -9,6 +9,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { Composer } from './Composer';
 import { renderMessageText } from './renderMessageText';
 import './ThreadPanel.css';
+import { CollapsibleText } from './CollapsibleText';
 
 function ThreadEventRow({
   event,
@@ -35,12 +36,12 @@ function ThreadEventRow({
             {new Date(event.getTs()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <div className="nu-thread-panel__message-text">
+        <CollapsibleText className="nu-thread-panel__message-text" text={String(content.body ?? '')}>
           {renderMessageText(String(content.body ?? ''), emotes, members, myUserId, {
             formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
             hiddenMxcUrls,
           })}
-        </div>
+        </CollapsibleText>
       </div>
     </div>
   );
