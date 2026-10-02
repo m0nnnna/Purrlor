@@ -56,6 +56,9 @@ import { canManageWebhooks } from '../../matrix/webhooks';
 import { CHANNEL_SETTINGS_EVENT } from '../../matrix/channelPermissions';
 import './ChannelList.css';
 
+/** Where the shell shows one screen at a time (styles/base/shell.css). */
+const PHONE_WIDTH = '(max-width: 900px)';
+
 /** For a genuine 1:1 DM (exactly one other joined member), the person on the other end — used
  *  to show a presence dot the way a DM list normally would. Group chats skip it: there's no
  *  single "other person" to represent with one dot. */
@@ -518,9 +521,11 @@ export function ChannelList() {
   // first, else its first text channel from the top of this list (matrix/spaceNews.ts), so a Space
   // never opens onto an empty page. Anything already chosen — a channel, Posts, Events, a jump to
   // a message from a notification — is left alone.
+  // Not on a phone: there the page is this channel list until something is picked, and Back from a
+  // chat leaves nothing chosen, so landing would put you straight back in the chat you just left.
   const nothingChosen = !!space && !selectedRoomId && spaceView === null && !globalFeedOpen && !profileUserId && !openPost;
   useEffect(() => {
-    if (!space || !nothingChosen) return;
+    if (!space || !nothingChosen || window.matchMedia?.(PHONE_WIDTH).matches) return;
     // Read fresh, not from spaceRooms/categories: right after switching Spaces those still hold the
     // last Space's lists for a render (their hooks catch up in an effect), and landing on them sent
     // you to the last Space's first channel. They're still deps, so a Space whose channels are
