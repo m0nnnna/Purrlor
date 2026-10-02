@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NowPlayingCard } from '../voice/NowPlayingCard';
+import { MusicPlayerBar } from '../music/MusicPlayerBar';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import type { Room } from 'matrix-js-sdk';
 import {
@@ -625,6 +626,7 @@ export function ChannelList() {
       <aside className="nu-channel-list" data-nu-role="channel-list">
         <SocialNav />
         <NowPlayingCard />
+        <MusicPlayerBar variant="card" />
         <ActiveCallBar />
         <UserPanel />
       </aside>
@@ -826,6 +828,7 @@ export function ChannelList() {
         )}
       </div>
       <NowPlayingCard />
+      <MusicPlayerBar variant="card" />
       <ActiveCallBar />
       <UserPanel />
       {showCreateChannel && space && (

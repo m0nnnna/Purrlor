@@ -1,0 +1,17 @@
+.nu-share-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  min-width: 0;
+}
+
+.nu-share-link > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+}
+
+.nu-share-link__fallback {
+  min-width: 220px;
+  font-size: var(--nu-font-size-xs);
+}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPageHidden, fetchPublicFeed, fetchPublicPage, parsePublicRoute, publicMediaUrl, publicPagePath } from './publicWeb';
+import { fetchPageHidden, fetchPublicFeed, fetchPublicPage, pageTargetPath, parsePublicRoute, publicMediaUrl, publicPagePath } from './publicWeb';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -36,6 +36,19 @@ describe('parsePublicRoute', () => {
     expect(parsePublicRoute('/@a/b')).toBeUndefined();
     expect(parsePublicRoute('/@%E0%A4%A')).toBeUndefined();
     expect(parsePublicRoute('/settings')).toBeUndefined();
+  });
+
+  it('reads links to things on a page, and builds them back', () => {
+    expect(parsePublicRoute('/@luna/music/lp')).toEqual({ kind: 'page', user: 'luna', target: { kind: 'music', album: 'lp' } });
+    expect(parsePublicRoute('/@luna/music/lp/3')).toEqual({ kind: 'page', user: 'luna', target: { kind: 'music', album: 'lp', track: 3 } });
+    expect(parsePublicRoute('/@luna/art/fa/2/')).toEqual({ kind: 'page', user: 'luna', target: { kind: 'art', album: 'fa', piece: 2 } });
+    expect(parsePublicRoute('/@luna/commissions/t1')).toEqual({ kind: 'page', user: 'luna', target: { kind: 'commission', type: 't1' } });
+    for (const bad of ['/@luna/music', '/@luna/music/lp/0', '/@luna/music/lp/x', '/@luna/music/bad id', '/@luna/commissions/t1/2', '/@luna/videos/a']) {
+      expect(parsePublicRoute(bad)).toBeUndefined();
+    }
+    for (const target of [{ kind: 'music', album: 'lp', track: 3 }, { kind: 'art', album: 'fa' }, { kind: 'commission', type: 't1' }] as const) {
+      expect(parsePublicRoute(pageTargetPath('@luna:purr.example', target))).toEqual({ kind: 'page', user: 'luna', target });
+    }
   });
 });
 

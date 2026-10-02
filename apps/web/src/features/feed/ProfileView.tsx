@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
@@ -29,6 +29,10 @@ import { useProfilePage } from '../../matrix/hooks/useProfilePage';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
 import { PageBlocks } from '../profilePage/PageBlocks';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
+import { PageTargetContext, pageTargetAtom } from '../profilePage/PageTargetContext';
+import { ShareLinkButton } from '../../components/ShareLinkButton';
+import { pageLink } from '../../matrix/publicWeb';
+import { readPublicWebEnabled } from '../../matrix/publicWebSwitch';
 import { HeaderCommissionBadge } from '../profilePage/CommissionsBlock';
 import { ProfilePageEditor } from '../profilePage/ProfilePageEditor';
 import './FeedView.css';
@@ -65,6 +69,13 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const scroll = useKeptScroll<HTMLDivElement>(hidden);
   const [tab, setTab] = useState<ProfileTab>('posts');
   const [editingPage, setEditingPage] = useState(false);
+  // A link to something on this page (`/@name/music/<album>`, …) opened it: hand it to the blocks once.
+  const [pageTarget, setPageTarget] = useAtom(pageTargetAtom);
+  const [linkedTarget] = useState(() => (pageTarget?.userId === userId ? pageTarget.target : undefined));
+  useEffect(() => {
+    if (linkedTarget) setPageTarget(null);
+  }, [linkedTarget, setPageTarget]);
+  const publicOn = isMe && readPublicWebEnabled(mx);
   const [styleCopied, setStyleCopied] = useState(false);
 
   // Same as the profile card's Message: reuse an existing DM or start one. Selecting the room
@@ -198,6 +209,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                   >
                     {page ? 'Edit page' : 'Build your page'}
                   </button>
+                  <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
                 </div>
               )}
               {!isMe && (
@@ -225,6 +237,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                   >
                     {following ? 'Following' : 'Follow'}
                   </button>
+                  <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
                   {page && (
                     <button
                       type="button"
@@ -274,9 +287,16 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
             )}
           </section>
 
+          {isMe && !publicOn && (
+            <p className="nu-field__hint" data-nu-role="profile-share-hint">
+              Only people signed in to Purrlor can open your link until you show your page to everyone (Edit page, or Settings → Privacy).
+            </p>
+          )}
           {page && page.blocks.length > 0 && (
             <PageOwnerContext.Provider value={{ userId, roomId: profileRoomId, isMe }}>
-              <PageBlocks blocks={page.blocks} />
+              <PageTargetContext.Provider value={linkedTarget}>
+                <PageBlocks blocks={page.blocks} />
+              </PageTargetContext.Provider>
             </PageOwnerContext.Provider>
           )}
           {page && !isMe && profileRoomId && (

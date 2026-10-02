@@ -37,7 +37,9 @@ The service reads it on each feed refresh, so switching it off takes effect with
 
 - **Signed out** (`features/publicWeb/`): `/@name` is the person's page (or "Sign in to see this
   page", the same answer for every reason a page isn't shown), `/@name/post/<id>` is one Global
-  post, `/feed` is the Global feed. Each has a bar with **Sign in** and **Join Purrlor**, and a page
+  post, `/feed` is the Global feed. `/@name/music/<album>[/<n>]`, `/@name/art/<album>[/<n>]` and
+  `/@name/commissions/<type>` are the page with that thing open (`docs/profile-pages.md`, "Links to
+  a page and the things on it"). Each has a bar with **Sign in** and **Join Purrlor**, and a page
   has **Make your own page**. The page goes through `parseProfilePage` first. Media goes through
   `/api/public/media` (`useMediaUrl` does that when there's no Matrix client). The Top 8 shows
   only friends whose own pages are public, drawn from their page answers; the guestbook says
@@ -125,11 +127,17 @@ passes the size limit) and answers from the copy, with `Accept-Ranges: bytes`, `
 (default 1 GiB), least recently used go first, a takedown deletes its file's copy at once, and the
 folder is emptied when the service starts.
 
-### `GET /api/public/card/:user` and `/api/public/card/post/:eventId`
+### `GET /api/public/card/:user`, `/api/public/card/post/:eventId`, and things on a page
 
 A tiny HTML page of link-preview tags (`og:title`, `og:image`, `theme-color`…), for the bots that
 unfurl links. nginx sends only them here (below); people get the app. A page that isn't public gets
 a generic "Sign in to see this page" card, so a preview never confirms an account exists.
+
+`/api/public/card/:user/music/:album[/:n]` and `/art/:album[/:n]` preview an album, a track or a
+piece (`pageItemPreview`): its title with the owner's name, a line about it ("Luna · from Night
+Drive", "2024 · 9 tracks"), and the album's cover or the piece as the picture. They read the page as
+the API serves it, so a Mature piece never previews. `/commissions/:type`, or something the page
+hasn't got, previews as the page itself.
 
 ## Limits
 
@@ -174,13 +182,14 @@ location /api/public/ {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
-location ~ ^/@[^/]+(/post/[^/]+)?$ {
+location ~ ^/@[^/]+(/post/[^/]+|/(music|art|commissions)/[A-Za-z0-9_-]+(/[0-9]+)?)?$ {
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     if ($purrlor_unfurl) {
         rewrite ^/@[^/]+/post/([^/]+)$ /api/public/card/post/$1 break;
+        rewrite ^/@([^/]+)/((music|art|commissions)/.+)$ /api/public/card/$1/$2 break;
         rewrite ^/@([^/]+)$ /api/public/card/$1 break;
         proxy_pass http://127.0.0.1:3001;
     }

@@ -1,4 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { Lightbox } from '../../components/Lightbox';
+import { ShareLinkButton } from '../../components/ShareLinkButton';
+import { pageLink } from '../../matrix/publicWeb';
 import { useMatrixClient, MatrixClientContext } from '../../matrix/MatrixClientContext';
 import {
   COMMISSION_STATUS_LABELS,
@@ -20,6 +23,7 @@ import { handleFor } from '../../matrix/roles';
 import { CommissionManager } from './CommissionManager';
 import { CommissionRequestModal } from './CommissionRequestModal';
 import { PageOwnerContext } from './PageOwnerContext';
+import { PageTargetContext } from './PageTargetContext';
 
 /** "Commissions: open": the badge on the header and the block (CommissionBadge in ProfileView too). */
 export function StatusBadge({ status }: { status: CommissionStatus }) {
@@ -37,14 +41,45 @@ export function HeaderCommissionBadge({ roomId }: { roomId: string | undefined }
   return status ? <StatusBadge status={status} /> : null;
 }
 
-function PriceCard({ type }: { type: CommissionType }) {
+/**
+ * One commission type: its example picture (pressed, shown large), name, price, description and
+ * slots, and a link straight to it. A link that pointed here scrolls it into view, marks it, and
+ * shows the example large.
+ */
+function PriceCard({ type, ownerId, linked }: { type: CommissionType; ownerId: string; linked: boolean }) {
   const example = useMediaUrl(type.example, { width: 480, height: 320, method: 'scale' });
+  const full = useMediaUrl(type.example);
+  const [large, setLarge] = useState(false);
+  const ref = useRef<HTMLElement>(null);
+  const shownLinked = useRef(false);
+  useEffect(() => {
+    if (!linked || shownLinked.current) return;
+    shownLinked.current = true;
+    ref.current?.scrollIntoView?.({ block: 'center' });
+    if (type.example) setLarge(true);
+  }, [linked, type.example]);
   return (
-    <article className="nu-commissions__price" data-nu-role="commission-price">
-      {example && <img className="nu-commissions__example" src={example} alt="" loading="lazy" />}
+    <article
+      ref={ref}
+      className={linked ? 'nu-commissions__price nu-commissions__price--linked' : 'nu-commissions__price'}
+      data-nu-role="commission-price"
+    >
+      {example && (
+        <button type="button" className="nu-commissions__example-button" aria-label={`Show the example for ${type.name}`} onClick={() => setLarge(true)}>
+          <img className="nu-commissions__example" src={example} alt="" loading="lazy" />
+        </button>
+      )}
+      {large && full && <Lightbox src={full} alt={type.name} onClose={() => setLarge(false)} />}
       <div className="nu-commissions__price-head">
         <strong>{type.name}</strong>
         <span className="nu-commissions__amount">{type.price}</span>
+        <ShareLinkButton
+          url={pageLink(ownerId, { kind: 'commission', type: type.id })}
+          title={type.name}
+          iconOnly
+          className="nu-profile-page__piece-link"
+          role="commission-link"
+        />
       </div>
       {type.description && <p className="nu-commissions__description">{type.description}</p>}
       {type.slots && (
@@ -127,6 +162,7 @@ function AlertToggle({ artistId }: { artistId: string }) {
 function SignedInCommissions({ owner }: { owner: { userId: string; roomId?: string; isMe: boolean } }) {
   const mx = useMatrixClient();
   const me = mx.getUserId() ?? '';
+  const target = useContext(PageTargetContext);
   const { commissions, consents, loading, reload } = useCommissions(owner.roomId);
   const [requesting, setRequesting] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -206,7 +242,7 @@ function SignedInCommissions({ owner }: { owner: { userId: string; roomId?: stri
       {data.types.length > 0 && (
         <div className="nu-commissions__prices" data-nu-role="commission-prices">
           {data.types.map((type) => (
-            <PriceCard key={type.id} type={type} />
+            <PriceCard key={type.id} type={type} ownerId={owner.userId} linked={target?.kind === 'commission' && target.type === type.id} />
           ))}
         </div>
       )}

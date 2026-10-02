@@ -10,6 +10,7 @@ import {
   mayServeMedia,
   MediaIndex,
   pageMedia,
+  pageItemPreview,
   pageOfPosts,
   parseRange,
   publicPageContent,
@@ -461,5 +462,42 @@ describe('linkCardHtml', () => {
     assert.ok(!html.includes('"onmouseover'));
     assert.ok(!html.includes('theme-color'));
     assert.ok(html.includes('&quot;&gt;&lt;script&gt;'));
+  });
+});
+
+describe('pageItemPreview', () => {
+  const page = {
+    blocks: [
+      {
+        type: 'music',
+        albums: [
+          {
+            id: 'lp',
+            title: 'Night Drive',
+            year: 2024,
+            cover: 'mxc://s/cover',
+            tracks: [{ url: 'mxc://s/t1', title: 'Headlights', artist: 'Luna' }, { url: 'mxc://s/t2', title: 'Overpass' }],
+          },
+          { id: 'ep', tracks: [{ url: 'mxc://s/t3', title: 'Rough' }] },
+        ],
+      },
+      { type: 'gallery', albums: [{ id: 'fa', title: 'Fan art', pieces: [{ url: 'mxc://s/p1', title: 'Fox' }, { url: 'mxc://s/p2' }] }] },
+    ],
+  };
+
+  it('previews a music album, a track on it, a gallery album and a piece in it', () => {
+    assert.deepEqual(pageItemPreview(page, 'music', 'lp'), { title: 'Night Drive', description: '2024 · 2 tracks', image: 'mxc://s/cover' });
+    assert.deepEqual(pageItemPreview(page, 'music', 'lp', 1), { title: 'Headlights', description: 'Luna · from Night Drive', image: 'mxc://s/cover' });
+    assert.deepEqual(pageItemPreview(page, 'music', 'ep', 1), { title: 'Rough', description: 'from Untitled album', image: undefined });
+    assert.deepEqual(pageItemPreview(page, 'art', 'fa'), { title: 'Fan art', description: '2 pieces', image: 'mxc://s/p1' });
+    assert.deepEqual(pageItemPreview(page, 'art', 'fa', 2), { title: 'Fan art', description: 'From Fan art', image: 'mxc://s/p2' });
+  });
+
+  it('has nothing for what the page has not got', () => {
+    assert.equal(pageItemPreview(page, 'music', 'nope'), undefined);
+    assert.equal(pageItemPreview(page, 'music', 'lp', 3), undefined);
+    assert.equal(pageItemPreview(page, 'art', 'lp'), undefined);
+    assert.equal(pageItemPreview(page, 'commissions', 'x'), undefined);
+    assert.equal(pageItemPreview(null, 'music', 'lp'), undefined);
   });
 });

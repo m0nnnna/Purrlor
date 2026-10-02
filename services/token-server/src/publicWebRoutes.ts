@@ -15,6 +15,7 @@ import {
   isSeekableMediaType,
   isServableMediaType,
   linkCardHtml,
+  pageItemPreview,
   localUserId,
   MediaIndex,
   mayServeMedia,
@@ -48,6 +49,8 @@ import { RateLimiter } from './webhooks.js';
  *   GET /api/public/media/:server/:id     media a public answer referenced (?width=&height= for a thumbnail)
  *   GET /api/public/card/:user            link-preview HTML for /@name (nginx sends unfurling bots here)
  *   GET /api/public/card/post/:eventId    the same for a post's link
+ *   GET /api/public/card/:user/music/:album[/:track], /art/:album[/:piece], /commissions/:type
+ *                                         the same for something on a page (an album, a track, a piece)
  */
 
 /** How long the feed is reused before profile rooms are read again. */
@@ -421,6 +424,34 @@ export function publicWebRouter(): Router {
         description: post.warning ? `Content warning: ${post.warning}` : post.body || 'A post with media',
         url: `${baseUrl(req)}/@${post.author.slice(1, post.author.indexOf(':'))}/post/${encodeURIComponent(post.eventId)}`,
         ...(image && !post.sensitive && !post.warning && { image: mediaUrl(req, image, 600) }),
+        siteName: 'Purrlor',
+      });
+    } catch {
+      res.status(503).end();
+    }
+  });
+
+  // A link to something on a page: an album or a track of it, a gallery album or a piece of it.
+  // Anything else on a page (a commission type: those aren't public) previews as the page itself.
+  router.get(/^\/card\/([^/]+)\/(music|art|commissions)\/([A-Za-z0-9_-]{1,16})(?:\/(\d{1,4}))?$/, async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    const [user, kind, id, number] = [req.params[0], req.params[1], req.params[2], req.params[3]];
+    try {
+      const page = await publicPage(user);
+      const name = await serverName();
+      if (!page) return void sendCard(res, { title: `Purrlor on ${name}`, description: 'Sign in to see this page.', url: baseUrl(req), siteName: 'Purrlor' });
+      allowProfileMedia(page);
+      const localpart = page.userId.slice(1, page.userId.indexOf(':'));
+      const who = page.displayName ? `${page.displayName} (@${localpart})` : `@${localpart}`;
+      const item = pageItemPreview(page.page, kind, id, number ? Number(number) : undefined);
+      const style = page.page?.style as { colors?: { accent?: unknown } } | undefined;
+      const image = item?.image ?? page.avatarUrl;
+      sendCard(res, {
+        title: item ? `${item.title} · ${who}` : who,
+        description: item?.description ?? page.bio ?? `${page.userId} on Purrlor`,
+        url: `${baseUrl(req)}/@${localpart}/${kind}/${id}${number ? `/${number}` : ''}`,
+        ...(image && { image: mediaUrl(req, image, 600) }),
+        ...(typeof style?.colors?.accent === 'string' && { themeColor: style.colors.accent }),
         siteName: 'Purrlor',
       });
     } catch {

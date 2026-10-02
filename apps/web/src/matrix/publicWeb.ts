@@ -98,32 +98,66 @@ export function publicMediaUrl(mxcUrl: string, width?: number, height?: number):
   return `${PUBLIC_API}/media/${encodeURIComponent(match[1])}/${match[2]}${size}`;
 }
 
-/** The address a visitor's browser is on, read as a public route: `/@name`, `/@name/post/$id` or `/feed`. */
+/**
+ * Something on a page a link points at: a music album (and a track of it, numbered from 1), a
+ * gallery album (and a piece of it, from 1), or a commission type. IDs are the page's own.
+ */
+export type PageTarget =
+  | { kind: 'music'; album: string; track?: number }
+  | { kind: 'art'; album: string; piece?: number }
+  | { kind: 'commission'; type: string };
+
+/** The address a visitor's browser is on, read as a public route: `/@name` (or a thing on that
+ *  page, below), `/@name/post/$id` or `/feed`. */
 export type PublicRoute =
   | { kind: 'feed' }
-  | { kind: 'page'; user: string }
+  | { kind: 'page'; user: string; target?: PageTarget }
   | { kind: 'post'; user: string; eventId: string };
+
+const ITEM_ID = /^[A-Za-z0-9_-]{1,16}$/;
+
+function readTarget(kind: string, id: string, number: string | undefined): PageTarget | undefined {
+  if (!ITEM_ID.test(id)) return undefined;
+  const n = number === undefined ? undefined : Number(number);
+  if (n !== undefined && !(Number.isInteger(n) && n >= 1 && n <= 1000)) return undefined;
+  if (kind === 'music') return { kind: 'music', album: id, ...(n && { track: n }) };
+  if (kind === 'art') return { kind: 'art', album: id, ...(n && { piece: n }) };
+  return number === undefined ? { kind: 'commission', type: id } : undefined;
+}
 
 export function parsePublicRoute(pathname: string): PublicRoute | undefined {
   const path = pathname.replace(/\/+$/, '');
   if (path === '/feed') return { kind: 'feed' };
-  const post = /^\/@([^/]+)\/post\/([^/]+)$/.exec(path);
-  if (post) {
-    try {
-      return { kind: 'post', user: decodeURIComponent(post[1]), eventId: decodeURIComponent(post[2]) };
-    } catch {
-      return undefined;
-    }
-  }
-  const page = /^\/@([^/]+)$/.exec(path);
-  if (page) {
-    try {
-      return { kind: 'page', user: decodeURIComponent(page[1]) };
-    } catch {
-      return undefined;
-    }
+  try {
+    const post = /^\/@([^/]+)\/post\/([^/]+)$/.exec(path);
+    if (post) return { kind: 'post', user: decodeURIComponent(post[1]), eventId: decodeURIComponent(post[2]) };
+    const page = /^\/@([^/]+)$/.exec(path);
+    if (page) return { kind: 'page', user: decodeURIComponent(page[1]) };
+    const item = /^\/@([^/]+)\/(music|art|commissions)\/([^/]+)(?:\/(\d+))?$/.exec(path);
+    const target = item && readTarget(item[2], item[3], item[4]);
+    if (item && target) return { kind: 'page', user: decodeURIComponent(item[1]), target };
+  } catch {
+    return undefined;
   }
   return undefined;
 }
 
 export const publicPagePath = (user: string) => `/@${encodeURIComponent(user.replace(/^@/, '').replace(/:.*$/, ''))}`;
+
+/** The path of a thing on someone's page, as `parsePublicRoute` reads it. */
+export function pageTargetPath(user: string, target: PageTarget): string {
+  const page = publicPagePath(user);
+  switch (target.kind) {
+    case 'music':
+      return `${page}/music/${target.album}${target.track ? `/${target.track}` : ''}`;
+    case 'art':
+      return `${page}/art/${target.album}${target.piece ? `/${target.piece}` : ''}`;
+    case 'commission':
+      return `${page}/commissions/${target.type}`;
+  }
+}
+
+/** A full link to someone's page, or a thing on it, on this deployment. */
+export function pageLink(user: string, target?: PageTarget): string {
+  return `${window.location.origin}${target ? pageTargetPath(user, target) : publicPagePath(user)}`;
+}

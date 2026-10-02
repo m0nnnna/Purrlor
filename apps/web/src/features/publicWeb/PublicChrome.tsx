@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
+import { MusicPlayerBar } from '../music/MusicPlayerBar';
+import { MusicPlayerHost } from '../music/MusicPlayerHost';
 import './PublicWeb.css';
 
 /**
@@ -34,6 +36,9 @@ export function PublicChrome({
         </nav>
       </header>
       <div className="nu-public__scroll">{children}</div>
+      {/* Page music, under whatever the visitor scrolls to. */}
+      <MusicPlayerHost />
+      <MusicPlayerBar variant="bar" />
     </div>
   );
 }

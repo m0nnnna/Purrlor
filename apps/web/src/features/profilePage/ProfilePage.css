@@ -677,6 +677,20 @@
   border-radius: var(--page-corners);
 }
 
+.nu-commissions__price--linked {
+  border-color: var(--page-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--page-accent) 40%, transparent);
+}
+
+.nu-commissions__example-button {
+  appearance: none;
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
 .nu-commissions__example {
   width: 100%;
   aspect-ratio: 3 / 2;
@@ -751,6 +765,163 @@
 }
 
 /* Music block (MusicBlock.tsx): a track list and a basic player. */
+/* Music: a shelf of album covers (MusicBlock.tsx). */
+.nu-profile-page__music-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__music-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  min-width: 0;
+  padding: var(--nu-space-2);
+  border: 2px solid transparent;
+  border-radius: calc(var(--page-corners) * 0.75);
+  background: transparent;
+  color: var(--page-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-profile-page__music-card:hover,
+.nu-profile-page__music-card:focus-visible {
+  border-color: var(--page-accent);
+  background: color-mix(in srgb, var(--page-accent) 14%, transparent);
+}
+
+.nu-profile-page__music-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-profile-page__music-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--page-corners) * 0.5);
+  background: color-mix(in srgb, var(--page-accent) 22%, transparent);
+  font-size: 2em;
+}
+
+.nu-profile-page__music-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-profile-page__music-now {
+  color: var(--page-accent);
+  font-weight: 600;
+}
+
+/* An album's songs open in a dialog, outside the page and so outside its colours: the app's own. */
+.nu-profile-page__music-album {
+  --page-accent: var(--nu-color-accent);
+  --page-text: var(--nu-color-text-primary);
+  --page-corners: var(--nu-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  min-width: 0;
+}
+
+.nu-profile-page__music-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nu-space-3);
+}
+
+.nu-profile-page__music-head .nu-profile-page__music-cover {
+  flex: none;
+  width: 112px;
+}
+
+.nu-profile-page__music-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nu-space-2);
+  margin-top: var(--nu-space-2);
+}
+
+.nu-profile-page__music-actions .nu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+}
+
+.nu-profile-page__music-album .nu-profile-page__tracks {
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.nu-profile-page__track-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+}
+
+/* The track takes the row, less its link button. */
+.nu-profile-page__track-row .nu-profile-page__track {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.nu-profile-page__track--linked {
+  border-color: color-mix(in srgb, var(--page-accent) 60%, transparent);
+}
+
+.nu-profile-page__track-link {
+  appearance: none;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nu-color-text-muted);
+  cursor: pointer;
+}
+
+.nu-profile-page__piece-link {
+  appearance: none;
+  flex: none;
+  align-self: flex-end;
+  width: 26px;
+  height: 26px;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.nu-profile-page__piece-link:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--page-accent) 20%, transparent);
+}
+
+.nu-profile-page__track-link:hover {
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+}
+
 .nu-profile-page__tracks {
   display: flex;
   flex-direction: column;
@@ -809,140 +980,9 @@
   opacity: 0.8;
 }
 
-.nu-profile-page__track-time,
-.nu-profile-page__time {
+.nu-profile-page__track-time {
   flex: none;
   font-size: 0.85em;
   font-variant-numeric: tabular-nums;
 }
 
-/* Music albums: a shelf of covers, one album open at a time (MusicBlock.tsx). */
-.nu-profile-page__music-shelf {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--nu-space-3);
-}
-
-.nu-profile-page__music-card {
-  appearance: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nu-space-1);
-  min-width: 0;
-  padding: var(--nu-space-2);
-  border: 2px solid transparent;
-  border-radius: calc(var(--page-corners) * 0.75);
-  background: transparent;
-  color: var(--page-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.nu-profile-page__music-card:hover,
-.nu-profile-page__music-card:focus-visible {
-  border-color: var(--page-accent);
-  background: color-mix(in srgb, var(--page-accent) 14%, transparent);
-}
-
-.nu-profile-page__music-card strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nu-profile-page__music-cover {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1;
-  width: 100%;
-  overflow: hidden;
-  border-radius: calc(var(--page-corners) * 0.5);
-  background: color-mix(in srgb, var(--page-accent) 22%, transparent);
-  font-size: 2em;
-}
-
-.nu-profile-page__music-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.nu-profile-page__music-now {
-  color: var(--page-accent);
-  font-weight: 600;
-}
-
-.nu-profile-page__music-album {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nu-space-3);
-}
-
-.nu-profile-page__music-back {
-  appearance: none;
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--page-accent);
-  font: inherit;
-  cursor: pointer;
-}
-
-.nu-profile-page__music-head {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--nu-space-3);
-}
-
-.nu-profile-page__music-head .nu-profile-page__music-cover {
-  flex: none;
-  width: 120px;
-}
-
-.nu-profile-page__music-head h4 {
-  margin: 0;
-}
-
-.nu-profile-page__music-play-all {
-  align-self: flex-start;
-}
-
-.nu-profile-page__music-now-playing {
-  display: flex;
-  align-items: center;
-  gap: var(--nu-space-2);
-}
-
-.nu-profile-page__music-now-playing button {
-  appearance: none;
-  border: none;
-  background: none;
-  color: var(--page-text);
-  font: inherit;
-  cursor: pointer;
-}
-
-.nu-profile-page__player {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nu-space-2);
-  margin-top: var(--nu-space-3);
-}
-
-.nu-profile-page__seek,
-.nu-profile-page__volume {
-  display: flex;
-  align-items: center;
-  gap: var(--nu-space-2);
-  font-size: 0.85em;
-}
-
-.nu-profile-page__seek input,
-.nu-profile-page__volume input {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--page-accent);
-}

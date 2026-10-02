@@ -549,6 +549,60 @@ export function escapeHtml(text: string): string {
 export type LinkCard = { title: string; description: string; url: string; image?: string; themeColor?: string; siteName: string };
 
 /**
+ * What a link to something on a page previews as (`/@name/music/<album>[/<track>]`,
+ * `/@name/art/<album>[/<piece>]`): its title, a line about it, and its picture (an mxc:// URL) if
+ * it has one. Numbers count from 1. Read from the page as the public API serves it (Mature pieces
+ * already out), so a preview shows nothing the page wouldn't. Undefined when there's no such thing.
+ */
+export function pageItemPreview(
+  page: Record<string, unknown> | null | undefined,
+  kind: string,
+  id: string,
+  number?: number
+): { title: string; description: string; image?: string } | undefined {
+  const records = (value: unknown) => (Array.isArray(value) ? value.filter(isRecord) : []);
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : undefined);
+  const mxc = (value: unknown) => (isMxc(value) ? value : undefined);
+  for (const block of records(page?.blocks)) {
+    if (kind === 'music' && block.type === 'music') {
+      const album = records(block.albums).find((a) => a.id === id);
+      if (!album) continue;
+      const tracks = records(album.tracks);
+      const albumTitle = text(album.title) ?? 'Untitled album';
+      if (number !== undefined) {
+        const track = tracks[number - 1];
+        if (!track) return undefined;
+        const artist = text(track.artist);
+        return { title: text(track.title) ?? 'Untitled', description: `${artist ? `${artist} · ` : ''}from ${albumTitle}`, image: mxc(album.cover) };
+      }
+      const year = typeof album.year === 'number' ? `${album.year} · ` : '';
+      return {
+        title: albumTitle,
+        description: text(album.description) ?? `${year}${tracks.length} ${tracks.length === 1 ? 'track' : 'tracks'}`,
+        image: mxc(album.cover),
+      };
+    }
+    if (kind === 'art' && (block.type === 'gallery' || block.type === 'art')) {
+      const album = records(block.albums).find((a) => a.id === id);
+      if (!album) continue;
+      const pieces = records(album.pieces);
+      const albumTitle = text(album.title) ?? 'Gallery';
+      if (number !== undefined) {
+        const piece = pieces[number - 1];
+        if (!piece) return undefined;
+        return { title: text(piece.title) ?? albumTitle, description: text(piece.description) ?? `From ${albumTitle}`, image: mxc(piece.url) };
+      }
+      return {
+        title: albumTitle,
+        description: text(album.description) ?? `${pieces.length} ${pieces.length === 1 ? 'piece' : 'pieces'}`,
+        image: mxc(pieces[0]?.url),
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
  * A tiny HTML page carrying a link's preview tags, for the bots that unfurl links (Discord,
  * Bluesky, iMessage…); nginx sends only those here, and people get the app. Every value is
  * escaped, and the description is cut short.

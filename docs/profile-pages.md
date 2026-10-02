@@ -209,13 +209,43 @@ one album, moved to another album from the track's Album menu (a full album can'
 album left with no tracks isn't kept on publishing. The builder reminds people to upload only music
 they have the right to share.
 
-**The player** (`MusicBlock.tsx`): with several albums, a shelf of album cards (cover, title, year,
-number of tracks and their total length); pressing one opens its track list, with "All albums" to go
-back. A block with a single album shows it open, with no shelf. An open album has "Play album" and a
-track list, and once a track is pressed a play and pause button per track, a seek bar, and a volume
-slider (the same remembered volume as Listen Together). Before that there is no audio element at all,
-so a page of music costs no requests to open beyond the covers' thumbnails. Signed out, a track plays
-from the public media route; signed in, from the homeserver like any other page file (fetched when
-it's pressed, not before). A track that ends goes on to the next in its album, and the album stops
-after its last. Music keeps playing while another album is open, and the player then says what's
-playing and from which album, with a button to pause it; the playing album's card says so too.
+**On the page** (`MusicBlock.tsx`): a shelf of album cards, cover and title (with the year, number
+of tracks and total length), however many albums there are, so a long discography doesn't push the
+posts down. Pressing a card opens the album over the page: its cover and details, "Play album", "Copy
+link", and the track list, each track with its own link button. The card of the album playing says
+so.
+
+**The player** (`features/music/`): one for the whole app, so music keeps playing when you close the
+album, go to another profile, a channel or the feed. `MusicPlayerHost` holds the only audio element,
+mounted once in the app shell (signed in) and in the public frame (signed out); `MusicPlayerBar` is
+its controls: what's on and from which album, back (or to the start of the track, a few seconds in),
+play or pause, next, seek, volume (the same remembered volume as Listen Together) and close, which
+stops it. Signed in, the controls are a card in the sidebar above your name, beside Listen
+Together's; on a phone, where the sidebar is out of sight on the chat screen, a strip across the top
+(the shell moves down to make room). Signed out, a bar along the bottom of the page. There's no audio
+element until something is played, so a page of music costs no requests beyond the covers'
+thumbnails. Signed out, a track plays from the public media route; signed in, from the homeserver
+like any other page file. A track that ends goes on to the next in its album, and the album stops
+after its last. Links between signed-out pages are ordinary page loads, so there the music stops
+when the visitor follows one.
+
+### Links to a page and the things on it
+
+**Share** on a profile (yours or anyone's) gives its address, `https://<app>/@name`: the phone's
+share sheet on a touch screen, otherwise copied. Your own profile says, until you show your page to
+everyone, that only people signed in can open it. Things on a page have addresses of their own
+(`matrix/publicWeb.ts`'s `pageTargetPath`; numbers count from 1):
+
+| Address | Opens |
+| --- | --- |
+| `/@name/music/<album>` | the page with that album's songs open |
+| `/@name/music/<album>/<n>` | the same, track n marked (not played: a browser won't play sound before the visitor presses something) |
+| `/@name/art/<album>` | the page with that gallery album open |
+| `/@name/art/<album>/<n>` | the same, piece n shown large (unless it's Mature) |
+| `/@name/commissions/<type>` | the page scrolled to that commission type, marked, its example shown large |
+
+The album dialog has "Copy link" and a link button per track; a gallery album and each piece have
+one, and so does each commission type. Signed in, the address opens inside the app
+(`useOpenPublicRoute` hands the target to the profile through `pageTargetAtom`); signed out, the
+public page opens it (`PageTargetContext`). Commissions stay signed-in only (above), so signed out a
+commission link shows the page with "Sign in to see commission status, prices and the queue".

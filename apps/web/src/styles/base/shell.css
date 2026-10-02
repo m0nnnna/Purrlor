@@ -1,4 +1,5 @@
 .nu-shell {
+  --nu-music-strip-height: 48px;
   display: grid;
   grid-template-columns:
     var(--nu-width-server-rail) var(--nu-width-channel-list) 1fr
@@ -123,6 +124,11 @@
 
   .nu-shell[data-nu-mobile-members-open='true'] .nu-member-list {
     transform: translateX(0);
+  }
+
+  /* Room at the top for page music's strip while it plays (MusicPlayerBar's `mini`). */
+  .nu-shell[data-nu-music='on'][data-nu-mobile-pane='chat'] {
+    padding-top: calc(env(safe-area-inset-top) + var(--nu-music-strip-height));
   }
 
   .nu-shell__mobile-backdrop {

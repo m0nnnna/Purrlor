@@ -1,0 +1,182 @@
+.nu-music-player {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-2);
+  background: var(--nu-color-bg-tertiary);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  color: var(--nu-color-text-primary);
+  min-width: 0;
+}
+
+/* In the sidebar, like Listen Together's card. */
+.nu-music-player--card {
+  margin: 0 var(--nu-space-2) var(--nu-space-2);
+}
+
+/* Along the bottom of the signed-out pages: one row when there's room. */
+.nu-music-player--bar {
+  flex: none;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-2) var(--nu-space-4);
+  border-width: 1px 0 0;
+  border-radius: 0;
+  padding: var(--nu-space-2) var(--nu-space-4);
+}
+
+.nu-music-player--bar .nu-music-player__now {
+  flex: 1 1 220px;
+}
+
+.nu-music-player--bar .nu-music-player__controls {
+  flex: 2 1 320px;
+}
+
+.nu-music-player__now {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  min-width: 0;
+}
+
+.nu-music-player__cover {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: var(--nu-radius-sm);
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-accent);
+}
+
+.nu-music-player__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-music-player__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-music-player__text strong,
+.nu-music-player__text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-music-player__text span {
+  font-size: var(--nu-font-size-xs);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-music-player__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-1) var(--nu-space-2);
+  min-width: 0;
+}
+
+.nu-music-player__button {
+  appearance: none;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nu-color-text-secondary);
+  cursor: pointer;
+}
+
+.nu-music-player__button:hover:not(:disabled) {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-music-player__button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nu-music-player__button--main {
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}
+
+.nu-music-player__button--main:hover:not(:disabled) {
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  filter: brightness(1.1);
+}
+
+.nu-music-player__seek {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  flex: 1 1 140px;
+  min-width: 0;
+  font-size: var(--nu-font-size-xs);
+}
+
+.nu-music-player__seek input,
+.nu-music-player__volume input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--nu-color-accent);
+}
+
+.nu-music-player__time {
+  flex: none;
+  color: var(--nu-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-music-player__volume {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  flex: 1 1 90px;
+  min-width: 0;
+  max-width: 160px;
+  color: var(--nu-color-text-muted);
+}
+
+/* A phone's strip (AppShell): only below the shell's breakpoint, and only on the chat screen,
+   where the sidebar's card is out of sight. The shell makes room for it (styles/base/shell.css). */
+.nu-music-player--mini {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .nu-shell[data-nu-music='on'][data-nu-mobile-pane='chat'] .nu-music-player--mini {
+    display: flex;
+    position: fixed;
+    top: env(safe-area-inset-top);
+    left: env(safe-area-inset-left);
+    right: env(safe-area-inset-right);
+    height: var(--nu-music-strip-height);
+    box-sizing: border-box;
+    justify-content: center;
+    padding: 0 var(--nu-space-3);
+    border-width: 0 0 1px;
+    border-radius: 0;
+    z-index: 150;
+  }
+}

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { parseProfilePage } from '../../matrix/profilePage';
-import { fetchPublicPage, type PublicPageAnswer } from '../../matrix/publicWeb';
+import { fetchPublicPage, type PageTarget, type PublicPageAnswer } from '../../matrix/publicWeb';
 import { handleFor } from '../../matrix/roles';
 import { PageBlocks } from '../profilePage/PageBlocks';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
+import { PageTargetContext } from '../profilePage/PageTargetContext';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
 import { PublicPostCard } from './PublicPostCard';
 import { usePublicPosts } from './usePublicPosts';
@@ -48,7 +49,17 @@ function PublicPosts({ userId, onSignIn }: { userId: string; onSignIn: () => voi
   );
 }
 
-function PublicProfile({ answer, onSignIn, onRegister }: { answer: PublicPageAnswer; onSignIn: () => void; onRegister: () => void }) {
+function PublicProfile({
+  answer,
+  target,
+  onSignIn,
+  onRegister,
+}: {
+  answer: PublicPageAnswer;
+  target?: PageTarget;
+  onSignIn: () => void;
+  onRegister: () => void;
+}) {
   // The service only checks it's a page at all: it goes through the same parser as the signed-in app.
   const page = parseProfilePage(answer.page);
   const name = answer.displayName || handleFor(answer.userId);
@@ -88,7 +99,9 @@ function PublicProfile({ answer, onSignIn, onRegister }: { answer: PublicPageAns
 
         {page && page.blocks.length > 0 && (
           <PageOwnerContext.Provider value={{ userId: answer.userId, isMe: false }}>
-            <PageBlocks blocks={page.blocks} />
+            <PageTargetContext.Provider value={target}>
+              <PageBlocks blocks={page.blocks} />
+            </PageTargetContext.Provider>
           </PageOwnerContext.Provider>
         )}
 
@@ -101,7 +114,18 @@ function PublicProfile({ answer, onSignIn, onRegister }: { answer: PublicPageAns
 }
 
 /** A person's page at /@name, for someone who isn't signed in. */
-export function PublicPage({ user, onSignIn, onRegister }: { user: string; onSignIn: () => void; onRegister: () => void }) {
+export function PublicPage({
+  user,
+  target,
+  onSignIn,
+  onRegister,
+}: {
+  user: string;
+  /** What the link pointed at on the page, if anything (`/@name/music/<album>`, …). */
+  target?: PageTarget;
+  onSignIn: () => void;
+  onRegister: () => void;
+}) {
   const [state, setState] = useState<State>({ status: 'loading' });
   useEffect(() => {
     let cancelled = false;
@@ -117,5 +141,5 @@ export function PublicPage({ user, onSignIn, onRegister }: { user: string; onSig
   if (state.status === 'loading') return <p className="nu-feed__status">Loading…</p>;
   if (state.status === 'error') return <p className="nu-feed__status">Couldn’t load this page right now.</p>;
   if (state.status === 'not_found' || !state.answer) return <SignInToSee onSignIn={onSignIn} />;
-  return <PublicProfile answer={state.answer} onSignIn={onSignIn} onRegister={onRegister} />;
+  return <PublicProfile answer={state.answer} target={target} onSignIn={onSignIn} onRegister={onRegister} />;
 }

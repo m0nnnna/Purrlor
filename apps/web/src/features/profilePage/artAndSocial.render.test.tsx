@@ -4,6 +4,7 @@ import { createContext } from 'react';
 import { parseProfilePage, type ProfilePage } from '../../matrix/profilePage';
 import { PageBlocks } from './PageBlocks';
 import { PageOwnerContext } from './PageOwnerContext';
+import { PageTargetContext } from './PageTargetContext';
 import { visiblePieces } from './GalleryBlock';
 
 const viewer = vi.hoisted(() => ({ signedIn: false }));
@@ -139,5 +140,41 @@ describe('the social and commission blocks without a Matrix client', () => {
     await findByText('Pub');
     expect(container.textContent).not.toContain('private');
     expect(container.querySelectorAll('a[href="/@pub"]')).toHaveLength(1);
+  });
+});
+
+describe('links to the gallery', () => {
+  const page = pageOf([
+    {
+      id: 'g',
+      type: 'gallery',
+      albums: [
+        { id: 'x', title: 'One', pieces: [{ url: MXC('p1') }] },
+        { id: 'y', title: 'Two', pieces: [{ url: MXC('p2'), title: 'Fox' }, { url: MXC('p3') }] },
+      ],
+    },
+  ]);
+  const draw = (target?: Parameters<typeof PageTargetContext.Provider>[0]['value']) =>
+    render(
+      <PageOwnerContext.Provider value={{ userId: '@luna:purr.example.org', isMe: false }}>
+        <PageTargetContext.Provider value={target}>
+          <PageBlocks blocks={page.blocks} />
+        </PageTargetContext.Provider>
+      </PageOwnerContext.Provider>
+    );
+
+  it('gives each album and each piece a link of its own', () => {
+    const { container } = draw();
+    fireEvent.click(qa(container, 'art-album')[1].querySelector('button') as Element);
+    const links = (role: string) => qa(container, role).map((el) => (el as HTMLElement).dataset.nuLink);
+    expect(links('art-album-link')).toContain(`${window.location.origin}/@luna/art/y`);
+    expect(links('art-piece-link')).toEqual([`${window.location.origin}/@luna/art/y/1`, `${window.location.origin}/@luna/art/y/2`]);
+  });
+
+  it('opens the album a link points at, with its piece shown large', () => {
+    const { container } = draw({ kind: 'art', album: 'y', piece: 2 });
+    expect(qa(container, 'art-piece')).toHaveLength(2);
+    const lightbox = document.querySelector('.nu-lightbox img, [data-nu-role="lightbox"] img') as HTMLImageElement | null;
+    expect(lightbox?.getAttribute('src')).toBe('https://media.example/p3');
   });
 });

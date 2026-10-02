@@ -8,10 +8,10 @@ import { HOMESERVER, type TestUser } from './matrix';
 
 export const role = (page: Page | Locator, name: string) => page.locator(`[data-nu-role="${name}"]`);
 
-/** Opens the app locked to the test homeserver, as a deployment's `/config.json` would. */
-export async function openApp(page: Page): Promise<void> {
+/** Opens the app locked to the test homeserver, as a deployment's `/config.json` would, at `path`. */
+export async function openApp(page: Page, path = '/'): Promise<void> {
   await page.route('**/config.json', (route) => route.fulfill({ json: { homeserver: HOMESERVER } }));
-  await page.goto('/');
+  await page.goto(path);
 }
 
 export async function logIn(page: Page, user: TestUser): Promise<void> {

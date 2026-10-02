@@ -24,6 +24,9 @@ import { isDemoMode } from '../demo/demoMode';
 import { useComposeShortcut } from '../features/feed/useComposeShortcut';
 import { useShareTarget } from '../features/feed/useShareTarget';
 import { useOpenPublicRoute } from '../features/publicWeb/useOpenPublicRoute';
+import { musicQueueAtom } from '../features/music/musicPlayer';
+import { MusicPlayerBar } from '../features/music/MusicPlayerBar';
+import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
 import { InstallHint } from './InstallHint';
 import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
@@ -45,6 +48,7 @@ export function AppShell() {
   const spaceView = useAtomValue(selectedSpaceViewAtom);
   const profileOpen = !!useAtomValue(profileUserIdAtom);
   const postOpen = !!useAtomValue(openPostAtom);
+  const musicOn = !!useAtomValue(musicQueueAtom);
   // On a phone the main pane only shows once there's something in it: a room, a Space's Posts,
   // or the global feed. The last two aren't rooms, so a room check alone left them invisible.
   const mainPaneHasContent = !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
@@ -64,6 +68,7 @@ export function AppShell() {
       // media query switches on. They're no-ops above the breakpoint.
       data-nu-mobile-pane={mainPaneHasContent ? 'chat' : 'sidebar'}
       data-nu-mobile-members-open={mobileMembersOpen}
+      data-nu-music={musicOn ? 'on' : undefined}
       data-nu-members-hidden={membersHidden || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
       <VoiceCallSession>
@@ -79,6 +84,8 @@ export function AppShell() {
           onClick={() => setMobileMembersOpen(false)}
         />
       )}
+      <MusicPlayerHost />
+      <MusicPlayerBar variant="mini" />
       {isDemoMode() ? <DemoModeBanner /> : <InstallHint />}
       <DesktopNotifications />
       <NotificationRules />

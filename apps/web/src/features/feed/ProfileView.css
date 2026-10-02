@@ -32,9 +32,10 @@
   gap: var(--nu-space-2);
 }
 
-/* Message reuses the outlined follow-button look, but isn't a destructive toggle like
+/* Message and Share reuse the outlined follow-button look, but isn't a destructive toggle like
    "Following" — no red on hover. */
-.nu-profile-view__actions [data-nu-role='profile-message']:hover {
+.nu-profile-view__actions [data-nu-role='profile-message']:hover,
+.nu-profile-view__actions [data-nu-role='profile-share']:hover {
   border-color: var(--nu-color-text-muted);
   color: var(--nu-color-text-primary);
 }
