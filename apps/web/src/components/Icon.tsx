@@ -86,6 +86,7 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronUp: <path d="m18 15-6-6-6 6" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   arrowDown: <path d="M12 5v14M19 12l-7 7-7-7" />,
@@ -119,6 +120,37 @@ const PATHS: Record<string, ReactNode> = {
     <>
       <rect x="6" y="4" width="4" height="16" rx="1" />
       <rect x="14" y="4" width="4" height="16" rx="1" />
+    </>
+  ),
+  headphones: (
+    <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+  ),
+  camera: (
+    <>
+      <path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </>
+  ),
+  cameraOff: (
+    <path d="M10.7 6H14a2 2 0 0 1 2 2v2.5l5.2-3.5a.5.5 0 0 1 .8.4v9.2M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2M2 2l20 20" />
+  ),
+  monitor: (
+    <>
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </>
+  ),
+  tv: (
+    <>
+      <rect x="2" y="7" width="20" height="15" rx="2" />
+      <path d="m17 2-5 5-5-5" />
+    </>
+  ),
+  music: (
+    <>
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
     </>
   ),
   headphonesOff: (

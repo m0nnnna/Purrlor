@@ -13,6 +13,8 @@ import {
 } from '@livekit/components-react';
 import type { Room as MatrixRoom } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
+import { Icon, type IconName } from '../../components/Icon';
+import { Menu, MenuItem } from '../../components/Menu';
 import { useVoiceCall } from './voiceCallContext';
 import { useParticipantSounds } from './useParticipantSounds';
 import { usePushToTalk } from './usePushToTalk';
@@ -139,6 +141,43 @@ function ParticipantRow({
   );
 }
 
+/** One button in the call's control bar: an icon in a circle with what it does written under it.
+ *  `off` is something of yours that's switched off (muted, deafened), `on` something you're
+ *  sending (camera, screen). */
+function CallControl({
+  icon,
+  label,
+  title,
+  state,
+  role,
+  disabled,
+  onClick,
+}: {
+  icon: IconName;
+  label: string;
+  title: string;
+  state: 'normal' | 'on' | 'off' | 'leave';
+  role: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={state === 'normal' ? 'nu-call-control' : `nu-call-control nu-call-control--${state}`}
+      data-nu-role={role}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+    >
+      <span className="nu-call-control__icon">
+        <Icon name={icon} size={20} />
+      </span>
+      <span className="nu-call-control__label">{label}</span>
+    </button>
+  );
+}
+
 /** The live call UI — participant grid, controls, screen share/Watch Together slot — for a
  *  channel whose call has actually reached the "ready" (connected) state. Loaded lazily by
  *  VoiceChannelPanel via React.lazy, since everything here (and its LiveKit imports above) is
@@ -200,6 +239,22 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
     localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
   };
 
+  const micIcon = pushToTalk.enabled || isMicrophoneEnabled ? 'mic' : 'micOff';
+  const micLabel = pushToTalk.rebinding
+    ? 'Press a key'
+    : pushToTalk.enabled
+      ? `Hold ${pushToTalk.keyLabel}`
+      : isMicrophoneEnabled
+        ? 'Mute'
+        : 'Unmute';
+  const micTitle = pushToTalk.rebinding
+    ? 'Press the key you want to hold to talk (Escape or click to cancel)'
+    : pushToTalk.enabled
+      ? `Push to talk is on: hold ${pushToTalk.keyLabel} to talk`
+      : isMicrophoneEnabled
+        ? 'Mute your microphone'
+        : 'Unmute your microphone';
+
   return (
     <>
       {activeScreenShare ? (
@@ -243,154 +298,112 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
         ))}
       </ul>
       <div className="nu-voice-controls" data-nu-role="voice-controls">
-        <button
-          type="button"
-          className={
-            isMicrophoneEnabled
-              ? 'nu-voice-control-button'
-              : 'nu-voice-control-button nu-voice-control-button--active'
-          }
-          onClick={toggleMic}
-          disabled={pushToTalk.enabled}
-          title={
-            pushToTalk.enabled
-              ? `Push-to-talk is on — hold ${pushToTalk.keyLabel} to talk`
-              : isMicrophoneEnabled
-                ? 'Mute'
-                : 'Unmute'
-          }
-        >
-          {isMicrophoneEnabled ? '🎤' : '🔇'}
-        </button>
-        <button
-          type="button"
-          className={
-            pushToTalk.enabled ? 'nu-voice-control-button nu-voice-control-button--active' : 'nu-voice-control-button'
-          }
-          data-nu-role="voice-ptt-toggle"
-          onClick={() => pushToTalk.setEnabled(!pushToTalk.enabled)}
-          title={
-            pushToTalk.enabled
-              ? `Push-to-talk on (hold ${pushToTalk.keyLabel}) — click to switch to open mic`
-              : 'Switch to push-to-talk'
-          }
-        >
-          🎙️
-        </button>
-        {pushToTalk.enabled && (
-          <button
-            type="button"
-            className={
-              pushToTalk.rebinding
-                ? 'nu-voice-control-button nu-voice-control-button--key nu-voice-control-button--rebinding'
-                : 'nu-voice-control-button nu-voice-control-button--key'
-            }
-            data-nu-role="voice-ptt-rebind"
-            onClick={() => (pushToTalk.rebinding ? pushToTalk.cancelRebind() : pushToTalk.startRebind())}
-            title={
-              pushToTalk.rebinding
-                ? 'Press the key you want to hold to talk (Escape to cancel)'
-                : `Push-to-talk key: ${pushToTalk.keyLabel} — click to change`
-            }
+        <div className="nu-call-control-group">
+          <CallControl
+            icon={micIcon}
+            label={micLabel}
+            state={!isMicrophoneEnabled && !pushToTalk.enabled ? 'off' : 'normal'}
+            role="voice-mic-toggle"
+            disabled={pushToTalk.enabled && !pushToTalk.rebinding}
+            title={micTitle}
+            onClick={pushToTalk.rebinding ? pushToTalk.cancelRebind : toggleMic}
+          />
+          <Menu
+            label="Microphone options"
+            trigger={<Icon name="chevronUp" size={12} />}
+            triggerClassName="nu-call-control__options"
+            role="voice-mic-options"
+            dropUp
           >
-            {pushToTalk.rebinding ? 'Press a key…' : pushToTalk.keyLabel}
-          </button>
-        )}
-        <button
-          type="button"
-          className={deafened ? 'nu-voice-control-button nu-voice-control-button--active' : 'nu-voice-control-button'}
+            <MenuItem icon={pushToTalk.enabled ? 'check' : undefined} role="voice-ptt-toggle" onSelect={() => pushToTalk.setEnabled(!pushToTalk.enabled)}>
+              Push to talk
+            </MenuItem>
+            {pushToTalk.enabled && (
+              <MenuItem icon="pencil" role="voice-ptt-rebind" onSelect={pushToTalk.startRebind}>
+                Change key ({pushToTalk.keyLabel})
+              </MenuItem>
+            )}
+          </Menu>
+        </div>
+        <CallControl
+          icon={deafened ? 'headphonesOff' : 'headphones'}
+          label={deafened ? 'Undeafen' : 'Deafen'}
+          state={deafened ? 'off' : 'normal'}
+          role="voice-deafen-toggle"
+          title={deafened ? 'Hear everyone again' : 'Stop hearing everyone (also mutes you)'}
           onClick={toggleDeafen}
-          title={deafened ? 'Undeafen' : 'Deafen'}
-        >
-          {deafened ? '🔕' : '🔊'}
-        </button>
-        <button
-          type="button"
-          className={
-            isCameraEnabled ? 'nu-voice-control-button nu-voice-control-button--active' : 'nu-voice-control-button'
-          }
+        />
+        <CallControl
+          icon={isCameraEnabled ? 'camera' : 'cameraOff'}
+          label={isCameraEnabled ? 'Stop video' : 'Camera'}
+          state={isCameraEnabled ? 'on' : 'normal'}
+          role="voice-camera-toggle"
+          title={isCameraEnabled ? 'Turn off your camera' : 'Turn on your camera'}
           onClick={() => localParticipant.setCameraEnabled(!isCameraEnabled)}
-          title={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-        >
-          {isCameraEnabled ? '🎥' : '📷'}
-        </button>
-        <button
-          type="button"
-          className={
-            isScreenShareEnabled
-              ? 'nu-voice-control-button nu-voice-control-button--active'
-              : 'nu-voice-control-button'
+        />
+        <div className="nu-call-control-group">
+          <CallControl
+            icon="monitor"
+            label={isScreenShareEnabled ? 'Stop sharing' : 'Share'}
+            state={isScreenShareEnabled ? 'on' : 'normal'}
+            role="voice-screen-share-toggle"
+            title={
+              isScreenShareEnabled
+                ? 'Stop sharing your screen'
+                : appAudioOnly
+                  ? 'Share a window, with only that window’s sound'
+                  : 'Share your screen or a window'
+            }
+            onClick={() => {
+              // Closing the browser's picker rejects; that's not an error worth showing.
+              const started = isScreenShareEnabled ? localParticipant.setScreenShareEnabled(false) : startScreenShare(localParticipant, appAudioOnly);
+              started.catch(() => undefined);
+            }}
+          />
+          {!isScreenShareEnabled && (
+            <Menu
+              label="Screen share options"
+              trigger={<Icon name="chevronUp" size={12} />}
+              triggerClassName="nu-call-control__options"
+              role="voice-share-options"
+              dropUp
+            >
+              <MenuItem
+                icon={appAudioOnly ? 'check' : undefined}
+                role="voice-share-app-audio-only"
+                onSelect={() => {
+                  setAppAudioOnly(!appAudioOnly);
+                  saveAppAudioOnly(!appAudioOnly);
+                }}
+              >
+                Only share the window’s sound
+              </MenuItem>
+            </Menu>
+          )}
+        </div>
+        <Menu
+          label="Watch or listen together"
+          trigger={
+            <>
+              <span className="nu-call-control__icon">
+                <Icon name={sharedMode === 'listen' ? 'music' : 'tv'} size={20} />
+              </span>
+              <span className="nu-call-control__label">Together</span>
+            </>
           }
-          data-nu-role="voice-screen-share-toggle"
-          onClick={() => {
-            // Closing the browser's picker rejects; that's not an error worth showing.
-            const started = isScreenShareEnabled ? localParticipant.setScreenShareEnabled(false) : startScreenShare(localParticipant, appAudioOnly);
-            started.catch(() => undefined);
-          }}
-          title={
-            isScreenShareEnabled
-              ? 'Stop sharing'
-              : appAudioOnly
-                ? 'Share a window (only that window’s sound, if your browser can capture it)'
-                : 'Share screen (browser will offer a "Share audio" option)'
-          }
+          triggerClassName={sharedMode ? 'nu-call-control nu-call-control--on' : 'nu-call-control'}
+          role="voice-together-menu"
+          align="end"
+          dropUp
         >
-          🖥️
-        </button>
-        <button
-          type="button"
-          className={appAudioOnly ? 'nu-voice-control-button nu-voice-control-button--active' : 'nu-voice-control-button'}
-          data-nu-role="voice-share-app-audio-only"
-          aria-pressed={appAudioOnly}
-          disabled={isScreenShareEnabled}
-          onClick={() => {
-            setAppAudioOnly(!appAudioOnly);
-            saveAppAudioOnly(!appAudioOnly);
-          }}
-          title={
-            appAudioOnly
-              ? 'Screen share sound: only the shared window’s. Click to allow all of your computer’s sound again'
-              : 'Screen share sound: your browser decides. Click to share only the shared window’s sound, never everything'
-          }
-        >
-          🎧
-        </button>
-        <button
-          type="button"
-          className={
-            sharedMode === 'watch'
-              ? 'nu-voice-control-button nu-voice-control-button--active'
-              : 'nu-voice-control-button'
-          }
-          data-nu-role="voice-watch-together-toggle"
-          disabled={!watchTogether}
-          onClick={() => setWatchTogetherModal('watch')}
-          title={sharedMode === 'watch' ? 'Change what you\'re watching together' : 'Watch a video together'}
-        >
-          📺
-        </button>
-        <button
-          type="button"
-          className={
-            sharedMode === 'listen'
-              ? 'nu-voice-control-button nu-voice-control-button--active'
-              : 'nu-voice-control-button'
-          }
-          data-nu-role="voice-listen-together-toggle"
-          disabled={!watchTogether}
-          onClick={() => setWatchTogetherModal('listen')}
-          title={sharedMode === 'listen' ? 'Change what you\'re listening to together' : 'Listen to music together'}
-        >
-          🎵
-        </button>
-        <button
-          type="button"
-          className="nu-voice-control-button nu-voice-control-button--leave"
-          onClick={onLeave}
-          title="Leave"
-        >
-          📞
-        </button>
+          <MenuItem icon="tv" role="voice-watch-together-toggle" onSelect={() => setWatchTogetherModal('watch')}>
+            {sharedMode === 'watch' ? 'Change the video' : 'Watch a video together'}
+          </MenuItem>
+          <MenuItem icon="music" role="voice-listen-together-toggle" onSelect={() => setWatchTogetherModal('listen')}>
+            {sharedMode === 'listen' ? 'Change the music' : 'Listen to music together'}
+          </MenuItem>
+        </Menu>
+        <CallControl icon="phoneOff" label="Leave" state="leave" role="voice-leave" title="Leave the call" onClick={onLeave} />
       </div>
       {watchTogetherModal && watchTogether && (
         <WatchTogetherModal
