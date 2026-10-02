@@ -5,7 +5,7 @@ import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../.
 import { Avatar } from '../../components/Avatar';
 import { Modal } from '../../components/Modal';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { createDirectMessage, findExistingDirectMessageRoomId } from '../../matrix/directMessages';
+import { openDirectMessage } from '../../matrix/directMessages';
 import { useExtendedProfile } from '../../matrix/hooks/useExtendedProfile';
 import { useIsUserIgnored } from '../../matrix/hooks/useIsUserIgnored';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
@@ -48,7 +48,7 @@ export function UserProfileModal({
     setStarting(true);
     setError(undefined);
     try {
-      const roomId = findExistingDirectMessageRoomId(mx, userId) ?? (await createDirectMessage(mx, userId));
+      const roomId = await openDirectMessage(mx, userId);
       setSelectedSpaceId(null);
       setSelectedRoomId(roomId);
       onClose();
@@ -76,7 +76,7 @@ export function UserProfileModal({
     setVerifying(true);
     setError(undefined);
     try {
-      const roomId = findExistingDirectMessageRoomId(mx, userId) ?? (await createDirectMessage(mx, userId));
+      const roomId = await openDirectMessage(mx, userId);
       setVerificationRequest(await requestCrossUserVerification(mx, userId, roomId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start verification');

@@ -4,7 +4,7 @@ import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../.
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
-import { createDirectMessage, findExistingDirectMessageRoomId } from '../../matrix/directMessages';
+import { openDirectMessage } from '../../matrix/directMessages';
 import { setFollowing } from '../../matrix/follows';
 import { readPost } from '../../matrix/feed';
 import { filterPosts } from '../../matrix/globalFeed';
@@ -74,7 +74,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
     setStartingDm(true);
     setFollowError(undefined);
     try {
-      const roomId = findExistingDirectMessageRoomId(mx, userId) ?? (await createDirectMessage(mx, userId));
+      const roomId = await openDirectMessage(mx, userId);
       setSelectedSpaceId(null);
       setSelectedRoomId(roomId);
     } catch (err) {

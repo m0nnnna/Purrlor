@@ -458,9 +458,30 @@
   transition: opacity 0.12s ease;
 }
 
-.nu-channel-list__row:hover .nu-channel-list__row-actions,
+/* Revealed on hover only where there is a real hover. On a touchscreen, iOS treats a tap that
+   reveals something on :hover as a hover alone and only follows it on a second tap, which made
+   every channel need two taps to open. There the actions just stay visible instead, with the
+   name making room for them. */
+@media (hover: hover) {
+  .nu-channel-list__row:hover .nu-channel-list__row-actions {
+    opacity: 1;
+  }
+}
+
 .nu-channel-list__row-actions:focus-within {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .nu-channel-list__row-actions {
+    opacity: 1;
+    background: transparent;
+    transition: none;
+  }
+
+  .nu-channel-list__item {
+    padding-right: 52px;
+  }
 }
 
 .nu-channel-list__row-action {

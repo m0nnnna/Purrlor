@@ -1,5 +1,5 @@
 import { Direction, MsgType, Method, type MatrixClient } from 'matrix-js-sdk';
-import { createDirectMessage, findExistingDirectMessageRoomId } from './directMessages';
+import { openDirectMessage } from './directMessages';
 import { feedJoinVia } from './feed';
 import { readLine, readMxc } from './profilePage';
 
@@ -275,7 +275,7 @@ export async function sendCommissionRequest(mx: MatrixClient, artistId: string, 
   const description = request.description.trim();
   if (!description) throw new Error('Describe what you’d like.');
   if (description.length > COMMISSION_LIMITS.request) throw new Error(`Keep the description under ${COMMISSION_LIMITS.request} characters.`);
-  const roomId = findExistingDirectMessageRoomId(mx, artistId) ?? (await createDirectMessage(mx, artistId));
+  const roomId = await openDirectMessage(mx, artistId);
   await mx.sendMessage(roomId, { msgtype: MsgType.Text, body: requestMessageBody({ ...request, description }) });
   return roomId;
 }

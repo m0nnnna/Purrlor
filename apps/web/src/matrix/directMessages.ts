@@ -1,5 +1,8 @@
-import { EventType, Preset, type MatrixClient } from 'matrix-js-sdk';
+import { EventType, Preset, type MatrixClient, type Room } from 'matrix-js-sdk';
 import { ENCRYPTION_INITIAL_STATE } from './encryption';
+import { acceptInvite, classifyInvite } from './invites';
+import { readMentionInvite } from './mentionInvites';
+import { listSpacelessRooms } from './spacelessRooms';
 
 const MXID_PATTERN = /^@[^:\s]+:.+$/;
 
@@ -9,9 +12,10 @@ export function isValidUserId(userId: string): boolean {
 
 /**
  * Updates the `m.direct` account data mapping so other Matrix clients (Element etc.) also
- * recognize the new room as a DM with this user — this app itself never reads it (see
- * useSpacelessRooms.ts: a room counts as a DM here purely by "not in any joined Space"), but
- * writing it costs nothing and keeps the room from looking like a stray group chat elsewhere.
+ * recognize the new room as a DM with this user. This app's DM list doesn't depend on it (see
+ * spacelessRooms.ts: a room counts as a DM here by "not in any joined Space"); it only breaks a
+ * tie in findExistingDirectMessageRoomId, and keeps the room from looking like a stray group chat
+ * elsewhere.
  */
 async function recordAsDirectMessage(mx: MatrixClient, userId: string, roomId: string): Promise<void> {
   const content = mx.getAccountData(EventType.Direct)?.getContent() ?? {};
@@ -20,16 +24,60 @@ async function recordAsDirectMessage(mx: MatrixClient, userId: string, roomId: s
   await mx.setAccountData(EventType.Direct, { ...content, [userId]: [...existing, roomId] });
 }
 
-/** An existing 1:1 (exactly you + them, joined) DM room with this user, if one's already
- *  around — checked before starting a new one from a profile's "Message" button, so clicking it
- *  reopens the existing conversation instead of spawning a duplicate room. */
+/** Exactly you (joined) and them (joined, or invited and not yet accepted) — a DM you started
+ *  only has you joined until they accept, and it's still that DM meanwhile. */
+function isOneToOneWith(room: Room, myUserId: string, userId: string): boolean {
+  const members = room.getMembers().filter((m) => m.membership === 'join' || m.membership === 'invite');
+  return (
+    members.length === 2 &&
+    members.some((m) => m.userId === myUserId && m.membership === 'join') &&
+    members.some((m) => m.userId === userId)
+  );
+}
+
+/** An existing 1:1 DM room with this user, if one's already around — checked before starting a
+ *  new one from a profile's "Message" button, so clicking it reopens the existing conversation
+ *  instead of spawning a duplicate room. That includes one you started that they haven't
+ *  accepted yet. Only rooms the DM list shows count (listSpacelessRooms): a Space's channel with
+ *  just the two of you in it is not a DM, and matching on member count alone sent "Message" to
+ *  some small Space's #general. Rooms `m.direct` records for this user come first, then any
+ *  other 1:1 in the list. */
 export function findExistingDirectMessageRoomId(mx: MatrixClient, userId: string): string | undefined {
-  const myUserId = mx.getUserId();
+  const myUserId = mx.getUserId() ?? '';
+  const candidates = listSpacelessRooms(mx).filter(
+    (room) => room.currentState.getStateEvents(EventType.SpaceParent).length === 0 && isOneToOneWith(room, myUserId, userId)
+  );
+  if (candidates.length < 2) return candidates[0]?.roomId;
+  const recorded: unknown = mx.getAccountData(EventType.Direct)?.getContent()[userId];
+  const recordedIds = Array.isArray(recorded) ? recorded : [];
+  return (candidates.find((room) => recordedIds.includes(room.roomId)) ?? candidates[0])?.roomId;
+}
+
+/** A DM this user invited you to that you haven't accepted yet: the invite's `is_direct` flag,
+ *  from them, and not a Space or channel or a Global-post mention's invite. */
+export function findPendingDirectMessageInviteRoomId(mx: MatrixClient, userId: string): string | undefined {
+  const myUserId = mx.getUserId() ?? '';
   return mx.getRooms().find((room) => {
-    if (room.isSpaceRoom()) return false;
-    const joined = room.getJoinedMembers();
-    return joined.length === 2 && joined.some((m) => m.userId === userId) && joined.some((m) => m.userId === myUserId);
+    if (room.getMyMembership() !== 'invite' || classifyInvite(mx, room) !== 'dm' || readMentionInvite(mx, room)) return false;
+    const invite = room.currentState.getStateEvents(EventType.RoomMember, myUserId);
+    return invite?.getSender() === userId && invite.getContent().is_direct === true;
   })?.roomId;
+}
+
+/** The DM to open for "Message": the one you already have with them, else the one they've
+ *  invited you to (accepted now, rather than starting a second one beside it), else a new one. */
+export async function openDirectMessage(mx: MatrixClient, userId: string): Promise<string> {
+  const existing = findExistingDirectMessageRoomId(mx, userId);
+  if (existing) return existing;
+  const invited = findPendingDirectMessageInviteRoomId(mx, userId);
+  if (invited) {
+    await acceptInvite(mx, invited);
+    await recordAsDirectMessage(mx, userId, invited).catch(() => {
+      // As in createDirectMessage: a nicety.
+    });
+    return invited;
+  }
+  return createDirectMessage(mx, userId);
 }
 
 /**
