@@ -1,6 +1,7 @@
 import {
   decodeRecoveryKey,
   deriveRecoveryKeyFromPassphrase,
+  type CryptoApi,
   type KeyBackupRestoreResult,
 } from 'matrix-js-sdk/lib/crypto-api';
 import { SecretStorage, type MatrixClient } from 'matrix-js-sdk';
@@ -32,16 +33,38 @@ async function decodeUserInput(
 }
 
 /**
- * Restores decryption ability for historical encrypted messages using a Matrix recovery
- * key/passphrase via the spec's Secure Secret Storage and Backup mechanism. Non-interactive:
- * it works standalone, without another logged-in device present. SAS/QR device-to-device
- * verification is a better UX for establishing trust and is planned as a follow-up — this
- * covers "I have my recovery key, unlock my history" in the meantime.
+ * Signs this session with the account's cross-signing keys, read from secret storage — what makes
+ * other Matrix apps (Element, FluffyChat) show it as verified rather than as an unknown session.
+ * Unlocking the key backup alone gives this session the history but proves nothing to anyone else.
+ *
+ * Only when the keys are actually in secret storage: given none, bootstrapCrossSigning makes
+ * brand-new ones, which would leave every other session of the account unverified instead.
+ * Returns whether this session is now signed.
  */
-export async function restoreFromRecoveryKey(
-  mx: MatrixClient,
-  input: string
-): Promise<KeyBackupRestoreResult> {
+async function signThisSession(crypto: CryptoApi, deviceId: string | null): Promise<boolean> {
+  const status = await crypto.getCrossSigningStatus();
+  if (!status.privateKeysInSecretStorage || !deviceId) return false;
+  // Reads the keys from secret storage into this session and signs it.
+  await crypto.bootstrapCrossSigning({});
+  // Signed again in case the keys were already here (bootstrap then does nothing); harmless twice.
+  await crypto.crossSignDevice(deviceId);
+  return true;
+}
+
+export type RecoveryResult = {
+  /** The key backup restored, when the account has one. */
+  restored?: KeyBackupRestoreResult;
+  /** This session is now signed with the account's cross-signing keys. */
+  verified: boolean;
+};
+
+/**
+ * Verifies this session with a Matrix recovery key or passphrase, through the spec's Secure Secret
+ * Storage: signs it with the account's cross-signing keys (so other apps trust it), and restores
+ * the key backup (so past encrypted messages decrypt). Non-interactive: it works without another
+ * logged-in device. Verifying from another device (RecoveryKeyPrompt) is the other way in.
+ */
+export async function restoreFromRecoveryKey(mx: MatrixClient, input: string): Promise<RecoveryResult> {
   const crypto = mx.getCrypto();
   if (!crypto) {
     throw new RecoveryKeyError('Encryption is not available on this session.');
@@ -64,13 +87,24 @@ export async function restoreFromRecoveryKey(
     );
   }
 
-  try {
-    return await withSecretStorageKeyAttempt(keyId, privateKey, async () => {
-      await crypto.bootstrapSecretStorage({});
+  return withSecretStorageKeyAttempt(keyId, privateKey, async () => {
+    await crypto.bootstrapSecretStorage({});
+    let verified: boolean;
+    try {
+      verified = await signThisSession(crypto, mx.getDeviceId());
+    } catch {
+      throw new RecoveryKeyError('The key is right, but verifying this session failed. Try again.');
+    }
+    if (!(await crypto.getKeyBackupInfo())) return { verified };
+    try {
       await crypto.loadSessionBackupPrivateKeyFromSecretStorage();
-      return crypto.restoreKeyBackup();
-    });
-  } catch {
-    throw new RecoveryKeyError('Unlocked secret storage, but restoring message history failed. Try again.');
-  }
+      return { restored: await crypto.restoreKeyBackup(), verified };
+    } catch {
+      throw new RecoveryKeyError(
+        verified
+          ? 'This session is verified, but restoring message history failed. Try again.'
+          : 'Unlocked secret storage, but restoring message history failed. Try again.'
+      );
+    }
+  });
 }

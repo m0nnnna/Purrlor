@@ -19,6 +19,7 @@ the same server.
 | `chat-features.spec.ts` | A thread (replying from a message, another user's reply arriving in it), pinning and unpinning, finding a message by searching, and sending a file from the composer |
 | `news.spec.ts` | A Space's news shown on a member's first visit and then not, the Space opening on its first channel, a small fix that isn't shown again and an update that is; who may edit it set in Roles and held to by the homeserver |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
+| `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
 
 ## Running locally
 

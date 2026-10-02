@@ -18,7 +18,7 @@ export function RecoveryKeyPrompt({ onResolved }: { onResolved: () => void }) {
   const [recoveryKey, setRecoveryKey] = useState('');
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string>();
-  const [result, setResult] = useState<{ imported: number; total: number }>();
+  const [result, setResult] = useState<string>();
   const [verificationRequest, setVerificationRequest] = useState<VerificationRequest>();
   const [verificationError, setVerificationError] = useState<string>();
 
@@ -39,7 +39,8 @@ export function RecoveryKeyPrompt({ onResolved }: { onResolved: () => void }) {
     setError(undefined);
     try {
       const res = await restoreFromRecoveryKey(mx, recoveryKey);
-      setResult({ imported: res.imported, total: res.total });
+      const restored = res.restored ? `Restored ${res.restored.imported} of ${res.restored.total} message keys.` : '';
+      setResult(res.verified ? `This session is verified. ${restored}`.trim() : restored || 'Unlocked.');
       setTimeout(onResolved, 1500);
     } catch (err) {
       setError(err instanceof RecoveryKeyError ? err.message : 'Something went wrong. Try again.');
@@ -51,11 +52,11 @@ export function RecoveryKeyPrompt({ onResolved }: { onResolved: () => void }) {
   return (
     <div className="nu-recovery-prompt" data-nu-role="recovery-prompt">
       <form className="nu-recovery-prompt__panel" onSubmit={handleSubmit}>
-        <h2 className="nu-recovery-prompt__title">Unlock message history</h2>
+        <h2 className="nu-recovery-prompt__title">Verify this session</h2>
         <p className="nu-recovery-prompt__body">
-          This is a new session, so past encrypted messages won't decrypt yet. Enter your
-          recovery key or recovery passphrase (whichever was set up for this account) to
-          restore them.
+          Enter your recovery key or recovery passphrase (whichever was set up for this account).
+          It unlocks your past encrypted messages here, and verifies this session so your other
+          Matrix apps trust it.
         </p>
         <input
           className="nu-recovery-prompt__input"
@@ -73,7 +74,7 @@ export function RecoveryKeyPrompt({ onResolved }: { onResolved: () => void }) {
         )}
         {result && (
           <p className="nu-recovery-prompt__success" data-nu-role="recovery-prompt-success">
-            Restored {result.imported} of {result.total} keys.
+            {result}
           </p>
         )}
         {verificationError && (
@@ -98,7 +99,7 @@ export function RecoveryKeyPrompt({ onResolved }: { onResolved: () => void }) {
             className="nu-recovery-prompt__submit"
             disabled={!recoveryKey.trim() || restoring}
           >
-            {restoring ? 'Unlocking…' : 'Unlock'}
+            {restoring ? 'Verifying…' : 'Verify'}
           </button>
         </div>
       </form>
