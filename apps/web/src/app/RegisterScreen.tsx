@@ -4,7 +4,7 @@ import { Modal } from '../components/Modal';
 import { EmailVerificationModal } from './EmailVerificationModal';
 import { initClient, startClient } from '../matrix/client';
 import { bootstrapNewAccountEncryption } from '../matrix/e2eeSetup';
-import { registerAccount, RegistrationError, type EmailRetry, type EmailVerification, type TermsPolicy } from '../matrix/registration';
+import { registerAccount, RegistrationError, usernameProblem, type EmailRetry, type EmailVerification, type TermsPolicy } from '../matrix/registration';
 import { clearSession } from '../matrix/session';
 import { getRuntimeConfig, homeserverDisplayName } from './runtimeConfig';
 import { TermsNotice } from './TermsOfService';
@@ -105,6 +105,11 @@ export function RegisterScreen({ onSwitchToLogin, onRegistered }: RegisterScreen
     evt.preventDefault();
     if (submitting) return;
 
+    const problem = usernameProblem(username);
+    if (problem) {
+      setError(problem);
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords don't match.");
       return;

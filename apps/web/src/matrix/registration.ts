@@ -37,6 +37,50 @@ const SUPPORTED_STAGES = new Set<string>([
   AuthType.UnstableRegistrationToken,
 ]);
 
+/** What a Matrix user ID allows before the `:server` part (the spec's user identifier grammar). */
+const LOCALPART_RE = /^[a-z0-9._=\-/+]+$/;
+
+/** Why a username can't be used, in words someone can act on, or null if it's fine. Checked
+ *  before anything is sent, so a bad name never gets as far as the email step. */
+export function usernameProblem(username: string): string | null {
+  if (!username) return 'Enter a username.';
+  if (LOCALPART_RE.test(username)) return null;
+  if (/\s/.test(username)) return "Usernames can't contain spaces.";
+  const lower = username.toLowerCase();
+  if (LOCALPART_RE.test(lower)) return `Usernames can only use lowercase letters. Try "${lower}" instead.`;
+  return 'Usernames can only use lowercase letters (a-z), numbers, and . _ = - / +';
+}
+
+/** The username errors a homeserver gives, reworded; null for any other error. */
+function usernameRejection(err: MatrixError, username: string): RegistrationError | null {
+  const reason = typeof err.data?.error === 'string' ? err.data.error : err.message;
+  switch (err.errcode) {
+    case 'M_USER_IN_USE':
+      return new RegistrationError(`The username "${username}" is taken. Try another.`);
+    case 'M_EXCLUSIVE':
+      return new RegistrationError(`The username "${username}" is reserved. Try another.`);
+    case 'M_INVALID_USERNAME':
+      return new RegistrationError(usernameProblem(username) ?? `That username can't be used: ${reason}`);
+    default:
+      return null;
+  }
+}
+
+/** Ask the server whether the name is free and valid before the flow starts (terms, email). A
+ *  server without the endpoint, or one rate limiting it, isn't a reason to stop: register()
+ *  still has the final say. */
+async function checkUsernameAvailable(mx: MatrixClient, username: string): Promise<void> {
+  let available: boolean;
+  try {
+    available = await mx.isUsernameAvailable(username);
+  } catch (err) {
+    const rejection = err instanceof MatrixError ? usernameRejection(err, username) : null;
+    if (rejection) throw rejection;
+    return;
+  }
+  if (!available) throw new RegistrationError(`The username "${username}" is taken. Try another.`);
+}
+
 const isTokenStage = (stage: string) =>
   stage === AuthType.RegistrationToken || stage === AuthType.UnstableRegistrationToken;
 
@@ -69,8 +113,12 @@ export async function registerAccount(
   password: string,
   prompts: RegistrationPrompts
 ): Promise<Session> {
+  const problem = usernameProblem(username);
+  if (problem) throw new RegistrationError(problem);
+
   const baseUrl = await resolveHomeserverBaseUrl(server);
   const mx = createClient({ baseUrl });
+  await checkUsernameAvailable(mx, username);
 
   let sessionId: string | null = null;
   let auth: Record<string, unknown> | undefined;
@@ -96,6 +144,8 @@ export async function registerAccount(
     } catch (err) {
       if (!(err instanceof MatrixError) || err.httpStatus !== 401) {
         if (err instanceof RegistrationError) throw err;
+        const rejection = err instanceof MatrixError ? usernameRejection(err, username) : null;
+        if (rejection) throw rejection;
         throw new RegistrationError(err instanceof Error ? err.message : 'Registration failed.');
       }
 

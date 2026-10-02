@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MatrixError } from 'matrix-js-sdk';
-import { registerAccount, RegistrationError } from './registration';
+import { registerAccount, RegistrationError, usernameProblem } from './registration';
 
 const register = vi.fn();
+const isUsernameAvailable = vi.fn(async () => true);
 
 vi.mock('matrix-js-sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('matrix-js-sdk')>();
-  return { ...actual, createClient: () => ({ register }) };
+  return { ...actual, createClient: () => ({ register, isUsernameAvailable }) };
 });
 vi.mock('./session', () => ({ setSession: vi.fn() }));
 
@@ -172,5 +173,73 @@ describe('registerAccount — email stage', () => {
 
     expect(p.enterRegistrationToken).not.toHaveBeenCalled();
     expect(register.mock.calls[1][3]).toMatchObject({ type: EMAIL_STAGE });
+  });
+});
+
+describe('usernameProblem', () => {
+  it('accepts what a Matrix user ID allows', () => {
+    expect(usernameProblem('wyrd')).toBeNull();
+    expect(usernameProblem('a.b_c=d-e/f+9')).toBeNull();
+  });
+
+  it('suggests the lowercase name when capitals are the only problem', () => {
+    expect(usernameProblem('Wyrd')).toBe('Usernames can only use lowercase letters. Try "wyrd" instead.');
+  });
+
+  it('names spaces and other characters', () => {
+    expect(usernameProblem('wy rd')).toBe("Usernames can't contain spaces.");
+    expect(usernameProblem('wyrd!')).toMatch(/lowercase letters \(a-z\), numbers/);
+    expect(usernameProblem('')).toBe('Enter a username.');
+  });
+});
+
+describe('registerAccount — username checks before the flow starts', () => {
+  beforeEach(() => {
+    register.mockReset();
+    isUsernameAvailable.mockReset().mockResolvedValue(true);
+  });
+
+  it('refuses a name with capitals without contacting the server', async () => {
+    const p = prompts([]);
+    await expect(registerAccount('https://hs.example', 'Wyrd', 'password1', p)).rejects.toThrow(
+      'Usernames can only use lowercase letters. Try "wyrd" instead.'
+    );
+    expect(isUsernameAvailable).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('stops on a taken name before any email or token prompt', async () => {
+    isUsernameAvailable.mockResolvedValue(false);
+    const p = prompts(['invite-123']);
+    await expect(registerAccount('https://hs.example', 'wyrd', 'password1', p)).rejects.toThrow(
+      'The username "wyrd" is taken. Try another.'
+    );
+    expect(register).not.toHaveBeenCalled();
+    expect(p.verifyEmail).not.toHaveBeenCalled();
+  });
+
+  it("rewords the server's invalid-username error", async () => {
+    isUsernameAvailable.mockRejectedValue(
+      new MatrixError({ errcode: 'M_INVALID_USERNAME', error: 'identifier contains invalid characters' }, 400)
+    );
+    await expect(registerAccount('https://hs.example', '_wyrd', 'password1', prompts([]))).rejects.toThrow(
+      "That username can't be used: identifier contains invalid characters"
+    );
+  });
+
+  it('carries on when the server has no availability check', async () => {
+    isUsernameAvailable.mockRejectedValue(new MatrixError({ errcode: 'M_UNRECOGNIZED' }, 404));
+    register.mockResolvedValueOnce({ user_id: '@wyrd:x', device_id: 'D', access_token: 'T' });
+    const session = await registerAccount('https://hs.example', 'wyrd', 'password1', prompts([]));
+    expect(session.userId).toBe('@wyrd:x');
+  });
+
+  it('rewords an invalid-username error from register itself', async () => {
+    register.mockRejectedValueOnce(
+      new MatrixError({ errcode: 'M_INVALID_USERNAME', error: 'Username is reserved' }, 400)
+    );
+    await expect(registerAccount('https://hs.example', 'wyrd', 'password1', prompts([]))).rejects.toThrow(
+      "That username can't be used: Username is reserved"
+    );
   });
 });
