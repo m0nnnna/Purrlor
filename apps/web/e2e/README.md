@@ -1,7 +1,7 @@
 # End-to-end tests
 
 The production build in Chromium, against a real homeserver: a fresh Continuwuity in Docker with
-federation off, plus the token server built from this checkout (for webhooks). Each test registers its own users and makes its own rooms through the client-server
+no other server to federate with, plus the token server built from this checkout (for webhooks and the online count). Each test registers its own users and makes its own rooms through the client-server
 API (`matrix.ts`), drives the app through its `data-nu-role` attributes (`app.ts`), then checks what
 actually reached the server. Tests share nothing, so they run in parallel and can be rerun against
 the same server.
@@ -16,6 +16,7 @@ the same server.
 | `calendar.spec.ts` | A moderator adds an event and a member RSVPs (kept in their member event), an event reminder, and a message reminder from "Remind me" to opening it |
 | `webhooks.spec.ts` | A webhook posting through a real token server under its own name (APP), wrong tokens refused, deleting it, and a person unable to pose as one |
 | `discover.spec.ts` | Discover lists a public Space but not its public channel, and joining it puts it on the server rail |
+| `online.spec.ts` | The global feed's "N online", which goes up when another account opens the app, also shown signed out; a ping without a real account's token is refused |
 | `encryption-settings.spec.ts` | New private channels and DMs are created encrypted, public channels aren't, and turning encryption on for an existing channel warns first |
 | `chat-features.spec.ts` | A thread (replying from a message, another user's reply arriving in it), pinning and unpinning, finding a message by searching, and sending a file from the composer |
 | `news.spec.ts` | A Space's news shown on a member's first visit and then not, the Space opening on its first channel, a small fix that isn't shown again and an update that is; who may edit it set in Roles and held to by the homeserver |

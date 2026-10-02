@@ -7,6 +7,7 @@ import type { AdminStore } from './adminStore.js';
 import {
   cleanActor,
   cleanReason,
+  countRegisteredPeople,
   deletionSucceeded,
   parseMediaTarget,
   parseReportNotice,
@@ -51,6 +52,8 @@ export type ControlDeps = {
   /** Drops the local copy of a file (the media route's cache) at once. */
   forgetCopy(mxc: string): Promise<void>;
   adminSession?: <T>(credentials: AdminCredentials, fn: (session: AdminSession) => Promise<T>) => Promise<T>;
+  /** Counts for `purrlor stats`: totals only, never who. */
+  counts?(): Promise<{ online: number; publicPages: number; profiles: number; serviceAccounts: string[] }>;
 };
 
 class ControlError extends Error {
@@ -380,6 +383,36 @@ export function controlApp(deps: ControlDeps): express.Express {
         ...(failed.length ? ['They stay blocked on the public web; run it again to retry.'] : []),
       ].join('\n');
       reply(req, res, failed.length ? 207 : 200, text, { results });
+    })
+  );
+
+  // --- Stats ------------------------------------------------------------------------------------
+
+  // How many people have accounts (from the homeserver, so it needs its admin), have the app open,
+  // and show a page to everyone. Totals only: nothing here names anyone.
+  app.post(
+    '/stats',
+    route(async (req, res, actor, body) => {
+      const creds = credentials(body);
+      const counts = (await deps.counts?.()) ?? { online: 0, publicPages: 0, profiles: 0, serviceAccounts: [] };
+      let registered: number | undefined;
+      try {
+        registered = await session(creds, async (admin) => countRegisteredPeople(await admin.command('users list-users'), counts.serviceAccounts));
+      } catch (err) {
+        await deps.store.audit({ actor, action: 'stats', result: `failed: ${(err as Error).message}` });
+        throw new ControlError(502, (err as Error).message);
+      }
+      await deps.store.audit({ actor, action: 'stats', result: 'ok' });
+      const text = [
+        `Registered accounts:     ${registered ?? '? (the homeserver gave an answer this can’t read)'}`,
+        `Online now:              ${counts.online}   (the app open in the last few minutes)`,
+        `With a profile feed:     ${counts.profiles}   (posted to Global or made a page)`,
+        `Page shown to everyone:  ${counts.publicPages}`,
+        '',
+        'Accounts don’t include the server’s own or the service bot. Totals only: nothing is kept about who.',
+      ].join('\n');
+      const { serviceAccounts: _bots, ...totals } = counts;
+      reply(req, res, 200, text, { registered: registered ?? null, ...totals });
     })
   );
 

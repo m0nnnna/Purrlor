@@ -143,6 +143,7 @@ Moderation (root; docs/admin.md) — every change needs a reason, which goes in 
   purrlor takedown run                 delete the queued files from the homeserver (admin password)
   purrlor reports [--pages]            page reports from the homeserver's admin room (admin password)
   purrlor audit [N]                    the last N things done (default 50)
+  purrlor stats                        registered accounts, online now, public pages: totals only (admin password)
   Options: --reason "why" (else asked), --yes (skip the confirmation). A <file> is its mxc:// address
   or the public media link.
 HELP
@@ -1315,6 +1316,15 @@ cmd_takedown() {
   esac
 }
 
+# cmd_stats: totals only (docs/admin.md). The registered count comes from the homeserver, so it asks
+# for its admin; online and public-page counts are the token server's own.
+cmd_stats() {
+  local usage="Usage: purrlor stats   (asks for the homeserver admin's password)"
+  need_root stats "$@"
+  [ "$#" -eq 0 ] || die "$usage"
+  ctl_admin POST /stats
+}
+
 cmd_reports() {
   local usage="Usage: purrlor reports [--pages] [--limit N]   (asks for the homeserver admin's password)"
   need_root reports "$@"
@@ -1363,6 +1373,7 @@ case "${1:-help}" in
   takedown) shift; cmd_takedown "$@" ;;
   reports) shift; cmd_reports "$@" ;;
   audit) shift; cmd_audit "$@" ;;
+  stats) shift; cmd_stats "$@" ;;
   matrix-dns) write_matrix_resolv ;;
   *) warn "Unknown command: $1"; echo; cmd_help; exit 1 ;;
 esac; exit $?

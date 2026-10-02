@@ -77,6 +77,25 @@ entry in their profile room, or something else. `--pages` leaves out the rest, a
 that many admin-room messages (default 300). It asks for the homeserver admin's account and
 password, which go over standard input and aren't stored.
 
+## Stats
+
+`purrlor stats` gives four totals:
+
+| Line | Where it comes from |
+| --- | --- |
+| Registered accounts | The homeserver's own list (`!admin users list-users`), less the server's own account and the service bot. So it asks for the homeserver admin's account and password, like `reports` |
+| Online now | Accounts with the app open in the last 2½ minutes (below) |
+| With a profile feed | People who have posted to Global or made a page |
+| Page shown to everyone | People whose page signed-out visitors can see now |
+
+Totals only, on purpose: nothing names anyone, and nothing new is collected for them. The online
+count is the same number the global feed shows everyone. While the app is open and showing, it
+tells the token server so about once a minute, proving the account with a Matrix OpenID token.
+The token server keeps, in memory only, a keyed hash of the account and when it last did. The key is
+random and new each time the service starts, so the hashes can't be matched to accounts. Each entry
+is dropped 2½ minutes after its last ping, and nothing is written to disk or logged (no address,
+no device). Running `stats` goes in the audit log, as `stats`, without the numbers.
+
 ## The audit log
 
 `purrlor audit` shows the last 50 things done (`purrlor audit 200` for more): time, who, what, the

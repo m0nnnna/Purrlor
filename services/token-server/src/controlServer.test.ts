@@ -71,11 +71,13 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
     publicMediaOf: async (userId) => (userId === LUNA ? ['mxc://purr.example/avatar', 'mxc://purr.example/post1'] : []),
     profileRoomOwner: async (roomId) => (roomId === '!luna-profile:purr.example' ? LUNA : undefined),
     forgetCopy: async (mxc) => void forgotten.push(mxc),
+    counts: async () => ({ online: 2, publicPages: 1, profiles: 3, serviceAccounts: ['@bot:purr.example'] }),
     adminSession: async (credentials, fn) => {
       if (credentials.password !== 'right') throw new Error(`Couldn't log in as ${credentials.user}: Invalid password`);
       const session: AdminSession = {
         async command(text) {
           commands.push(text);
+          if (text === 'users list-users') return ['Found 3 local user account(s):', '```', '@conduit:purr.example', '@luna:purr.example', '@bot:purr.example', '```'].join('\n');
           return text.includes('fails') ? 'Failed to delete MXC: not found' : 'Deleted the MXC from our database and on our filesystem.';
         },
         async messages() {
@@ -279,6 +281,19 @@ describe('the control socket', { skip: !unix && 'Unix sockets only' }, () => {
     assert.equal(res.status, 200, res.text);
     assert.equal((await store.lists()).blockedMedia.has('mxc://purr.example/oops'), false);
     assert.equal((await store.deletions()).some((entry) => entry.mxc === 'mxc://purr.example/oops'), false);
+  });
+
+  it('gives totals only: registered people, online now, public pages', async () => {
+    const res = await call(socketPath, 'POST', '/stats', { adminUser: 'admin', adminPassword: 'right' });
+    assert.equal(res.status, 200);
+    assert.match(res.text, /Registered accounts: +1\b/);
+    assert.match(res.text, /Online now: +2\b/);
+    assert.match(res.text, /With a profile feed: +3\b/);
+    assert.match(res.text, /Page shown to everyone: +1\b/);
+    // Totals only: no account is named.
+    assert.ok(!res.text.includes('@luna'));
+    const wrong = await call(socketPath, 'POST', '/stats', { adminUser: 'admin', adminPassword: 'wrong' });
+    assert.equal(wrong.status, 502);
   });
 
   it('lists reports from the admin room, saying which are about pages', async () => {

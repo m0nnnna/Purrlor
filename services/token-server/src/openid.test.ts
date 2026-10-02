@@ -105,6 +105,24 @@ describe('openid validation cache', () => {
     assert.equal(calls, 1);
   });
 
+  it("checks its own server's tokens at its own address, and anyone else's over federation", async () => {
+    clearFederationDelegationCache();
+    const seen: string[] = [];
+    await withFetch(
+      (url) => {
+        seen.push(url);
+        return ok(url.startsWith('http://matrix:8008') ? '@me:purr.example' : '@them:other.example:8448');
+      },
+      async () => {
+        const local = { serverName: 'purr.example', baseUrl: 'http://matrix:8008/' };
+        assert.equal(await validateOpenIdToken({ access_token: 'mine', matrix_server_name: 'purr.example' }, local), '@me:purr.example');
+        assert.equal(await validateOpenIdToken({ access_token: 'theirs', matrix_server_name: 'other.example:8448' }, local), '@them:other.example:8448');
+      }
+    );
+    assert.equal(seen[0], 'http://matrix:8008/_matrix/federation/v1/openid/userinfo?access_token=mine');
+    assert.match(seen[1], /^https:\/\/other\.example:8448\/_matrix\/federation\/v1\/openid\/userinfo/);
+  });
+
   it('never answers from cache for the same token claimed by a different server', async () => {
     clearFederationDelegationCache();
     const seen: string[] = [];

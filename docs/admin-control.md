@@ -121,6 +121,14 @@ original on the homeserver, so signed-in people stop seeing it too.
 post or guestbook entry in their profile room, or something else. Copyright complaints come by
 email to the address in the terms; they aren't in the admin room.
 
+### Stats
+
+`POST /stats` (adminUser, adminPassword) logs in as the admin, asks the homeserver for its account
+list (`users list-users`) and counts the people in it (`countRegisteredPeople`: not `@conduit`, not
+the service bot), then adds the token server's own totals: accounts online now (`online.ts`), people
+with a profile feed, and pages shown to everyone. Totals only; the account list isn't kept or
+returned. Audited as `stats`.
+
 ### The audit log
 
 `GET /audit?limit=50` shows the last entries.

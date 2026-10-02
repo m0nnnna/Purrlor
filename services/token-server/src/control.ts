@@ -165,6 +165,20 @@ export function deletionSucceeded(reply: string): boolean {
   return /^Deleted the MXC/i.test(reply.trim());
 }
 
+// --- Stats ---------------------------------------------------------------------------------------
+
+/**
+ * How many people have accounts, from the homeserver's `users list-users` answer ("Found N local
+ * user account(s):" and the IDs in a code block). The server's own account (`@conduit`) and the
+ * service accounts named in `notPeople` aren't people, so they aren't counted. Only the number is
+ * kept. Undefined if the answer isn't that list.
+ */
+export function countRegisteredPeople(reply: string, notPeople: string[]): number | undefined {
+  if (!/^Found \d+ local user account/i.test(reply.trim())) return undefined;
+  const ids = reply.split('\n').map((line) => line.trim()).filter((line) => /^@[^\s:]+:\S+$/.test(line));
+  return ids.filter((id) => !id.startsWith('@conduit:') && !notPeople.includes(id)).length;
+}
+
 // --- Reports, from the homeserver's admin room --------------------------------------------------
 
 // Room version 12 room IDs have no server part (`!<hash>`); older ones do (`!opaque:server`).

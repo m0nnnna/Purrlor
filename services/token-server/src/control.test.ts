@@ -11,6 +11,7 @@ import {
   parseReportNotice,
   queueDeletions,
   terminalSafe,
+  countRegisteredPeople,
 } from './control.js';
 import { mediaDeleteCommand } from './adminRoom.js';
 import { albumMedia } from './controlServer.js';
@@ -214,5 +215,20 @@ describe('albumMedia', () => {
     assert.deepEqual(albumMedia(page, 'Releases')[0].urls, ['mxc://s/c1', 'mxc://s/u1', 'mxc://s/u2']);
     assert.deepEqual(albumMedia(page, 'nothing'), []);
     assert.deepEqual(albumMedia(undefined, 'Fan Art'), []);
+  });
+});
+
+describe('countRegisteredPeople', () => {
+  const fence = '```';
+  const reply = ['Found 4 local user account(s):', fence, '@conduit:purr.example', '@luna:purr.example', '@purrlor-bot:purr.example', '@nibbles:purr.example', fence].join('\n');
+
+  it("counts the people in the homeserver's list, not the server's own account or the service bot", () => {
+    assert.equal(countRegisteredPeople(reply, ['@purrlor-bot:purr.example']), 2);
+    assert.equal(countRegisteredPeople(['Found 0 local user account(s):', fence, fence].join('\n'), []), 0);
+  });
+
+  it("is undefined for an answer that isn't the list", () => {
+    assert.equal(countRegisteredPeople('Unknown command', []), undefined);
+    assert.equal(countRegisteredPeople('', []), undefined);
   });
 });

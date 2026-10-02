@@ -1,3 +1,4 @@
+import { PublicOnlineCount } from '../online/OnlineCount';
 import { PublicPostCard } from './PublicPostCard';
 import { usePublicPosts } from './usePublicPosts';
 
@@ -8,6 +9,7 @@ export function PublicFeed({ onSignIn, onRegister }: { onSignIn: () => void; onR
     <main className="nu-public__main" data-nu-role="public-feed">
       <section className="nu-public__banner">
         <h1>Global feed</h1>
+        <PublicOnlineCount />
         <p>Posts anyone on Purrlor chose to share with the whole web. Everything else stays behind sign-in.</p>
         <button type="button" className="nu-button nu-button--primary" onClick={onRegister}>
           Join Purrlor

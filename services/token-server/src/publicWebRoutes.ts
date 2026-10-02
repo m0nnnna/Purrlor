@@ -35,6 +35,8 @@ import {
   type RawEvent,
 } from './publicWeb.js';
 import { RateLimiter } from './webhooks.js';
+import { onlineCounter } from './online.js';
+import { validateOpenIdToken } from './openid.js';
 
 /**
  * The public web's HTTP side (publicWeb.ts has the rules). Everything here is read-only, needs no
@@ -45,6 +47,8 @@ import { RateLimiter } from './webhooks.js';
  *   GET /api/public/pages/:user           a profile page, if its owner opted in
  *   GET /api/public/feed?before=&author=  Global posts, newest first
  *   GET /api/public/posts/:eventId        one Global post (?author=name finds one older than the feed reaches)
+ *   GET /api/public/online                { online } — how many accounts have the app open
+ *   POST /api/public/online               the app's ping (openid_token), answered with the same
  *   GET /api/public/status/:user          { hidden } — whether an admin hid this person's page
  *   GET /api/public/media/:server/:id     media a public answer referenced (?width=&height= for a thumbnail)
  *   GET /api/public/card/:user            link-preview HTML for /@name (nginx sends unfurling bots here)
@@ -350,6 +354,27 @@ export function publicWebRouter(): Router {
     }
   });
 
+  // "N online": the count anyone may read, and the ping a signed-in app sends about once a minute
+  // while it's showing (online.ts: kept in memory as a keyed hash, forgotten within minutes). The
+  // ping proves who's asking with a Matrix OpenID token, so only accounts on this server count.
+  router.get('/online', (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    res.set('Cache-Control', 'no-store').json({ online: onlineCounter.count() });
+  });
+
+  router.post('/online', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    try {
+      const ownServer = await serverName();
+      const userId = await validateOpenIdToken(req.body?.openid_token, { serverName: ownServer, baseUrl: process.env.MATRIX_HOMESERVER_URL ?? '' });
+      if (serverNameOf(userId) !== ownServer) return void res.status(403).json({ error: 'Not an account on this server' });
+      onlineCounter.mark(userId);
+      res.set('Cache-Control', 'no-store').json({ online: onlineCounter.count() });
+    } catch {
+      res.status(401).json({ error: 'Authentication failed' });
+    }
+  });
+
   router.get('/status/:user', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
     const userId = localUserId(req.params.user, await serverName().catch(() => ''));
@@ -502,6 +527,11 @@ export function controlDeps(): Omit<ControlDeps, 'store'> {
     serverName,
     homeserverUrl: () => homeserverUrl,
     pageState,
+    async counts() {
+      const feed = await getFeed();
+      const bot = (await getServiceClient()).getUserId();
+      return { online: onlineCounter.count(), publicPages: feed.publicPages.size, profiles: feed.byOwner.size, serviceAccounts: bot ? [bot] : [] };
+    },
     async publicMediaOf(userId) {
       const feed = await getFeed();
       const mx = await getServiceClient();

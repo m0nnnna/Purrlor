@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { OnlineCount } from '../online/OnlineCount';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
 import { globalFeedOpenAtom, socialViewAtom, type SocialView } from '../../app/state/selection';
@@ -167,6 +168,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
         </button>
         <Icon name={TITLES[tab].icon} size={20} className="nu-main-pane__header-icon" />
         <h1 className="nu-main-pane__header-name">{TITLES[tab].title}</h1>
+        <OnlineCount />
         <div className="nu-main-pane__header-actions">
           {/* The sidebar (SocialNav) does this on a wide screen; on a phone it's off screen. */}
           <div className="nu-feed__tabs nu-global-feed__tabs" role="tablist">

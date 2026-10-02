@@ -103,6 +103,14 @@ older than the snapshot reaches: it's read on its own from that person's profile
 relates to it (edits, likes, comments: up to 100), through the same rules as the feed. Never a hidden
 person's, and never a Space post: only profile rooms are read.
 
+### `GET /api/public/online` and `POST /api/public/online`
+
+`{ "online": 12 }`: how many accounts on this server have the app open, shown as "N online" on the
+global feed (signed in and signed out). The signed-in app `POST`s `{ "openid_token": … }` about once
+a minute while it's showing, and gets the same answer back; only accounts on this server count.
+The service keeps a keyed hash of each account and when it last pinged, in memory, for 2½ minutes,
+under a key made fresh each start (`online.ts`): enough to count, never who. Rate limited like pages.
+
 ### `GET /api/public/status/:user`
 
 `{ "hidden": true | false, "publicOff": true | false }`: whether an admin hid this person's page, or

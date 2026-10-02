@@ -27,6 +27,7 @@ import { useOpenPublicRoute } from '../features/publicWeb/useOpenPublicRoute';
 import { musicQueueAtom } from '../features/music/musicPlayer';
 import { MusicPlayerBar } from '../features/music/MusicPlayerBar';
 import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
+import { useOnlinePing } from '../features/online/useOnlinePing';
 import { InstallHint } from './InstallHint';
 import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
@@ -56,6 +57,7 @@ export function AppShell() {
   useComposeShortcut();
   useShareTarget();
   useOpenPublicRoute();
+  useOnlinePing();
   const inviteLinkJoin = useJoinFromInviteLink();
   const [inviteErrorDismissed, setInviteErrorDismissed] = useState(false);
 

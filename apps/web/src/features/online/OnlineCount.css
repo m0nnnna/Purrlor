@@ -1,0 +1,28 @@
+.nu-online-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px var(--nu-space-2);
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-secondary);
+  font-size: var(--nu-font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-online-count__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nu-color-success);
+}
+
+/* A phone's header is full: the dot and number say enough (the full words are in its label). */
+@media (max-width: 900px) {
+  .nu-main-pane__header .nu-online-count__word {
+    display: none;
+  }
+}

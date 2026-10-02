@@ -1,5 +1,5 @@
 # What the end-to-end tests run against: Continuwuity, the homeserver deploy/docker-compose.yml
-# bundles, with federation off, and the token server built from this checkout (for webhooks). The
+# bundles, on its own, and the token server built from this checkout (for webhooks). The
 # homeserver's database is a tmpfs, so every `up` is a brand-new server and no test can depend on
 # what an earlier run left behind. start-homeserver.sh brings both up.
 name: purrlor-e2e
@@ -19,7 +19,9 @@ services:
       # What the tests register with (E2E_REGISTRATION_TOKEN). It only works once the server's
       # first account exists, which start-homeserver.sh creates with the one-time bootstrap token.
       CONTINUWUITY_REGISTRATION_TOKEN: e2e-registration-token
-      CONTINUWUITY_ALLOW_FEDERATION: 'false'
+      # On, as deployed: it serves the federation API, whose OpenID userinfo is how the token
+      # server checks who's asking (the online count's ping). It has no other server to talk to.
+      CONTINUWUITY_ALLOW_FEDERATION: 'true'
       CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ''
     tmpfs:
       - /var/lib/continuwuity
