@@ -32,6 +32,10 @@ type FakeRoom = {
   roomId: string;
   isSpaceRoom: () => boolean;
   getMembers: () => FakeMember[];
+  getMember: (userId: string) => FakeMember | null;
+  getJoinedMemberCount: () => number;
+  getInvitedMemberCount: () => number;
+  loadMembersIfNeeded: () => Promise<boolean>;
   getMyMembership: () => string;
   getType: () => string | undefined;
   getLastActiveTimestamp: () => number;
@@ -64,8 +68,15 @@ function fakeRoom(
     invited = [] as string[],
     myMembership = 'join',
     invite = undefined as { from: string; isDirect: boolean } | undefined,
+    lazyLoaded = false,
   } = {}
 ): FakeRoom {
+  const members: FakeMember[] = [
+    ...memberIds.map((userId) => ({ userId, membership: 'join' })),
+    ...invited.map((userId) => ({ userId, membership: 'invite' })),
+  ];
+  // Lazy loading (client.ts): until loaded, a room knows only your own member event.
+  let membersLoaded = !lazyLoaded;
   const myInvite: FakeStateEvent | null = invite
     ? { getStateKey: () => ME, getSender: () => invite.from, getContent: () => ({ membership: 'invite', is_direct: invite.isDirect }) }
     : null;
@@ -76,10 +87,15 @@ function fakeRoom(
   return {
     roomId,
     isSpaceRoom: () => isSpace,
-    getMembers: () => [
-      ...memberIds.map((userId) => ({ userId, membership: 'join' })),
-      ...invited.map((userId) => ({ userId, membership: 'invite' })),
-    ],
+    getMembers: () => (membersLoaded ? members : members.filter((m) => m.userId === ME)),
+    getMember: (userId) => (membersLoaded ? members.find((m) => m.userId === userId) ?? null : null),
+    // From the sync summary: right whether or not the members are loaded.
+    getJoinedMemberCount: () => memberIds.length,
+    getInvitedMemberCount: () => invited.length,
+    loadMembersIfNeeded: async () => {
+      membersLoaded = true;
+      return true;
+    },
     getMyMembership: () => myMembership,
     getType: () => (isSpace ? 'm.space' : undefined),
     getLastActiveTimestamp: () => lastActive,
@@ -92,52 +108,69 @@ function fakeRoom(
 
 
 describe('findExistingDirectMessageRoomId', () => {
-  it('finds a room with exactly the two of you joined', () => {
+  it('finds a room with exactly the two of you joined', async () => {
     const mx = fakeClient(ME, [fakeRoom('!dm:example.org', [ME, THEM])]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBe('!dm:example.org');
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
   });
 
-  it('ignores a group chat with more than two members', () => {
+  it('ignores a group chat with more than two members', async () => {
     const mx = fakeClient(ME, [fakeRoom('!group:example.org', [ME, THEM, '@someone-else:example.org'])]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBeUndefined();
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBeUndefined();
   });
 
-  it('ignores Space rooms even if they happen to have two members', () => {
+  it('ignores Space rooms even if they happen to have two members', async () => {
     const mx = fakeClient(ME, [fakeRoom('!space:example.org', [ME, THEM], { isSpace: true })]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBeUndefined();
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBeUndefined();
   });
 
-  it("ignores a Space's channel with just the two of you in it", () => {
+  it("ignores a Space's channel with just the two of you in it", async () => {
     const mx = fakeClient(ME, [
       fakeRoom('!general:example.org', [ME, THEM], { lastActive: 2 }),
       fakeRoom('!space:example.org', [ME, THEM], { isSpace: true, children: ['!general:example.org'] }),
       fakeRoom('!dm:example.org', [ME, THEM], { lastActive: 1 }),
     ]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBe('!dm:example.org');
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
   });
 
-  it('ignores a room that names a Space as its parent', () => {
+  it('ignores a room that names a Space as its parent', async () => {
     const mx = fakeClient(ME, [fakeRoom('!general:example.org', [ME, THEM], { parent: '!left-space:example.org' })]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBeUndefined();
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBeUndefined();
   });
 
-  it('prefers the room m.direct records for that user', () => {
+  it('prefers the room m.direct records for that user', async () => {
     const mx = fakeClient(
       ME,
       [fakeRoom('!other:example.org', [ME, THEM], { lastActive: 2 }), fakeRoom('!dm:example.org', [ME, THEM], { lastActive: 1 })],
       { [THEM]: ['!dm:example.org'] }
     );
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBe('!dm:example.org');
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
   });
 
-  it('finds a DM you started that they have not accepted yet', () => {
+  it('finds a DM you started that they have not accepted yet', async () => {
     const mx = fakeClient(ME, [fakeRoom('!dm:example.org', [ME], { invited: [THEM] })]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBe('!dm:example.org');
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
   });
 
-  it('returns undefined when no DM with that user exists', () => {
+  it("finds a DM whose members this session hasn't loaded yet", async () => {
+    const mx = fakeClient(ME, [fakeRoom('!dm:example.org', [ME, THEM], { lazyLoaded: true })]);
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
+  });
+
+  it("prefers the DM they've accepted over a newer one they haven't, even one m.direct records", async () => {
+    const mx = fakeClient(
+      ME,
+      [
+        fakeRoom('!new:example.org', [ME], { invited: [THEM], lastActive: 2 }),
+        fakeRoom('!dm:example.org', [ME, THEM], { lazyLoaded: true, lastActive: 1 }),
+      ],
+      { [THEM]: ['!new:example.org'] }
+    );
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBe('!dm:example.org');
+  });
+
+  it('returns undefined when no DM with that user exists', async () => {
     const mx = fakeClient(ME, [fakeRoom('!dm:example.org', [ME, '@someone-else:example.org'])]);
-    expect(findExistingDirectMessageRoomId(mx, THEM)).toBeUndefined();
+    await expect(findExistingDirectMessageRoomId(mx, THEM)).resolves.toBeUndefined();
   });
 });
 

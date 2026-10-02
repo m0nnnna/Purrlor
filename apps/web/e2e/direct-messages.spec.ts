@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { logIn, message, openChannel, role, send } from './app';
-import { api, createSpaceWithChannel, createUser, eventually, type TestUser } from './matrix';
+import { api, createSpaceWithChannel, createUser, eventually, sendText, type TestUser } from './matrix';
 
 /**
  * A DM the way a person starts one: from the other person's profile ("Message"), in a Space whose
@@ -95,4 +95,58 @@ test('a DM accepted from Invites opens that same conversation', async ({ browser
   await expect(role(ctx.bobPage, 'composer-input')).toBeVisible();
   await bobReadsAndReplies(ctx, dmId);
   await ctx.close();
+});
+
+/** A DM the other person started earlier and that's well under way: the kind the client hasn't
+ *  loaded the members of when it starts (it lazy-loads them), which "Message" took for an empty
+ *  room and so started another DM beside it. */
+async function earlierDm(alice: TestUser, bob: TestUser): Promise<string> {
+  const { room_id: dmId } = await api<{ room_id: string }>(bob, 'POST', '/createRoom', {
+    preset: 'trusted_private_chat',
+    invite: [alice.userId],
+    is_direct: true,
+  });
+  await api(alice, 'POST', `/join/${encodeURIComponent(dmId)}`, {});
+  await sendText(bob, dmId, 'from bob, a while ago');
+  // Enough of Alice's own after it that Bob's join and message fall outside her first sync.
+  for (let i = 0; i < 40; i += 1) await sendText(alice, dmId, `alice rambling ${i}`);
+  return dmId;
+}
+
+test("Message reopens a DM you've had for a while, rather than starting another", async ({ browser }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const space = await createSpaceWithChannel(alice, [bob]);
+  const dmId = await earlierDm(alice, bob);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await logIn(page, alice);
+
+  await messageFromProfile(page, space.spaceName, bob);
+  await expect(message(page, 'alice rambling 39')).toBeVisible();
+  await send(page, 'still the same chat');
+  expect(await dmRooms(alice, space)).toEqual([dmId]);
+  await context.close();
+});
+
+test('leaving a DM takes it off your list', async ({ browser }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const dmId = await earlierDm(alice, bob);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await logIn(page, alice);
+
+  await role(page, 'server-rail-home').click();
+  const row = role(page, 'channel-list-row').filter({ has: role(page, 'channel-list-item').filter({ hasText: bob.localpart }) });
+  await expect(row).toBeVisible();
+  await row.hover();
+  await role(row, 'channel-list-row-menu').click();
+  await role(page, 'channel-list-leave').click();
+  await role(page, 'confirm-ok').click();
+
+  await expect(row).toBeHidden();
+  await eventually(
+    () => joinedRooms(alice),
+    (rooms) => !rooms.includes(dmId)
+  );
+  await context.close();
 });

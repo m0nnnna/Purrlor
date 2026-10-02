@@ -13,6 +13,7 @@ import {
   profileUserIdAtom,
 } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
+import { useConfirm } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/Icon';
 import { Menu, MenuItem } from '../../components/Menu';
 import { UnreadBadge } from '../../components/UnreadBadge';
@@ -20,6 +21,7 @@ import { useHasNewPosts } from '../../matrix/hooks/useHasNewPosts';
 import { useSpaceNews } from '../../matrix/hooks/useSpaceNews';
 import { spaceLanding } from '../../matrix/spaceNews';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
+import { leaveDirectMessage } from '../../matrix/directMessages';
 import { getChannelCategories, reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
@@ -118,6 +120,7 @@ function ChannelListRow({
   onOpenPermissions,
   onOpenWebhooks,
   onOpenSettings,
+  onLeave,
 }: {
   room: Room;
   isDirectMessage: boolean;
@@ -136,6 +139,8 @@ function ChannelListRow({
   onOpenWebhooks?: () => void;
   /** A channel's name, topic and avatar. */
   onOpenSettings?: () => void;
+  /** DMs and group chats only: leave it, which takes it off your list (leaveDirectMessage). */
+  onLeave?: () => void;
 }) {
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
@@ -164,7 +169,7 @@ function ChannelListRow({
   };
 
   return (
-    <div className="nu-channel-list__row">
+    <div className="nu-channel-list__row" data-nu-role="channel-list-row">
       <button
         type="button"
         className={[
@@ -213,7 +218,7 @@ function ChannelListRow({
       <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
         {/* One "⋯" for everything else, so a hovered row keeps most of its name clickable. */}
-        {(canEditSettings || canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace)) && (
+        {(canEditSettings || canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace) || !!onLeave) && (
           <Menu
             label="Channel options"
             trigger={<Icon name="more" size={13} />}
@@ -249,6 +254,11 @@ function ChannelListRow({
             {!isDirectMessage && canManageSpace && (
               <MenuItem icon="x" role="channel-list-remove-from-space" danger onSelect={onRemoveFromSpace}>
                 Remove from Space
+              </MenuItem>
+            )}
+            {onLeave && (
+              <MenuItem icon="logOut" role="channel-list-leave" danger onSelect={onLeave}>
+                Leave conversation
               </MenuItem>
             )}
           </Menu>
@@ -504,6 +514,7 @@ export function ChannelList() {
   const [settingsRoom, setSettingsRoom] = useState<Room | null>(null);
   const [showStartDm, setShowStartDm] = useState(false);
   const [showAddExistingChannel, setShowAddExistingChannel] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Picking a channel also leaves the Posts view, which sits alongside channels rather than
   // being one of them — otherwise the feed would stay on screen over a channel that now looks
@@ -593,6 +604,21 @@ export function ChannelList() {
     if (selectedRoomId === roomId) setSelectedRoomId(null);
   };
 
+  const handleLeaveConversation = async (room: Room) => {
+    const others = room.getJoinedMemberCount() + room.getInvitedMemberCount() - 1;
+    const ok = await confirm({
+      title: 'Leave conversation',
+      message:
+        others > 0
+          ? `“${room.name}” and its messages will be gone from your list. The others keep their copy, and messaging them again starts a new conversation.`
+          : `No one else is in “${room.name}”, so leaving deletes it.`,
+      confirmLabel: 'Leave',
+    });
+    if (!ok) return;
+    if (selectedRoomId === room.roomId) setSelectedRoomId(null);
+    await leaveDirectMessage(mx, room.roomId).catch(console.error);
+  };
+
   // The social side has its own places to go; a Space's channels or your DMs aren't among them.
   if (globalFeedOpen) {
     return (
@@ -648,6 +674,7 @@ export function ChannelList() {
                 onMoveUp={() => {}}
                 onMoveDown={() => {}}
                 onRemoveFromSpace={() => {}}
+                onLeave={() => void handleLeaveConversation(room)}
               />
             ))
           : (
@@ -826,6 +853,7 @@ export function ChannelList() {
           onClose={() => setShowAddExistingChannel(false)}
         />
       )}
+      {confirmDialog}
       {showStartDm && (
         <StartDmModal
           onClose={() => setShowStartDm(false)}
