@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { Lightbox } from '../../components/Lightbox';
+import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import type { Emote } from '../../matrix/emotes';
 import {
@@ -24,12 +25,14 @@ const toEmotes = (emotes?: PublicEmote[]): Emote[] => (emotes ?? []).map((emote)
 function PublicMediaItem({ attachment, onOpen }: { attachment: PublicAttachment; onOpen: (src: string) => void }) {
   const src = useMediaUrl(attachment.url);
   const thumb = useMediaUrl(attachment.kind === 'image' ? attachment.url : null, { width: 800, height: 800, method: 'scale' });
+  const videoRef = usePauseWhenOffscreen();
   const style = attachment.w && attachment.h ? { aspectRatio: `${attachment.w} / ${attachment.h}` } : undefined;
   if (!src) return null;
   if (attachment.kind === 'video') {
+    // As in the app (feed/PostMedia.tsx): plays with its sound when pressed, pauses off screen.
     return (
       <div className="nu-post-media__item" style={style}>
-        <video className="nu-post-media__video" src={src} controls loop muted playsInline preload="metadata" />
+        <video ref={videoRef} className="nu-post-media__video" src={src} controls loop playsInline preload="metadata" />
       </div>
     );
   }
