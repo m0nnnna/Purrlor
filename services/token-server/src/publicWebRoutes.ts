@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { Router, type Request, type Response } from 'express';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { adminStore } from './adminStore.js';
+import { clientIp } from './clientIp.js';
 import { pageStateFromRoom, type ControlDeps, type PageState } from './controlServer.js';
 import { getServiceClient } from './membership.js';
 import { byteLimit, MediaCache, TooLargeError } from './mediaCache.js';
@@ -209,10 +210,6 @@ async function withAuthors(mx: MatrixClient, posts: PublicPost[]): Promise<{ pos
   // The posts' own files are in the feed's media snapshot already; avatars come from profiles.
   for (const author of Object.values(authors)) if (author.avatarUrl) mediaIndex.allowProfile([author.avatarUrl], author.userId);
   return { posts, authors };
-}
-
-function clientIp(req: Request): string {
-  return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
 function limited(req: Request, res: Response, limiter: RateLimiter): boolean {

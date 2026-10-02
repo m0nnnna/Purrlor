@@ -200,5 +200,14 @@ everyone at once. Set `PUBLIC_WEB_RATE_SCALE` in `.env` to multiply them (20 sui
 server), then `purrlor restart token-server`. The real fix is a relay that passes visitors'
 addresses on (the PROXY protocol, with nginx's `set_real_ip_from`).
 
+An edge nginx on another machine that is itself behind Cloudflare needs one more setting. The edge
+connects from a private address, so the token server trusts it and takes the next address in
+`X-Forwarded-For`, which is Cloudflare's server rather than the visitor. Set `REAL_IP_FROM` in
+`.env` to the edge's address (`REAL_IP_FROM=192.168.1.7`; several, comma-separated), then
+`purrlor restart token-server`. A request from that address is taken at its `X-Real-IP`, which the
+edge sets to the visitor's own address (`proxy_set_header X-Real-IP $remote_addr`, with the edge
+itself reading Cloudflare's header). The header is ignored from anywhere else, so nobody can claim
+an address by sending it.
+
 Uploads: the bundled homeserver accepts files up to 100 MiB (`MATRIX_MAX_UPLOAD_BYTES` in `.env`),
 and nginx's homeserver blocks need the same `client_max_body_size 100M`.
