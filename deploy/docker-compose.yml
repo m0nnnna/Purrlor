@@ -249,6 +249,15 @@ services:
       # Never forget media the startup check can't find: with media on its own disk or volume, a
       # mount that's late or missing must not cost the database its records of every file.
       CONTINUWUITY_PRUNE_MISSING_MEDIA: 'false'
+      # Where it takes a client's address from (what Settings > Sessions shows, and what its rate
+      # limits count). Continuwuity's default is the connecting address, which behind nginx is
+      # nginx itself (the edge box, in a split setup), so every session showed that one address.
+      # Every proxy config setup.sh writes (and deploy/edge, deploy/nginx) sets X-Real-IP to the
+      # visitor's address, overwriting any a client sent; a request without it (the token server's,
+      # over the Compose network) falls back to the connecting address. Continuwuity has no
+      # trusted-proxy check, so this relies on 8008 only being reachable through that proxy
+      # (BIND_ADDR). MATRIX_IP_SOURCE=direct goes back to the old behaviour.
+      CONTINUWUITY_REQUEST_IP_SOURCE: ${MATRIX_IP_SOURCE:-x_real_ip}
       # Continuwuity's HTTP client honors the standard variables (verified against a logging proxy:
       # federation lookups arrive as CONNECTs).
       HTTP_PROXY: ${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}

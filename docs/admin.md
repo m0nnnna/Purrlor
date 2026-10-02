@@ -116,6 +116,11 @@ Nothing is recorded except while it runs, and only in memory: the list goes to y
 the token server keeps none of it. The audit log notes that a watch ran (`ips.watch`), not what it
 saw.
 
+This watches the token server only. The addresses in the app's Settings > Sessions come from the
+homeserver, which takes them from the same `X-Real-IP` (`MATRIX_IP_SOURCE`, default `x_real_ip`;
+see deploy/docker-compose.yml). So once `purrlor ips` shows visitors' own addresses, the sessions
+list does too, from each session's next request.
+
 ## The audit log
 
 `purrlor audit` shows the last 50 things done (`purrlor audit 200` for more): time, who, what, the
