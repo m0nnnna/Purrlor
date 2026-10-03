@@ -62,7 +62,7 @@ Section "Purrlor" SEC_MAIN
   ; fixed Programs\Purrlor folder (there's no directory page), so this only ever removes our files.
   RMDir /r "$INSTDIR"
   SetOutPath "$INSTDIR"
-  File /r "..\Purrlor\bin\Release\net8.0-windows\win-x64\publish\*.*"
+  File /r "..\Purrlor\bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\*.*"
 
   Call EnsureWebView2
 
@@ -121,6 +121,8 @@ FunctionEnd
 Section "Uninstall"
   SetShellVarContext current
   !insertmacro StopPurrlor
+  ; Takes Purrlor's notifications and its registration for them back off Windows (Toasts.cs).
+  ExecWait '"$INSTDIR\Purrlor.exe" --cleanup'
   Delete "$DESKTOP\Purrlor.lnk"
   Delete "$SMPROGRAMS\Purrlor\Purrlor.lnk"
   Delete "$SMPROGRAMS\Purrlor\Uninstall Purrlor.lnk"

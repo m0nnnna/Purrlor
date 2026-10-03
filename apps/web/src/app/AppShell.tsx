@@ -5,6 +5,8 @@ import { ChannelList } from '../features/channels/ChannelList';
 import { MainPane } from '../features/messaging/MainPane';
 import { MemberList } from '../features/members/MemberList';
 import { DesktopNotifications } from '../features/notifications/DesktopNotifications';
+import { AppBadge } from '../features/notifications/AppBadge';
+import { AutoAway } from '../features/account/AutoAway';
 import { NotificationRules } from '../features/notifications/NotificationRules';
 import { FeedGovernance } from '../features/feed/FeedGovernance';
 import { FollowPublisher } from '../features/feed/FollowPublisher';
@@ -90,6 +92,8 @@ export function AppShell() {
       <MusicPlayerBar variant="mini" />
       {isDemoMode() ? <DemoModeBanner /> : <InstallHint />}
       <DesktopNotifications />
+      <AppBadge />
+      {!isDemoMode() && <AutoAway />}
       <NotificationRules />
       {/* Writes power levels and kicks; the demo's sample world has nothing it should change. */}
       {!isDemoMode() && <FeedGovernance />}

@@ -16,6 +16,13 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // The uninstaller, once Purrlor has stopped: what it registered with Windows goes too.
+        if (args.Any(a => a.Equals("--cleanup", StringComparison.OrdinalIgnoreCase)))
+        {
+            Toasts.Uninstall();
+            return;
+        }
+
         // One copy per user: a second launch (Start menu, desktop shortcut, the installer's
         // "run now") just brings the running one out of the tray.
         using var instance = new Mutex(true, InstanceMutexName, out bool first);
@@ -204,6 +211,9 @@ public sealed class MainForm : Form
     private CoreWebView2Notification? lastNotification;
     private ToolStripMenuItem? startWithWindowsItem;
     private readonly GlobalHotkeys hotkeys;
+    private readonly Toasts toasts;
+    private readonly Badge badge;
+    private readonly IdleWatch idleWatch;
 
     internal MainForm(AppSettings settings, bool startInTray)
     {
@@ -227,6 +237,9 @@ public sealed class MainForm : Form
         trayIcon.DoubleClick += (_, _) => RestoreFromTray();
         trayIcon.BalloonTipClicked += (_, _) => OnBalloonClicked();
         BuildTrayMenu();
+        toasts = new Toasts(this, OnToastClicked);
+        badge = new Badge(this, trayIcon, trayIcon.Icon);
+        idleWatch = new IdleWatch(idle => PostBridgeEvent("idle", new { Idle = idle }));
         BuildChrome();
         BuildLoadingOverlay();
         Controls.Add(webView);
@@ -446,7 +459,7 @@ public sealed class MainForm : Form
     {
         var name = ServerAddress.DisplayName(server);
         serverLabel.Text = name;
-        trayIcon.Text = TrimTo63($"Purrlor — {name}");
+        trayIcon.Text = TrimTo63(badge.Count > 0 ? $"Purrlor — {name} ({badge.Count})" : $"Purrlor — {name}");
     }
 
     // NotifyIcon.Text throws past 63 characters (and balloon titles are truncated there anyway).
@@ -492,6 +505,13 @@ public sealed class MainForm : Form
             WindowState = settings.Maximized ? FormWindowState.Maximized : FormWindowState.Normal;
             Activate(); BringToFront(); UpdateMaximizeButton();
         }));
+    }
+
+    private void OnToastClicked(CoreWebView2Notification? notification)
+    {
+        RestoreFromTray();
+        // Lets the web client run its notification click handler (it opens the room).
+        try { notification?.ReportClicked(); } catch { }
     }
 
     private void OnBalloonClicked()
@@ -577,7 +597,7 @@ public sealed class MainForm : Form
 
     private void DisposeResources()
     {
-        SaveSettings(); showWait.Unregister(null); showSignal.Dispose(); hotkeys.Dispose();
+        SaveSettings(); showWait.Unregister(null); showSignal.Dispose(); hotkeys.Dispose(); idleWatch.Dispose(); badge.Dispose();
         trayIcon.Visible = false; trayIcon.Dispose(); trayMenu.Dispose(); webView.Dispose();
     }
 
@@ -626,7 +646,7 @@ public sealed class MainForm : Form
         if (ServerAddress.IsSameOrigin(e.Uri, server) || e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
         {
             // A new page (a reload, another server) sets its own keybinds when it joins a call.
-            hotkeys.Clear();
+            hotkeys.Clear(); idleWatch.Watch(0);
             return;
         }
         e.Cancel = true; OpenExternal(e.Uri);
@@ -679,6 +699,8 @@ public sealed class MainForm : Form
         {
             e.Handled = true;
             var n = e.Notification;
+            if (toasts.Show(n)) { n.ReportShown(); return; }
+            // Windows wouldn't show it (Purrlor's notifications off, or a Windows too old): the tray balloon instead.
             trayIcon.BalloonTipTitle = TrimTo63(string.IsNullOrWhiteSpace(n.Title) ? "Purrlor" : n.Title);
             trayIcon.BalloonTipText = string.IsNullOrWhiteSpace(n.Body) ? "You have a new notification." : n.Body;
             trayIcon.ShowBalloonTip(5000);
@@ -778,6 +800,20 @@ public sealed class MainForm : Form
                     wanted.Add((bindingId, code, Flag("ctrl"), Flag("alt"), Flag("shift")));
                 }
                 return new { Unknown = hotkeys.Set(wanted) };
+            }
+            case "setBadge":
+            {
+                if (parameters.ValueKind != JsonValueKind.Object || !parameters.TryGetProperty("count", out var c) || !c.TryGetInt32(out int count))
+                    throw new BridgeError("setBadge takes a count.");
+                badge.Set(count); ShowServerName();
+                return null;
+            }
+            case "watchIdle":
+            {
+                if (parameters.ValueKind != JsonValueKind.Object || !parameters.TryGetProperty("minutes", out var m) || !m.TryGetInt32(out int minutes))
+                    throw new BridgeError("watchIdle takes a number of minutes (0 stops).");
+                idleWatch.Watch(minutes);
+                return null;
             }
             case "changeServer":
                 BeginInvoke(ChangeServer);

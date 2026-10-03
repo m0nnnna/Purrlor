@@ -3,7 +3,7 @@ $root = $PSScriptRoot
 $project = Join-Path $root "Purrlor\Purrlor.csproj"
 $installerDir = Join-Path $root "installer"
 $distDir = Join-Path $root "dist"
-$publishDir = Join-Path $root "Purrlor\bin\Release\net8.0-windows\win-x64\publish"
+$publishDir = Join-Path $root "Purrlor\bin\Release\net8.0-windows10.0.17763.0\win-x64\publish"
 $bootstrapper = Join-Path $installerDir "MicrosoftEdgeWebview2Setup.exe"
 
 # makensis: on PATH, from the NSIS installer's registry entry, or the default install location.

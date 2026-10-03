@@ -23,7 +23,14 @@ left off.
 - WebView2 with the Purrlor server's camera, microphone, notification, clipboard and autoplay
   permissions granted up front (nothing is granted to any other site)
 - Borderless dark title bar, Windows Snap and edge/corner resizing, multi-monitor window state
-- Close-to-tray, so notifications keep arriving; clicking one opens the room (Settings → Desktop can make
+- Windows notifications (in the Action Center, following Focus Assist and Do Not Disturb); clicking
+  one opens the room
+- A badge on the taskbar button (and a dot on the tray icon) counting unread DMs and mentions
+- Shows you as Away after 10 minutes without keyboard or mouse, or when the PC locks, and Online
+  again when you're back (only if you were Online; never during a call)
+- The keyboard's media keys and Windows' media flyout control Purrlor's music player while it's
+  the one playing
+- Close-to-tray, so notifications keep arriving (Settings → Desktop can make
   the close button quit instead)
 - Start with Windows (starts in the tray)
 - Voice keybinds (push-to-talk, mute, deafen; set in Settings → Voice & Audio) that work while
@@ -54,12 +61,15 @@ server's own page and ignores anything else. Every message is JSON tagged `"purr
 | `getInfo` | | `{ version, settings: { startWithWindows, closeToTray } }` |
 | `setSetting` | `{ name, value }` (`startWithWindows` or `closeToTray`, true/false) | the settings |
 | `setHotkeys` | `{ bindings: [{ id, code, ctrl, alt, shift }] }` (`code` is a `KeyboardEvent.code`, or `Mouse4`/`Mouse5`; `[]` stops watching) | `{ unknown: [ids whose key it doesn't know] }` |
+| `setBadge` | `{ count }` | nothing |
+| `watchIdle` | `{ minutes }` (0 stops) | nothing; `idle` events follow |
 | `changeServer` | | nothing; the app opens its server dialog |
 
 A request is `{ purrlor: 1, id, method, params }` and its answer `{ purrlor: 1, id, result }` or
 `{ purrlor: 1, id, error }`. The app also sends events unasked, `{ purrlor: 1, event, data }`:
-`settings` when the tray menu changes one, and `hotkey` (`{ id, down }`) when a bound key goes down or
-up. Desktop 1.0.0 has no bridge, so the page treats
+`settings` when the tray menu changes one, `hotkey` (`{ id, down }`) when a bound key goes down or
+up, and `idle` (`{ idle }`) when you leave the computer or come back. Windows' idle timer only says
+when the last input was, never what it was. Desktop 1.0.0 has no bridge, so the page treats
 silence as "update the app".
 
 ## Keybinds and privacy
@@ -75,6 +85,9 @@ pressed anywhere, so the app keeps its use narrow:
 
 Windows doesn't pass a hook the input of a program running as administrator unless the hook's
 program is too, so keybinds don't fire while such a game is in front.
+
+## Build
+Purrlor runs on Windows 10 1809 or later (the Windows notifications need it).
 
 Needs the .NET 8 SDK and [NSIS](https://nsis.sourceforge.io). Run `Build-Purrlor.bat` (or
 `Build-Purrlor.ps1`); the installer lands at `dist\Purrlor-Setup.exe`.

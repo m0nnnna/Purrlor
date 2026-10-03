@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { readListenVolume } from '../voice/listenVolume';
+import { useMusicMediaSession } from './useMusicMediaSession';
 import { musicFailedAtom, musicPlayingAtom, musicQueueAtom, musicTimeAtom, registerMusicAudio } from './musicPlayer';
 
 /**
@@ -18,6 +19,7 @@ export function MusicPlayerHost() {
   const setFailed = useSetAtom(musicFailedAtom);
   const item = queue?.items[queue.index];
   const src = useMediaUrl(item?.track.url);
+  useMusicMediaSession();
 
   // A new track: start from nothing, with the length the uploader measured until the file says.
   useEffect(() => {
