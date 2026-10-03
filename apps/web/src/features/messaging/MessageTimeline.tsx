@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { ReportDialog } from '../feed/ReportDialog';
@@ -140,25 +140,29 @@ function previewTextFor(event: MatrixEvent): string {
 
 /** The quoted-preview strip a reply shows above its own body — looks up the original event in
  *  the room's already-loaded events (`room.findEventById`); if it hasn't been loaded (e.g. it's
- *  further back than this session has paginated), shows a plain placeholder rather than fetching
- *  it specially, matching this app's general preference for narrow-but-honest over complete. */
+ *  further back than this session has paginated), shows a plain placeholder instead. Either way
+ *  it's a button that jumps to the original (pendingJumpTargetAtom), which scrolls back through
+ *  history to find one that isn't loaded yet. */
 function ReplyPreview({ room, replyEventId }: { room: Room; replyEventId: string }) {
+  const setPendingJump = useSetAtom(pendingJumpTargetAtom);
   const original = room.findEventById(replyEventId);
-  if (!original) {
-    return (
-      <div
-        className="nu-timeline__reply-preview nu-timeline__reply-preview--missing"
-        data-nu-role="timeline-reply-preview"
-      >
-        ↩ Replying to a message
-      </div>
-    );
-  }
-  const senderName = original.sender?.name ?? fallbackName(original.getSender() ?? '?');
+  const senderName = original && (original.sender?.name ?? fallbackName(original.getSender() ?? '?'));
   return (
-    <div className="nu-timeline__reply-preview" data-nu-role="timeline-reply-preview">
-      ↩ <strong>{senderName}</strong>: {previewTextFor(original)}
-    </div>
+    <button
+      type="button"
+      className={original ? 'nu-timeline__reply-preview' : 'nu-timeline__reply-preview nu-timeline__reply-preview--missing'}
+      data-nu-role="timeline-reply-preview"
+      title="Jump to the message this replies to"
+      onClick={() => setPendingJump({ roomId: room.roomId, eventId: replyEventId })}
+    >
+      {original ? (
+        <>
+          ↩ <strong>{senderName}</strong>: {previewTextFor(original)}
+        </>
+      ) : (
+        '↩ Replying to a message'
+      )}
+    </button>
   );
 }
 

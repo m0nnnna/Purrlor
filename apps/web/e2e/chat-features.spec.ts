@@ -98,3 +98,39 @@ test('a file picked in the composer uploads and is sent as a file message', asyn
   // And a message typed with no file is unaffected.
   await send(page, 'and some words');
 });
+
+test('an image sent on its own as a reply is a reply, and its quote jumps to the original', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, [bob]);
+  const originalId = await sendText(bob, channelId, 'which colour for the banner?');
+  // Enough after it that the original is well out of view by the time the reply arrives.
+  for (let i = 1; i <= 30; i++) await sendText(bob, channelId, `filler ${i}`);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  await expect(message(page, 'filler 30')).toBeVisible();
+  // By its ID: the reply's quote will carry the same words.
+  const original = page.locator(`[data-nu-role="timeline-message"][data-nu-event-id="${originalId}"]`);
+  await clickMessageAction(original, 'timeline-reply-action');
+  await expect(role(page, 'composer-reply')).toBeVisible();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await role(page, 'composer-file-input').setInputFiles({ name: 'swatch.png', mimeType: 'image/png', buffer: png });
+  await role(page, 'composer-input').press('Enter');
+  await expect(role(page, 'composer-reply')).toBeHidden();
+
+  // On the server: an image that replies to the original.
+  const events = await eventually(
+    () => latestEvents(alice, channelId),
+    (evs) => evs.some((e) => e.content.msgtype === 'm.image' && e.content.body === 'swatch.png')
+  );
+  const image = events.find((e) => e.content.body === 'swatch.png')!;
+  expect(image.content['m.relates_to']?.['m.in_reply_to']?.event_id).toBe(originalId);
+
+  // In the app: the image shows the quote, and clicking it brings the original back into view.
+  const reply = page.locator(`[data-nu-role="timeline-message"][data-nu-event-id="${image.event_id}"]`);
+  await expect(role(reply, 'timeline-reply-preview')).toContainText('which colour for the banner?');
+  await expect(original).not.toBeInViewport();
+  await role(reply, 'timeline-reply-preview').click();
+  await expect(original).toBeInViewport();
+  await expect(original).toHaveClass(/nu-timeline__message--highlighted/);
+});

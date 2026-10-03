@@ -8,6 +8,7 @@ import type {
   VideoContent,
 } from 'matrix-js-sdk/lib/@types/media';
 import { buildVoiceMessageContent, type VoiceMessageLocation } from './voiceMessage';
+import { buildReplyRelation } from './replies';
 
 type MediaLocation = { url: string } | { file: EncryptedAttachmentInfo & { url: string } };
 
@@ -68,20 +69,21 @@ async function readImageDimensions(file: File): Promise<{ w: number; h: number }
  * (browser-encrypt-attachment, the same library the receive path decrypts with) before upload,
  * and the ciphertext blob is uploaded without its real filename (`includeFilename: false`,
  * matching Element's convention) since the filename itself is only safe inside the already-
- * encrypted event body, not as unencrypted upload metadata.
+ * encrypted event body, not as unencrypted upload metadata. `replyTo` makes it a reply to that event.
  */
 export async function sendFileMessage(
   mx: MatrixClient,
   roomId: string,
   threadId: string | null,
-  file: File
+  file: File,
+  replyTo?: string
 ): Promise<void> {
   const mimetype = file.type || 'application/octet-stream';
   const dimensions = await readImageDimensions(file);
   const info = { mimetype, size: file.size, ...dimensions };
   const location = await uploadAttachmentBytes(mx, roomId, file);
   const content = buildMediaContent(mimetype, file.name, location, info);
-  await mx.sendMessage(roomId, threadId, content);
+  await mx.sendMessage(roomId, threadId, replyTo ? { ...content, 'm.relates_to': buildReplyRelation(replyTo) } : content);
 }
 
 /**
@@ -90,7 +92,7 @@ export async function sendFileMessage(
  * sharing the same upload/encryption path (see uploadAttachmentBytes) but building its event
  * content via buildVoiceMessageContent instead of buildMediaContent, since a voice message needs
  * the extra org.matrix.msc1767.audio/org.matrix.msc3245.voice blocks a generic audio attachment
- * doesn't.
+ * doesn't. `replyTo` makes it a reply to that event.
  */
 export async function sendVoiceMessage(
   mx: MatrixClient,
@@ -99,10 +101,14 @@ export async function sendVoiceMessage(
   blob: Blob,
   mimetype: string,
   durationMs: number,
-  waveform: number[]
+  waveform: number[],
+  replyTo?: string
 ): Promise<void> {
   const location: VoiceMessageLocation = await uploadAttachmentBytes(mx, roomId, blob);
-  const content = buildVoiceMessageContent({ location, mimetype, size: blob.size, durationMs, waveform });
+  const content = {
+    ...buildVoiceMessageContent({ location, mimetype, size: blob.size, durationMs, waveform }),
+    ...(replyTo && { 'm.relates_to': buildReplyRelation(replyTo) }),
+  };
   // matrix-js-sdk's RoomMessageEventContent union has no slot for the MSC1767/MSC3245 voice
   // fields (same reason every other custom-namespaced event in this codebase needs a cast — see
   // eslint.config.js's note on @typescript-eslint/no-explicit-any). The content is still a

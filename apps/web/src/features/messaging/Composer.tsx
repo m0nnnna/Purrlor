@@ -179,6 +179,9 @@ export function Composer({
     const fileToSend = attachment;
     setAttachment(undefined);
     stopTyping();
+    // A reply goes on the first message sent: the file when there is one (so an image-only reply is
+    // still a reply), otherwise the text.
+    const replyTo = replyingTo?.eventId;
     try {
       // Matrix has no combined attachment+caption event shape — Element's own convention (and
       // the one followed here) is to send the file as its own event, then any typed text as a
@@ -186,7 +189,7 @@ export function Composer({
       if (fileToSend) {
         setUploading(true);
         try {
-          await sendFileMessage(mx, roomId, threadId, fileToSend);
+          await sendFileMessage(mx, roomId, threadId, fileToSend, replyTo);
         } finally {
           setUploading(false);
         }
@@ -207,7 +210,7 @@ export function Composer({
             mentionCandidates,
             roomMentionAllowed
           );
-          const relatesTo = replyingTo ? buildReplyRelation(replyingTo.eventId) : undefined;
+          const relatesTo = replyTo && !fileToSend ? buildReplyRelation(replyTo) : undefined;
           if (formattedBody || relatesTo || mentionedUserIds.length > 0 || mentionsRoom) {
             await mx.sendMessage(roomId, threadId, {
               msgtype: MsgType.Text,
@@ -267,8 +270,9 @@ export function Composer({
       // The waveform needs the recorded bytes decoded independently of the upload — computed
       // up front so a slow/failed upload doesn't also block or repeat the decode.
       const waveform = await computeWaveform(recorded.blob).catch(() => []);
-      await sendVoiceMessage(mx, roomId, threadId, recorded.blob, recorded.mimetype, recorded.durationMs, waveform);
+      await sendVoiceMessage(mx, roomId, threadId, recorded.blob, recorded.mimetype, recorded.durationMs, waveform, replyingTo?.eventId);
       voiceRecorder.reset();
+      onCancelReply?.();
     } catch (err) {
       console.error('Failed to send voice message', err);
       voiceRecorder.reset();
