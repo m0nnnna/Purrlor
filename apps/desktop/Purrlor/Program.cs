@@ -74,6 +74,8 @@ internal sealed class AppSettings
     public Rectangle? Bounds { get; set; }
     public bool Maximized { get; set; }
     public bool StartWithWindows { get; set; }
+    // Kept when a settings file from before this setting is read: the close button always hid to the tray then.
+    public bool CloseToTray { get; set; } = true;
     public bool TrayHintShown { get; set; }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -200,6 +202,7 @@ public sealed class MainForm : Form
     private bool restoringAfterCrash;
     private bool pageLoaded;
     private CoreWebView2Notification? lastNotification;
+    private ToolStripMenuItem? startWithWindowsItem;
 
     internal MainForm(AppSettings settings, bool startInTray)
     {
@@ -321,7 +324,7 @@ public sealed class MainForm : Form
         ConfigureButton(closeButton);
         minimizeButton.Click += (_, _) => WindowState = FormWindowState.Minimized;
         maximizeButton.Click += (_, _) => ToggleMaximize();
-        closeButton.Click += (_, _) => MinimizeToTray();
+        closeButton.Click += (_, _) => CloseOrHide();
 
         // Left-to-right: Minimize, Maximize/Restore, Close.
         var buttons = new Panel { Dock = DockStyle.Right, Width = 138, Height = TitleBarHeight, BackColor = ChromeColor };
@@ -415,10 +418,25 @@ public sealed class MainForm : Form
         var show = new ToolStripMenuItem("Show Purrlor"); show.Click += (_, _) => RestoreFromTray();
         var change = new ToolStripMenuItem("Change server…"); change.Click += (_, _) => { RestoreFromTray(); BeginInvoke(ChangeServer); };
         var start = new ToolStripMenuItem("Start with Windows") { Checked = settings.StartWithWindows, CheckOnClick = true };
-        start.CheckedChanged += (_, _) => { settings.StartWithWindows = start.Checked; SetStartup(start.Checked); SaveSettings(); };
+        start.CheckedChanged += (_, _) => SetStartWithWindows(start.Checked);
+        startWithWindowsItem = start;
         var exit = new ToolStripMenuItem("Exit Purrlor"); exit.Click += (_, _) => { allowExit = true; Close(); };
         trayMenu.Items.Add(show); trayMenu.Items.Add(change); trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(start); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add(exit);
+    }
+
+    private void SetStartWithWindows(bool enabled)
+    {
+        if (startWithWindowsItem != null && startWithWindowsItem.Checked != enabled) { startWithWindowsItem.Checked = enabled; return; } // CheckedChanged comes back here
+        if (settings.StartWithWindows == enabled) return;
+        settings.StartWithWindows = enabled; SetStartup(enabled); SaveSettings();
+        PostBridgeEvent("settings", BridgeSettings());
+    }
+
+    private void CloseOrHide()
+    {
+        if (settings.CloseToTray) { MinimizeToTray(); return; }
+        allowExit = true; Close();
     }
 
     private void ShowServerName()
@@ -484,6 +502,7 @@ public sealed class MainForm : Form
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
         if (e.CloseReason == CloseReason.WindowsShutDown || e.CloseReason == CloseReason.TaskManagerClosing || allowExit) return;
+        if (!settings.CloseToTray) { allowExit = true; return; }
         e.Cancel = true; MinimizeToTray();
     }
 
@@ -581,6 +600,7 @@ public sealed class MainForm : Form
             core.DownloadStarting += Core_DownloadStarting;
             core.ProcessFailed += Core_ProcessFailed;
             core.DocumentTitleChanged += (_, _) => BeginInvoke(UpdateTitle);
+            core.WebMessageReceived += Core_WebMessageReceived;
             try { core.NotificationReceived += Core_NotificationReceived; }
             catch (Exception ex) { AppPaths.LogError("notifications unavailable on this WebView2 runtime", ex); }
             webViewReady = true;
@@ -687,6 +707,72 @@ public sealed class MainForm : Form
             }
             finally { restoringAfterCrash = false; }
         });
+    }
+
+    // The bridge: the page (apps/web/src/desktop/desktopBridge.ts) asks the app for things over
+    // WebView2's message channel. Only the configured server's own page is answered; a message from
+    // anywhere else (a page the server sent us to that shouldn't have loaded, say) is ignored.
+    private static readonly JsonSerializerOptions BridgeJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    private sealed class BridgeError(string message) : Exception(message);
+
+    private void Core_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (!ServerAddress.IsSameOrigin(e.Source, server)) return;
+        JsonElement message;
+        try { using var doc = JsonDocument.Parse(e.WebMessageAsJson); message = doc.RootElement.Clone(); }
+        catch { return; }
+        if (message.ValueKind != JsonValueKind.Object
+            || !message.TryGetProperty("purrlor", out var version) || version.ValueKind != JsonValueKind.Number || version.GetInt32() != 1
+            || !message.TryGetProperty("id", out var idElement) || !idElement.TryGetInt64(out var id)) return;
+        var method = message.TryGetProperty("method", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+        message.TryGetProperty("params", out var parameters);
+        try { PostBridge(new Dictionary<string, object?> { ["purrlor"] = 1, ["id"] = id, ["result"] = HandleBridgeRequest(method, parameters) }); }
+        catch (BridgeError ex) { PostBridge(new Dictionary<string, object?> { ["purrlor"] = 1, ["id"] = id, ["error"] = ex.Message }); }
+        catch (Exception ex)
+        {
+            AppPaths.LogError($"bridge {method}", ex);
+            PostBridge(new Dictionary<string, object?> { ["purrlor"] = 1, ["id"] = id, ["error"] = "The desktop app couldn't do that." });
+        }
+    }
+
+    private object? HandleBridgeRequest(string? method, JsonElement parameters)
+    {
+        switch (method)
+        {
+            case "getInfo":
+                return new { Version = Application.ProductVersion, Settings = BridgeSettings() };
+            case "setSetting":
+            {
+                var name = parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+                if (parameters.ValueKind != JsonValueKind.Object || !parameters.TryGetProperty("value", out var v) || (v.ValueKind != JsonValueKind.True && v.ValueKind != JsonValueKind.False))
+                    throw new BridgeError("setSetting takes a name and a true/false value.");
+                bool value = v.GetBoolean();
+                switch (name)
+                {
+                    case "startWithWindows": SetStartWithWindows(value); break;
+                    case "closeToTray": settings.CloseToTray = value; SaveSettings(); break;
+                    default: throw new BridgeError($"There's no desktop setting called {name}.");
+                }
+                return BridgeSettings();
+            }
+            case "changeServer":
+                BeginInvoke(ChangeServer);
+                return null;
+            default:
+                throw new BridgeError($"The desktop app doesn't know {method}.");
+        }
+    }
+
+    private object BridgeSettings() => new { settings.StartWithWindows, settings.CloseToTray };
+
+    private void PostBridgeEvent(string name, object? data) =>
+        PostBridge(new Dictionary<string, object?> { ["purrlor"] = 1, ["event"] = name, ["data"] = data });
+
+    private void PostBridge(Dictionary<string, object?> message)
+    {
+        try { webView.CoreWebView2?.PostWebMessageAsJson(JsonSerializer.Serialize(message, BridgeJson)); }
+        catch (Exception ex) { AppPaths.LogError("bridge post", ex); }
     }
 
     private static void OpenExternal(string uri)

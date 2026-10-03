@@ -1,0 +1,27 @@
+.nu-voice-settings,
+.nu-desktop-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+}
+
+.nu-voice-settings__test {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-voice-settings__meter {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-bg-tertiary);
+  border: 1px solid var(--nu-color-border);
+  overflow: hidden;
+}
+
+.nu-voice-settings__meter-fill {
+  height: 100%;
+  background: var(--nu-color-success);
+  transition: width 60ms linear;
+}

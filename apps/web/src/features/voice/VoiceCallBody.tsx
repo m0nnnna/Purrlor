@@ -18,6 +18,7 @@ import { Menu, MenuItem } from '../../components/Menu';
 import { useVoiceCall } from './voiceCallContext';
 import { useParticipantSounds } from './useParticipantSounds';
 import { usePushToTalk } from './usePushToTalk';
+import { personVolume, setPersonVolume } from './callVolume';
 import { readAppAudioOnly, saveAppAudioOnly, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
 import { useScreenSharePopout } from './useScreenSharePopout';
 import { useSharedWatchTogether } from './watchTogetherContext';
@@ -65,12 +66,12 @@ function ParticipantRow({
 }) {
   const { quality } = useConnectionQualityIndicator({ participant });
   const bars = connectionQualityBars(quality);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(() => personVolume(participant.identity));
   const name = participantDisplayName(room, participant);
 
   const handleVolumeChange = (value: number) => {
     setVolume(value);
-    (participant as RemoteParticipant).setVolume(value);
+    setPersonVolume(participant as RemoteParticipant, value);
   };
 
   if (cameraTrack) {

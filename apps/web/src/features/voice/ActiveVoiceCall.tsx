@@ -8,6 +8,8 @@ import { VoiceCallContext, type VoiceCallContextValue } from './voiceCallContext
 import { playConnectedSound, playDisconnectedSound, warmUpAudioContext } from './voiceSounds';
 import { validateScreenShareCodecSupport, voiceChannelRoomOptions } from './voiceChannelRoomOptions';
 import { WatchTogetherProvider } from './WatchTogetherProvider';
+import { ApplyAudioSettings } from './ApplyAudioSettings';
+import { audioCaptureOptions, deviceIdOrDefault, readAudioSettings } from './audioSettings';
 
 // Split out of VoiceCallSession.tsx so @livekit/components-react (and livekit-client underneath
 // it) load as their own chunk — via React.lazy, see VoiceCallSession.tsx — only once there's
@@ -19,6 +21,17 @@ export default function ActiveVoiceCall({ room, children }: { room: MatrixRoom; 
   const { state, voiceServer, connect, disconnect } = useVoiceConnection(room);
   const [deafened, setDeafened] = useState(false);
   const autoConnectedKeyRef = useRef<string | null>(null);
+  // The devices and voice processing the call opens with. Frozen for the call's lifetime:
+  // LiveKitRoom makes a new Room (dropping the call) whenever `options` changes, so changes made
+  // during the call go through ApplyAudioSettings instead.
+  const [roomOptions] = useState(() => {
+    const s = readAudioSettings();
+    return {
+      ...voiceChannelRoomOptions,
+      audioCaptureDefaults: audioCaptureOptions(s),
+      audioOutput: { deviceId: deviceIdOrDefault(s.outputDeviceId) },
+    };
+  });
 
   // Auto-join whenever the active room actually changes — selecting a voice channel (or
   // switching from one to another) is the join action now, there's no separate button for it.
@@ -73,7 +86,7 @@ export default function ActiveVoiceCall({ room, children }: { room: MatrixRoom; 
       token={state.token}
       connect
       audio
-      options={voiceChannelRoomOptions}
+      options={roomOptions}
       onConnected={() => playConnectedSound()}
       onDisconnected={() => {
         playDisconnectedSound();
@@ -83,6 +96,7 @@ export default function ActiveVoiceCall({ room, children }: { room: MatrixRoom; 
       data-nu-role="voice-session"
     >
       <RoomAudioRenderer muted={deafened} />
+      <ApplyAudioSettings />
       <VoiceCallContext.Provider value={ctxValue}>
         <WatchTogetherProvider>{children}</WatchTogetherProvider>
       </VoiceCallContext.Provider>

@@ -23,7 +23,8 @@ left off.
 - WebView2 with the Purrlor server's camera, microphone, notification, clipboard and autoplay
   permissions granted up front (nothing is granted to any other site)
 - Borderless dark title bar, Windows Snap and edge/corner resizing, multi-monitor window state
-- Close-to-tray, so notifications keep arriving; clicking one opens the room
+- Close-to-tray, so notifications keep arriving; clicking one opens the room (Settings → Desktop can make
+  the close button quit instead)
 - Start with Windows (starts in the tray)
 - Links to other sites open in the default browser
 - Downloads go to the Windows Downloads folder
@@ -33,6 +34,29 @@ left off.
 
 Settings and browser data live in `%LOCALAPPDATA%\Purrlor`, and the app itself in
 `%LOCALAPPDATA%\Programs\Purrlor`. Uninstalling removes the app but keeps the data.
+
+## Settings
+Purrlor's own Settings gets a **Desktop** tab inside the app: Start with Windows, what the close
+button does, and the server. The app keeps these in its `settings.json`, not in the page's storage.
+Voice & Audio (microphone, speakers, voice processing) is in the web client and works the same in a
+browser.
+
+## The bridge
+The page and the app talk over WebView2's message channel (`window.chrome.webview` in the page,
+`WebMessageReceived` / `PostWebMessageAsJson` here; the page's side is
+`apps/web/src/desktop/desktopBridge.ts`). The app answers only messages from the configured
+server's own page and ignores anything else. Every message is JSON tagged `"purrlor": 1`:
+
+| Page asks (`method`) | Takes (`params`) | Answers (`result`) |
+|---|---|---|
+| `getInfo` | | `{ version, settings: { startWithWindows, closeToTray } }` |
+| `setSetting` | `{ name, value }` (`startWithWindows` or `closeToTray`, true/false) | the settings |
+| `changeServer` | | nothing; the app opens its server dialog |
+
+A request is `{ purrlor: 1, id, method, params }` and its answer `{ purrlor: 1, id, result }` or
+`{ purrlor: 1, id, error }`. The app also sends events unasked, `{ purrlor: 1, event, data }`:
+`settings` when the tray menu changes one. Desktop 1.0.0 has no bridge, so the page treats
+silence as "update the app".
 
 ## Build
 Needs the .NET 8 SDK and [NSIS](https://nsis.sourceforge.io). Run `Build-Purrlor.bat` (or

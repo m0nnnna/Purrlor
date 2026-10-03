@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Modal } from '../components/Modal';
 import { AccountGeneralSettings } from './AccountGeneralSettings';
 import { AppearanceSettings } from './AppearanceSettings';
+import { DesktopSettings } from './DesktopSettings';
 import { PrivacySettings } from './PrivacySettings';
 import { RemindersSettings } from './RemindersSettings';
 import { SessionsSettings } from './SessionsSettings';
+import { VoiceSettings } from './VoiceSettings';
+import { isDesktopApp } from '../desktop/desktopBridge';
 import './AccountSettingsModal.css';
 
-type AccountSettingsTab = 'account' | 'sessions' | 'appearance' | 'reminders' | 'privacy';
+type AccountSettingsTab = 'account' | 'sessions' | 'voice' | 'appearance' | 'reminders' | 'privacy' | 'desktop';
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<AccountSettingsTab>('account');
@@ -28,6 +31,14 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
           onClick={() => setTab('sessions')}
         >
           Sessions
+        </button>
+        <button
+          type="button"
+          className={tab === 'voice' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+          data-nu-role="account-settings-voice-tab"
+          onClick={() => setTab('voice')}
+        >
+          Voice & Audio
         </button>
         <button
           type="button"
@@ -52,12 +63,24 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
         >
           Privacy
         </button>
+        {isDesktopApp() && (
+          <button
+            type="button"
+            className={tab === 'desktop' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+            data-nu-role="account-settings-desktop-tab"
+            onClick={() => setTab('desktop')}
+          >
+            Desktop
+          </button>
+        )}
       </div>
       {tab === 'account' && <AccountGeneralSettings onClose={onClose} />}
       {tab === 'sessions' && <SessionsSettings />}
+      {tab === 'voice' && <VoiceSettings />}
       {tab === 'appearance' && <AppearanceSettings />}
       {tab === 'reminders' && <RemindersSettings onClose={onClose} />}
       {tab === 'privacy' && <PrivacySettings />}
+      {tab === 'desktop' && <DesktopSettings />}
     </Modal>
   );
 }
