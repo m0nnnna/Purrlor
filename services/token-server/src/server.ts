@@ -1,6 +1,7 @@
 import express from 'express';
 import { ipWatch } from './ipWatch.js';
 import cors from 'cors';
+import { corsOptions, parseAllowedOrigins } from './corsPolicy.js';
 import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 import { validateOpenIdToken } from './openid.js';
 import { checkMembership, getBotUserId, mayViewParticipants } from './membership.js';
@@ -40,22 +41,9 @@ if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
   process.exit(1);
 }
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '*').split(',').map((s) => s.trim());
-
-function corsOriginAllowed(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-  if (!origin || ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
-    callback(null, true);
-    return;
-  }
-  // Support a single leading-wildcard subdomain pattern, e.g. https://*.example.com — same
-  // convention as cinny-voice's token server.
-  const matched = ALLOWED_ORIGINS.some((allowed) => {
-    if (!allowed.includes('*')) return false;
-    const pattern = `^${allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace('\\*', '.*')}$`;
-    return new RegExp(pattern).test(origin);
-  });
-  callback(null, matched);
-}
+// Which pages may call this from a browser: voice from anywhere, the rest from ALLOWED_ORIGINS
+// (corsPolicy.ts).
+const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 
 const app = express();
 app.use(ops.measure);
@@ -68,7 +56,7 @@ app.use((req, _res, next) => {
   ipWatch.record(req);
   next();
 });
-app.use(cors({ origin: corsOriginAllowed }));
+app.use(cors(corsOptions(ALLOWED_ORIGINS)));
 app.use(express.json());
 app.use(opsRouter({ token: process.env.METRICS_TOKEN ?? '', service: 'token server', version: VERSION, metrics: ops, errors: errorLog }));
 

@@ -44,8 +44,10 @@ stores its voice server in room state and each account stores its push gateway i
 ## 2. Token server HTTP API
 
 Base URL: the token server's public origin, e.g. `https://token.DOMAIN`. All request and response
-bodies are JSON. CORS is restricted to `ALLOWED_ORIGINS` (comma-separated; one leading `*.`
-wildcard per entry allowed).
+bodies are JSON. The voice routes (`/api/livekit/…`) answer any page: a Space's members on other
+Matrix servers call them from their own server's app, and every request proves who's asking with an
+OpenID token, so the page it comes from adds nothing (`corsPolicy.ts`). Everything else is limited to
+`ALLOWED_ORIGINS` (comma-separated; one leading `*.` wildcard per entry allowed).
 
 A Space's configured **token endpoint** is the full URL of `POST /api/livekit/token`; the client
 derives the other two endpoints from its origin.

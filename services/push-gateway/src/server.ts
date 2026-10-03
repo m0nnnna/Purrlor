@@ -60,7 +60,9 @@ function corsOriginAllowed(origin: string | undefined, callback: (err: Error | n
   }
   const matched = ALLOWED_ORIGINS.some((allowed) => {
     if (!allowed.includes('*')) return false;
-    const pattern = `^${allowed.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace('\\*', '.*')}$`;
+    // The * escaped too, so it can be found and swapped for one subdomain (unescaped, it quantified
+    // the character before it and no subdomain ever matched; the token server's corsPolicy.ts).
+    const pattern = `^${allowed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\*', '[^./]+')}$`;
     return new RegExp(pattern).test(origin);
   });
   callback(null, matched);
