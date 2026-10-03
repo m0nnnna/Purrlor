@@ -50,6 +50,36 @@
   --nu-gradient-accent-text: linear-gradient(90deg, var(--nu-color-accent), var(--nu-color-accent-2));
 }
 
+/* A filling background picture (pageStyle.ts's backdropStyle): one screen tall, so it's sized to the
+   screen and never to the page, which grows as posts load. "Stay put" sticks to the top of the
+   scrolling area (working on phones too, unlike background-attachment: fixed) and takes no room;
+   "Fill the page" covers the first screen and scrolls away with it, fading into the page colour. */
+.nu-profile-page__backdrop {
+  z-index: 0;
+  height: 100vh;
+  height: 100dvh;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.nu-profile-page__backdrop--fixed {
+  position: sticky;
+  top: 0;
+  margin-bottom: -100vh;
+  margin-bottom: -100dvh;
+}
+
+.nu-profile-page__backdrop--cover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+
 .nu-profile-page__content {
   position: relative;
   z-index: 1;

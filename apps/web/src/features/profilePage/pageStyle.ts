@@ -82,19 +82,26 @@ export function pageStyleVars(style: PageStyle, backgroundSrc: string | null): C
   if (background.kind === 'gradient') {
     css.backgroundImage = `linear-gradient(${background.angle}deg, ${background.from}, ${background.to})`;
     css.backgroundAttachment = 'local';
-  } else if (background.kind === 'image' && backgroundSrc) {
+  } else if (background.kind === 'image' && backgroundSrc && background.fit === 'tile') {
     css.backgroundImage = cssUrl(backgroundSrc);
-    if (background.fit === 'tile') {
-      css.backgroundRepeat = 'repeat';
-      css.backgroundAttachment = 'local';
-    } else {
-      css.backgroundSize = 'cover';
-      css.backgroundPosition = 'center';
-      css.backgroundRepeat = 'no-repeat';
-      css.backgroundAttachment = background.fit === 'fixed' ? 'fixed' : 'local';
-    }
+    css.backgroundRepeat = 'repeat';
+    css.backgroundAttachment = 'local';
   }
+  // A filling picture isn't the page's own background: see backdropStyle.
   return css;
+}
+
+/**
+ * A filling background picture ("Fill the page", "Fill, stay put while scrolling") is drawn on a
+ * layer of its own, one screen tall (ProfilePageFrame, `.nu-profile-page__backdrop`), not as the
+ * page's background. As the page's background, `cover` sized it to the whole page, which grows as
+ * posts load while you scroll, so the picture kept zooming in. And `background-attachment: fixed`
+ * is ignored on phones and inside a scrolling panel. Undefined for no picture, or a tiled one.
+ */
+export function backdropStyle(style: PageStyle, backgroundSrc: string | null): CSSProperties | undefined {
+  const { background } = style;
+  if (background.kind !== 'image' || !backgroundSrc || background.fit === 'tile') return undefined;
+  return { backgroundImage: cssUrl(backgroundSrc) };
 }
 
 /** The host name a link goes to, shown under every link so nobody's surprised where it leads. */
