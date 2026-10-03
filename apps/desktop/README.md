@@ -30,6 +30,7 @@ left off.
   again when you're back (only if you were Online; never during a call)
 - The keyboard's media keys and Windows' media flyout control Purrlor's music player while it's
   the one playing
+- Keeps itself up to date (see "Updates" below)
 - Close-to-tray, so notifications keep arriving (Settings → Desktop can make
   the close button quit instead)
 - Start with Windows (starts in the tray)
@@ -63,12 +64,15 @@ server's own page and ignores anything else. Every message is JSON tagged `"purr
 | `setHotkeys` | `{ bindings: [{ id, code, ctrl, alt, shift }] }` (`code` is a `KeyboardEvent.code`, or `Mouse4`/`Mouse5`; `[]` stops watching) | `{ unknown: [ids whose key it doesn't know] }` |
 | `setBadge` | `{ count }` | nothing |
 | `watchIdle` | `{ minutes }` (0 stops) | nothing; `idle` events follow |
+| `checkForUpdates` | | the update state (below); `update` events follow |
+| `installUpdate` | | nothing; the app restarts into the new version |
 | `changeServer` | | nothing; the app opens its server dialog |
 
 A request is `{ purrlor: 1, id, method, params }` and its answer `{ purrlor: 1, id, result }` or
 `{ purrlor: 1, id, error }`. The app also sends events unasked, `{ purrlor: 1, event, data }`:
 `settings` when the tray menu changes one, `hotkey` (`{ id, down }`) when a bound key goes down or
-up, and `idle` (`{ idle }`) when you leave the computer or come back. Windows' idle timer only says
+up, `update` (`{ state, version, error, releaseUrl, automatic }`, also in `getInfo`) as an update is
+checked for, downloaded and ready, and `idle` (`{ idle }`) when you leave the computer or come back. Windows' idle timer only says
 when the last input was, never what it was. Desktop 1.0.0 has no bridge, so the page treats
 silence as "update the app".
 
@@ -85,6 +89,35 @@ pressed anywhere, so the app keeps its use narrow:
 
 Windows doesn't pass a hook the input of a program running as administrator unless the hook's
 program is too, so keybinds don't fire while such a game is in front.
+
+## Updates
+From 1.2.0 the app keeps itself up to date (`Updater.cs`). Two minutes after it starts, and every
+six hours, it reads this repository's releases for a newer `desktop-vX.Y.Z`, downloads its
+installer into `%LOCALAPPDATA%\Purrlor\Updates`, and offers "Restart to update" in the tray menu and
+Settings → Desktop. Quitting Purrlor installs it too, silently (the installer's `/S`, with
+`/RELAUNCH` to start the new version after). An update found at sign-in, with Purrlor starting in
+the tray, installs straight away. Settings → Desktop can switch the automatic checks off.
+
+There's no code-signing certificate, so the app checks updates against a key of its own: the
+release workflow signs each installer (`Purrlor-Setup.exe.sig`, ECDSA P-256 over
+`purrlor-desktop-update\n<version>\n<sha256 of the installer>\n`) with the
+`DESKTOP_UPDATE_SIGNING_KEY` Actions secret, and the app holds the public half (`UpdatePublicKey` in
+`Purrlor.csproj`). An installer that doesn't verify is deleted and never run, and since the version
+is signed, an old installer can't be passed off as a new one.
+
+The private key exists only in that secret. If it's ever lost or leaked, make a new pair, put the
+new public key in `Purrlor.csproj` and the private one in the secret: installed apps can't verify
+anything signed with the new key, so that one release has to be installed by hand. To make a pair
+(PowerShell 7):
+
+```
+$k = [Security.Cryptography.ECDsa]::Create([Security.Cryptography.ECCurve+NamedCurves]::nistP256)
+[Convert]::ToBase64String($k.ExportSubjectPublicKeyInfo())   # UpdatePublicKey
+$k.ExportPkcs8PrivateKeyPem() | gh secret set DESKTOP_UPDATE_SIGNING_KEY
+```
+
+A fork sets `UpdateRepository` to its own repository and makes its own pair; with `UpdatePublicKey`
+empty, its app only says when a new version is out, with a link.
 
 ## Build
 Purrlor runs on Windows 10 1809 or later (the Windows notifications need it).

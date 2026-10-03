@@ -22,12 +22,27 @@ type WebViewChannel = {
 export type DesktopInfo = {
   version: string;
   settings: DesktopSettings;
+  /** Desktop 1.2.0 on. */
+  update?: DesktopUpdate;
+};
+
+/** Where the app's auto-update is (apps/desktop/Purrlor/Updater.cs). */
+export type DesktopUpdate = {
+  state: 'idle' | 'checking' | 'upToDate' | 'downloading' | 'ready' | 'failed';
+  /** The new version, while one is downloading or ready (or failed to). */
+  version: string | null;
+  error: string | null;
+  releaseUrl: string | null;
+  /** False in a build that can't verify updates: it only says one exists. */
+  automatic: boolean;
 };
 
 export type DesktopSettings = {
   startWithWindows: boolean;
   /** The window's close button hides Purrlor in the tray (true) or quits it (false). */
   closeToTray: boolean;
+  /** Desktop 1.2.0 on: download updates by itself. */
+  autoUpdate?: boolean;
 };
 
 type Reply = { purrlor: 1; id: number; result?: unknown; error?: string };

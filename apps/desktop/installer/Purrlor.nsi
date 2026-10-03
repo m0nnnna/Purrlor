@@ -1,5 +1,7 @@
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+!include "Sections.nsh"
 
 !define APPNAME "Purrlor"
 !ifndef APPVERSION
@@ -90,6 +92,31 @@ Section "Start Menu Shortcut" SEC_STARTMENU
   CreateShortCut "$SMPROGRAMS\Purrlor\Purrlor.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0
   CreateShortCut "$SMPROGRAMS\Purrlor\Uninstall Purrlor.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
 SectionEnd
+
+; An automatic update (Updater.cs) runs this silently: /S, plus /RELAUNCH to start the new version
+; afterwards (/TRAY: in the tray, as at sign-in). It leaves shortcuts as they were: the Start menu
+; one is only made again if it's still there.
+Function .onInit
+  ${If} ${Silent}
+  ${AndIfNot} ${FileExists} "$SMPROGRAMS\Purrlor\Purrlor.lnk"
+    !insertmacro UnselectSection ${SEC_STARTMENU}
+  ${EndIf}
+FunctionEnd
+
+Function .onInstSuccess
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/RELAUNCH" $1
+  ${IfNot} ${Errors}
+    ClearErrors
+    ${GetOptions} $0 "/TRAY" $1
+    ${If} ${Errors}
+      Exec '"$INSTDIR\${EXE_NAME}"'
+    ${Else}
+      Exec '"$INSTDIR\${EXE_NAME}" --tray'
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
 
 ; Windows 11 ships the WebView2 Runtime; Windows 10 may not. The build downloads Microsoft's
 ; small bootstrapper into this folder, and it's only run when the runtime is missing.

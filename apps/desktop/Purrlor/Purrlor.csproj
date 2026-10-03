@@ -17,6 +17,14 @@
     <Company>MeowOps</Company>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+  <!-- Auto-update (Updater.cs): the releases it reads, and the public half of the key that signs
+       their installers (the private half is the DESKTOP_UPDATE_SIGNING_KEY Actions secret, used by
+       .github/workflows/desktop.yml). A fork makes its own pair (apps/desktop/README.md, "Updates");
+       with UpdatePublicKey empty, the app only says when a new version is out. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="UpdateRepository" Value="m0nnnna/Purrlor" />
+    <AssemblyMetadata Include="UpdatePublicKey" Value="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE/jEyOY0h+ikyiv7H4+c+uO+djfL9ecSMgnibq3BGqp1gsR5zvW3+D2W/t7jdGTOCac2zdKVn+KrpQyuMYN6X8A==" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3296.44" />

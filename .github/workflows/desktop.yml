@@ -41,6 +41,21 @@ jobs:
           if ("desktop-v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match Purrlor.csproj version $version" }
       - name: Build
         run: ./Build-Purrlor.ps1
+      # Auto-update (apps/desktop/Purrlor/Updater.cs) runs only an installer signed with this key.
+      # Signed: the version and the installer's SHA-256, so an old installer can't pose as a new one.
+      - name: Sign the installer for auto-update
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        env:
+          SIGNING_KEY: ${{ secrets.DESKTOP_UPDATE_SIGNING_KEY }}
+        run: |
+          if (-not $env:SIGNING_KEY) { throw "DESKTOP_UPDATE_SIGNING_KEY isn't set: installed apps would refuse this update" }
+          $version = "${{ github.ref_name }}".Substring("desktop-v".Length)
+          $hash = (Get-FileHash dist/Purrlor-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $message = [Text.Encoding]::UTF8.GetBytes("purrlor-desktop-update`n$version`n$hash`n")
+          $key = [Security.Cryptography.ECDsa]::Create()
+          $key.ImportFromPem($env:SIGNING_KEY)
+          $signature = $key.SignData($message, [Security.Cryptography.HashAlgorithmName]::SHA256)
+          [IO.File]::WriteAllText("$PWD/dist/Purrlor-Setup.exe.sig", [Convert]::ToBase64String($signature))
       - uses: actions/upload-artifact@v4
         with:
           name: Purrlor-Setup
@@ -51,6 +66,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ github.ref_name }}".Substring("desktop-v".Length)
-          gh release create "${{ github.ref_name }}" dist/Purrlor-Setup.exe `
+          gh release create "${{ github.ref_name }}" dist/Purrlor-Setup.exe dist/Purrlor-Setup.exe.sig `
             --title "Purrlor Desktop $version" `
-            --notes "Windows desktop app for Purrlor. Download **Purrlor-Setup.exe** and run it; no admin rights needed. On first launch it asks which Purrlor server to connect to (purr.meowops.net by default)."
+            --notes "Windows desktop app for Purrlor. Download **Purrlor-Setup.exe** and run it; no admin rights needed. On first launch it asks which Purrlor server to connect to (purr.meowops.net by default). From 1.2.0 it keeps itself up to date (Purrlor-Setup.exe.sig is what it checks the download against)."

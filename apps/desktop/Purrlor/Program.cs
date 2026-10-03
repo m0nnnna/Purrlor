@@ -83,6 +83,7 @@ internal sealed class AppSettings
     public bool StartWithWindows { get; set; }
     // Kept when a settings file from before this setting is read: the close button always hid to the tray then.
     public bool CloseToTray { get; set; } = true;
+    public bool AutoUpdate { get; set; } = true;
     public bool TrayHintShown { get; set; }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
@@ -214,6 +215,8 @@ public sealed class MainForm : Form
     private readonly Toasts toasts;
     private readonly Badge badge;
     private readonly IdleWatch idleWatch;
+    private readonly Updater updater;
+    private readonly ToolStripMenuItem updateItem = new() { Visible = false };
 
     internal MainForm(AppSettings settings, bool startInTray)
     {
@@ -240,6 +243,7 @@ public sealed class MainForm : Form
         toasts = new Toasts(this, OnToastClicked);
         badge = new Badge(this, trayIcon, trayIcon.Icon);
         idleWatch = new IdleWatch(idle => PostBridgeEvent("idle", new { Idle = idle }));
+        updater = new Updater(this, OnUpdateStatus);
         BuildChrome();
         BuildLoadingOverlay();
         Controls.Add(webView);
@@ -436,7 +440,9 @@ public sealed class MainForm : Form
         var start = new ToolStripMenuItem("Start with Windows") { Checked = settings.StartWithWindows, CheckOnClick = true };
         start.CheckedChanged += (_, _) => SetStartWithWindows(start.Checked);
         startWithWindowsItem = start;
-        var exit = new ToolStripMenuItem("Exit Purrlor"); exit.Click += (_, _) => { allowExit = true; Close(); };
+        var exit = new ToolStripMenuItem("Exit Purrlor"); exit.Click += (_, _) => Quit();
+        updateItem.Click += (_, _) => InstallUpdate(relaunch: true);
+        trayMenu.Items.Add(updateItem);
         trayMenu.Items.Add(show); trayMenu.Items.Add(change); trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(start); trayMenu.Items.Add(new ToolStripSeparator()); trayMenu.Items.Add(exit);
     }
@@ -452,7 +458,48 @@ public sealed class MainForm : Form
     private void CloseOrHide()
     {
         if (settings.CloseToTray) { MinimizeToTray(); return; }
+        Quit();
+    }
+
+    /// <summary>Exits; a downloaded update installs on the way out (it's quiet and quick).</summary>
+    private void Quit()
+    {
+        if (updater.Current.State == Updater.State.Ready) updater.Install(relaunch: false, tray: false);
         allowExit = true; Close();
+    }
+
+    private void InstallUpdate(bool relaunch)
+    {
+        if (!updater.Install(relaunch, tray: false))
+        {
+            ShowTrayMessage("Couldn't update Purrlor", "The downloaded update didn't check out. Purrlor will try again later.");
+            return;
+        }
+        allowExit = true; Close();
+    }
+
+    private Updater.State lastUpdateState;
+
+    private void OnUpdateStatus(Updater.Status status)
+    {
+        bool ready = status.State == Updater.State.Ready;
+        updateItem.Text = ready ? $"Restart to update to {status.Version}" : "";
+        updateItem.Visible = ready;
+        if (ready && lastUpdateState != Updater.State.Ready)
+            ShowTrayMessage($"Purrlor {status.Version} is ready", "Restart Purrlor to update, or it updates next time you quit it.");
+        lastUpdateState = status.State;
+        PostBridgeEvent("update", UpdateInfo());
+    }
+
+    private object UpdateInfo()
+    {
+        var s = updater.Current;
+        return new
+        {
+            State = JsonNamingPolicy.CamelCase.ConvertName(s.State.ToString()),
+            s.Version, s.Error, s.ReleaseUrl,
+            Automatic = updater.CanInstall,
+        };
     }
 
     private void ShowServerName()
@@ -597,11 +644,22 @@ public sealed class MainForm : Form
 
     private void DisposeResources()
     {
-        SaveSettings(); showWait.Unregister(null); showSignal.Dispose(); hotkeys.Dispose(); idleWatch.Dispose(); badge.Dispose();
+        SaveSettings(); showWait.Unregister(null); showSignal.Dispose(); hotkeys.Dispose(); idleWatch.Dispose(); updater.Dispose(); badge.Dispose();
         trayIcon.Visible = false; trayIcon.Dispose(); trayMenu.Dispose(); webView.Dispose();
     }
 
-    private async void MainForm_Load(object? sender, EventArgs e) { await InitializeWebViewAsync(); }
+    private async void MainForm_Load(object? sender, EventArgs e)
+    {
+        updater.LoadDownloaded();
+        // Signing in to Windows with an update waiting: install it before anyone's using Purrlor.
+        if (startHidden && updater.Current.State == Updater.State.Ready && updater.Install(relaunch: true, tray: true))
+        {
+            allowExit = true; Close();
+            return;
+        }
+        updater.Schedule(settings.AutoUpdate);
+        await InitializeWebViewAsync();
+    }
 
     private async Task InitializeWebViewAsync()
     {
@@ -771,7 +829,7 @@ public sealed class MainForm : Form
         switch (method)
         {
             case "getInfo":
-                return new { Version = Application.ProductVersion, Settings = BridgeSettings() };
+                return new { Version = Application.ProductVersion, Settings = BridgeSettings(), Update = UpdateInfo() };
             case "setSetting":
             {
                 var name = parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
@@ -782,6 +840,7 @@ public sealed class MainForm : Form
                 {
                     case "startWithWindows": SetStartWithWindows(value); break;
                     case "closeToTray": settings.CloseToTray = value; SaveSettings(); break;
+                    case "autoUpdate": settings.AutoUpdate = value; SaveSettings(); updater.Schedule(value); break;
                     default: throw new BridgeError($"There's no desktop setting called {name}.");
                 }
                 return BridgeSettings();
@@ -815,6 +874,13 @@ public sealed class MainForm : Form
                 idleWatch.Watch(minutes);
                 return null;
             }
+            case "checkForUpdates":
+                _ = updater.CheckAsync();
+                return UpdateInfo();
+            case "installUpdate":
+                if (updater.Current.State != Updater.State.Ready) throw new BridgeError("There's no update downloaded yet.");
+                BeginInvoke(() => InstallUpdate(relaunch: true));
+                return null;
             case "changeServer":
                 BeginInvoke(ChangeServer);
                 return null;
@@ -823,7 +889,7 @@ public sealed class MainForm : Form
         }
     }
 
-    private object BridgeSettings() => new { settings.StartWithWindows, settings.CloseToTray };
+    private object BridgeSettings() => new { settings.StartWithWindows, settings.CloseToTray, settings.AutoUpdate };
 
     private void PostBridgeEvent(string name, object? data) =>
         PostBridge(new Dictionary<string, object?> { ["purrlor"] = 1, ["event"] = name, ["data"] = data });
