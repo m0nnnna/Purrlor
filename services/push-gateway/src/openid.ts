@@ -106,7 +106,12 @@ async function resolveFederationHost(serverName: string): Promise<string> {
  * Proving *identity* is all this does. Whether that identity may have a token for the room it is
  * asking about is a separate question, answered by `tenancy.ts` and `membership.ts`.
  */
-export async function validateOpenIdToken(input: OpenIdTokenInput): Promise<string> {
+export async function validateOpenIdToken(
+  input: OpenIdTokenInput,
+  /** This deployment's own homeserver: a token from it is checked there directly, at the address
+   *  the service already uses for it, rather than through federation's public address. */
+  local?: { serverName: string; baseUrl: string }
+): Promise<string> {
   const accessToken = input?.access_token;
   const serverName = input?.matrix_server_name;
   if (!accessToken || !serverName || typeof accessToken !== 'string' || typeof serverName !== 'string') {
@@ -118,8 +123,8 @@ export async function validateOpenIdToken(input: OpenIdTokenInput): Promise<stri
   if (remembered && remembered.expiresAt > Date.now()) return remembered.userId;
   validations.delete(key);
 
-  const host = await resolveFederationHost(serverName);
-  const url = `https://${host}/_matrix/federation/v1/openid/userinfo?access_token=${encodeURIComponent(accessToken)}`;
+  const base = local && local.baseUrl && serverName === local.serverName ? local.baseUrl.replace(/\/+$/, '') : `https://${await resolveFederationHost(serverName)}`;
+  const url = `${base}/_matrix/federation/v1/openid/userinfo?access_token=${encodeURIComponent(accessToken)}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`OpenID validation failed: ${res.status}`);

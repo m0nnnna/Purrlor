@@ -300,6 +300,7 @@ run backup copy-to "backup@store.example:/x; rm -rf /"
 check "a destination with shell characters is refused" status_not0
 run backup schedule daily
 run backup run-scheduled
+command sleep 1   # backups are named to the second
 check "the nightly backup is copied over" test -n "$(ls "$WORK/remote"/purrlor-auto-*.tar.gz 2>/dev/null)"
 check "into the folder given" grep -qx "backup@store.example:/purrlor/" "$SCP_LOG"
 FAKE_SCP_FAIL=1 run backup run-scheduled
