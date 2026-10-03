@@ -50,7 +50,8 @@ function fakeRoom(states: FakeState[], extra: Partial<Record<'type' | 'alias', s
   return {
     roomId: '!library:example.org',
     getType: () => extra.type,
-    getCanonicalAlias: () => extra.alias ?? null,
+    // The library's own alias unless a test says otherwise: whose packs count follows its server.
+    getCanonicalAlias: () => ('alias' in extra ? (extra.alias ?? null) : '#purrlor-emotes:example.org'),
     currentState: {
       getStateEvents: (type: string, stateKey?: string) => {
         const ofType = events.filter((e) => e.getType() === type);
@@ -79,6 +80,12 @@ describe('readLibraryPacks', () => {
       { type: PACK, stateKey: 'official', sender: BOB, content: { images: { owl: image('mxc://x/owl', 1) } } },
     ]);
     expect(readLibraryPacks(room).map((p) => p.owner)).toEqual([ALICE]);
+  });
+
+  it('ignores packs from people on other servers, who can join the library but not add to it', () => {
+    const room = fakeRoom([pack(ALICE, { cat: image('mxc://x/cat', 1) }), pack('@mallory:evil.example', { evil: image('mxc://evil/x', 0) })]);
+    expect(readLibraryPacks(room).map((p) => p.owner)).toEqual([ALICE]);
+    expect(getLibraryEmotes(room).map((e) => e.shortcode)).toEqual(['cat']);
   });
 
   it('skips images without an mxc URL, and packs a moderator emptied', () => {

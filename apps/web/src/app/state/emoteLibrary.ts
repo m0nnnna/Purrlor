@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import type { Emote, Sticker } from '../../matrix/emotes';
+import type { PeerEmoteSet } from '../../matrix/peerEmotes';
 
 /**
  * The global emote library (matrix/emoteLibrary.ts), kept current by EmoteLibraryWatcher — read
@@ -21,3 +22,7 @@ export type EmoteLibraryState = {
 export const EMPTY_EMOTE_LIBRARY: EmoteLibraryState = { roomId: null, emotes: [], stickers: [], hiddenMxcUrls: [] };
 
 export const emoteLibraryAtom = atom<EmoteLibraryState>(EMPTY_EMOTE_LIBRARY);
+
+/** Approved peers' libraries (matrix/peerEmotes.ts), kept current by EmoteLibraryWatcher. Already
+ *  renamed (`:wave+cats-example:`), so they never collide with this server's own. */
+export const peerEmotesAtom = atom<PeerEmoteSet[]>([]);

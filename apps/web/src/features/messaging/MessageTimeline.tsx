@@ -437,7 +437,13 @@ function MessageRow({
             )}
           </>
         )}
-        <ReactionBar groups={reactionGroups} onToggle={toggleReaction} />
+        <ReactionBar
+          groups={reactionGroups}
+          onToggle={toggleReaction}
+          myUserId={myUserId}
+          nameOf={(userId) => room.getMember(userId)?.name ?? fallbackName(userId)}
+          avatarOf={(userId) => room.getMember(userId)?.getMxcAvatarUrl()}
+        />
         {threadSummary && (
           <button
             type="button"

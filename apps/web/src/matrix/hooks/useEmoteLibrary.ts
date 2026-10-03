@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useAtomValue } from 'jotai';
 import type { Room } from 'matrix-js-sdk';
-import { emoteLibraryAtom } from '../../app/state/emoteLibrary';
+import { emoteLibraryAtom, peerEmotesAtom } from '../../app/state/emoteLibrary';
+import type { PeerEmoteSet } from '../peerEmotes';
 import { mergeByShortcode, type Emote } from '../emotes';
 import { useMatrixClient } from '../MatrixClientContext';
 import { usePersonalEmotePacks } from './usePersonalEmotePacks';
@@ -21,9 +22,27 @@ export function useEmoteLibraryRoom(): Room | undefined {
  *  the library sits under even your own personal packs, as the widest scope of all. */
 export function useWithLibraryEmotes(emotes: Emote[]): Emote[] {
   const library = useAtomValue(emoteLibraryAtom).emotes;
+  const peerEmotes = usePeerEmotes();
+  const peers = useMemo(() => peerEmotes.flatMap((peer) => peer.emotes), [peerEmotes]);
   const personalPacks = usePersonalEmotePacks();
   const personalEmotes = useMemo(() => personalPacks.flatMap((pack) => pack.emotes), [personalPacks]);
-  return useMemo(() => mergeByShortcode(library, personalEmotes, emotes), [library, personalEmotes, emotes]);
+  // Peers' emotes underneath everything: their shortcodes are renamed, so they only ever fill in.
+  return useMemo(() => mergeByShortcode(peers, library, personalEmotes, emotes), [peers, library, personalEmotes, emotes]);
+}
+
+/** Peers' emotes and stickers, without any this server's library moderators have hidden. */
+export function usePeerEmotes(): PeerEmoteSet[] {
+  const peers = useAtomValue(peerEmotesAtom);
+  const hiddenMxcUrls = useAtomValue(emoteLibraryAtom).hiddenMxcUrls;
+  return useMemo(() => {
+    if (hiddenMxcUrls.length === 0) return peers;
+    const hidden = new Set(hiddenMxcUrls);
+    return peers.map((peer) => ({
+      ...peer,
+      emotes: peer.emotes.filter((emote) => !hidden.has(emote.mxcUrl)),
+      stickers: peer.stickers.filter((sticker) => !hidden.has(sticker.mxcUrl)),
+    }));
+  }, [peers, hiddenMxcUrls]);
 }
 
 /** Every mxc URL a global-library moderator has hidden — for filtering a message's own embedded

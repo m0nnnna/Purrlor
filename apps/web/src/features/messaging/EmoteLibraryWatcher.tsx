@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
 import { useSetAtom } from 'jotai';
 import { ClientEvent, EventType, RoomEvent, RoomStateEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
-import { EMPTY_EMOTE_LIBRARY, emoteLibraryAtom } from '../../app/state/emoteLibrary';
+import { EMPTY_EMOTE_LIBRARY, emoteLibraryAtom, peerEmotesAtom } from '../../app/state/emoteLibrary';
+import { fetchPeerEmotes } from '../../matrix/peerEmotes';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { findEmoteLibrary, getLibraryEmotes, getLibraryStickers, joinEmoteLibrary, readHidden } from '../../matrix/emoteLibrary';
 
 /** Joining waits a little after start, out of the way of the first screen loading. */
 const JOIN_DELAY_MS = 5_000;
+/** How often peers' libraries are asked for again: the token server reads them every ten minutes too. */
+const PEER_REFRESH_MS = 10 * 60_000;
 
 /**
  * Keeps you in this server's global emote library (matrix/emoteLibrary.ts) and publishes what's
@@ -17,6 +20,25 @@ const JOIN_DELAY_MS = 5_000;
 export function EmoteLibraryWatcher() {
   const mx = useMatrixClient();
   const setLibrary = useSetAtom(emoteLibraryAtom);
+  const setPeerEmotes = useSetAtom(peerEmotesAtom);
+
+  // Peers' libraries (matrix/peerEmotes.ts): after start, then every ten minutes. A failed fetch
+  // keeps what was there.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      void fetchPeerEmotes(mx).then((peers) => {
+        if (!cancelled && peers) setPeerEmotes(peers);
+      });
+    const first = setTimeout(load, JOIN_DELAY_MS);
+    const again = setInterval(load, PEER_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(first);
+      clearInterval(again);
+      setPeerEmotes([]);
+    };
+  }, [mx, setPeerEmotes]);
 
   useEffect(() => {
     let library: Room | undefined;

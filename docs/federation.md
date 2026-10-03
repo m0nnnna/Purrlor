@@ -150,6 +150,34 @@ Not done yet: finding a peer's person by name in search (a full `@name:server` I
 user ID is typed), and a peer's person whose extended profile doesn't come through federation and
 who isn't in the first pages of their instance's directory.
 
+## Emotes and stickers
+
+Each instance's **global emote library** (`#purrlor-emotes:<server>`, `docs/api.md`) is shared with
+its approved peers. During each peer's sync the bot also joins that peer's library, keeping it only
+if it's really theirs (the library's room type, their alias, created on their server;
+`services/token-server/src/peerEmotes.ts`). Removing the peer leaves it with everything else.
+
+The app asks its own token server for what's in them: `POST /api/public/peers/emotes` with an
+OpenID token (`{ openid_token }`), only for this server's own people (`401` without a valid token,
+`403` for someone from another server), since a peer's library isn't public on its own side.
+
+```json
+{ "peers": [ { "serverName": "cats.example", "name": "Cat Server",
+  "images": [ { "shortcode": "wave", "url": "mxc://cats.example/abc", "body": "wave", "emoticon": true, "sticker": false } ] } ] }
+```
+
+The library is read by the same rules as the app's own (`apps/web/src/matrix/emoteLibrary.ts`): one
+pack per person under their own user ID, only that server's own people (anyone can join a library,
+but a pack from someone on another server doesn't count, on either side), the peer's hidden images
+left out, one image per shortcode (the earliest added). Read at most once a minute.
+
+In the app (`apps/web/src/matrix/peerEmotes.ts`), a peer's shortcodes get its server name added,
+`:wave:` from cats.example becoming `:wave+cats-example:`, so they never stand in for this server's
+own. They sit below every other emote, in their own "From <peer>" sections of the emote and sticker
+pickers, and this server's library moderators can hide any of them like their own. Using one needs
+nothing else: a message carries its emote's image (and a sticker is an image), which every
+homeserver can fetch, so it shows for everyone who reads it, on any server.
+
 ## What the homeservers must do
 
 Checked with Continuwuity, two instances federating (`deploy/test/federation`, below):
@@ -182,7 +210,7 @@ Checked with Continuwuity, two instances federating (`deploy/test/federation`, b
 homeservers (`hsa.test`, `hsb.test`), two token servers built from this checkout (`appa.test`,
 `appb.test`) and Caddy for federation's TLS, all on one machine. `scenario.mjs` creates people and
 rooms on B the way the app does, peers the two through their real control sockets, and checks what A's
-people and A's public web can read, the on-demand join, both sides' hides and removing the peer. Then
+people and A's public web can read, the on-demand join, B's emote library reaching A, both sides' hides and removing the peer. Then
 `deploy/federation-check.mjs` checks the homeserver behaviour above. `KEEP=1` leaves the instances
 running (homeservers on 6201 and 6211, token servers on 6202 and 6212).
 

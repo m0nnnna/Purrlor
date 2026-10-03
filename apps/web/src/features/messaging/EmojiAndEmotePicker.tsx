@@ -5,7 +5,7 @@ import { EmojiPicker } from '../../components/EmojiPicker';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import type { EmoteSource, Sticker, SourcedEmote } from '../../matrix/emotes';
 import { canContributeToLibrary, canModerateLibrary } from '../../matrix/emoteLibrary';
-import { useEmoteLibraryRoom } from '../../matrix/hooks/useEmoteLibrary';
+import { useEmoteLibraryRoom, usePeerEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useGroupedRoomEmotes } from '../../matrix/hooks/useGroupedRoomEmotes';
 import { usePersonalEmotePacks } from '../../matrix/hooks/usePersonalEmotePacks';
 import { useRecentEmotes } from '../../matrix/hooks/useRecentEmotes';
@@ -94,6 +94,8 @@ export function EmojiAndEmotePicker({
   const personalPacks = usePersonalEmotePacks();
   const recentEmotes = useRecentEmotes();
   const stickers = useRoomStickers(room);
+  // Approved peers' libraries (matrix/peerEmotes.ts), one section each, after this server's own.
+  const peerSets = usePeerEmotes();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('emoji');
   const [query, setQuery] = useState('');
@@ -117,9 +119,21 @@ export function EmojiAndEmotePicker({
   // Recents only while not searching (search results already cover them, same as Discord's own
   // picker), and only ones still actually available here — a shortcode this room can't resolve
   // would just send as literal `:text:` (see messageFormatting.ts).
+  const peerEmotes = useMemo(
+    () =>
+      peerSets
+        .map((peer) => ({ name: peer.name, emotes: query.trim() ? peer.emotes.filter((e) => matchesQuery(e.shortcode, query)) : peer.emotes }))
+        .filter((peer) => peer.emotes.length > 0),
+    [peerSets, query]
+  );
   const availableRecents = query.trim()
     ? []
-    : recentEmotes.filter((recent) => groupedEmotes.some((e) => e.shortcode === recent.shortcode && e.mxcUrl === recent.mxcUrl));
+    : recentEmotes.filter(
+        (recent) =>
+          groupedEmotes.some((e) => e.shortcode === recent.shortcode && e.mxcUrl === recent.mxcUrl) ||
+          peerSets.some((peer) => peer.emotes.some((e) => e.shortcode === recent.shortcode && e.mxcUrl === recent.mxcUrl))
+      );
+  const peerStickers = peerSets.filter((peer) => peer.stickers.length > 0);
   const filteredPersonalPacks = useMemo(
     () =>
       personalPacks
@@ -127,8 +141,9 @@ export function EmojiAndEmotePicker({
         .filter((pack) => pack.emotes.length > 0),
     [personalPacks, query]
   );
-  const hasAnyEmotes = groupedEmotes.length > 0 || personalPacks.some((pack) => pack.emotes.length > 0);
-  const hasAnyMatch = filteredEmotes.length > 0 || filteredPersonalPacks.length > 0;
+  const hasAnyEmotes =
+    groupedEmotes.length > 0 || personalPacks.some((pack) => pack.emotes.length > 0) || peerSets.some((peer) => peer.emotes.length > 0);
+  const hasAnyMatch = filteredEmotes.length > 0 || filteredPersonalPacks.length > 0 || peerEmotes.length > 0;
 
   const pickEmote = (emote: { shortcode: string; mxcUrl: string }) => {
     setOpen(false);
@@ -220,6 +235,9 @@ export function EmojiAndEmotePicker({
                   {SOURCE_ORDER.map((source) => (
                     <EmoteSection key={source} label={SOURCE_LABELS[source]} emotes={bySource(source)} onPick={pickEmote} />
                   ))}
+                  {peerEmotes.map((peer) => (
+                    <EmoteSection key={`peer-${peer.name}`} label={`From ${peer.name}`} emotes={peer.emotes} onPick={pickEmote} />
+                  ))}
                 </>
               )}
               {canManage && (
@@ -239,26 +257,34 @@ export function EmojiAndEmotePicker({
           )}
           {tab === 'stickers' && (
             <div className="nu-emoji-emote-picker__emotes" data-nu-role="emoji-emote-picker-stickers">
-              {stickers.length === 0 ? (
+              {stickers.length === 0 && peerStickers.length === 0 ? (
                 <p className="nu-emoji-emote-picker__empty">No stickers available here yet.</p>
               ) : (
-                <div className="nu-emoji-emote-picker__grid">
-                  {stickers.map((sticker) => (
-                    <button
-                      key={sticker.shortcode}
-                      type="button"
-                      className="nu-emoji-emote-picker__item"
-                      data-nu-role="sticker-picker-item"
-                      title={sticker.body}
-                      onClick={() => {
-                        setOpen(false);
-                        onPickSticker(sticker);
-                      }}
-                    >
-                      <EmoteImage shortcode={sticker.shortcode} mxcUrl={sticker.mxcUrl} />
-                    </button>
-                  ))}
-                </div>
+                // This room's and this server's stickers first, unlabelled as before, then each peer's.
+                [{ name: '', stickers }, ...peerStickers.map((peer) => ({ name: `From ${peer.name}`, stickers: peer.stickers }))]
+                  .filter((group) => group.stickers.length > 0)
+                  .map((group) => (
+                    <section key={group.name || 'here'} className="nu-emoji-emote-picker__section" data-nu-role="sticker-picker-section">
+                      {group.name && <h3 className="nu-emoji-emote-picker__section-label">{group.name}</h3>}
+                      <div className="nu-emoji-emote-picker__grid">
+                        {group.stickers.map((sticker) => (
+                          <button
+                            key={sticker.shortcode}
+                            type="button"
+                            className="nu-emoji-emote-picker__item"
+                            data-nu-role="sticker-picker-item"
+                            title={sticker.body}
+                            onClick={() => {
+                              setOpen(false);
+                              onPickSticker(sticker);
+                            }}
+                          >
+                            <EmoteImage shortcode={sticker.shortcode} mxcUrl={sticker.mxcUrl} />
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ))
               )}
               {canManage && (
                 <button

@@ -41,6 +41,7 @@ import { onlineCounter } from './online.js';
 import { validateOpenIdToken } from './openid.js';
 import { FEDERATION_VERSION, cleanInstanceName, knownUserId, parsePeerStatus, profilePath, serverOfUser, type Peer } from './peers.js';
 import { joinFollowedProfile, leavePeer, peerStatus, syncPeer } from './peering.js';
+import { readPeerEmotes } from './peerEmotes.js';
 import { roomOriginServer } from './tenancy.js';
 
 /**
@@ -657,6 +658,26 @@ export function publicWebRouter(): Router {
   });
 
   // A signed-in person here followed (or opened) a peer's person the bot isn't reading yet.
+  // Peers' emotes and stickers (peerEmotes.ts), for this server's own people only: a peer's
+  // library isn't public on its own side, so it isn't here either.
+  router.post('/peers/emotes', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    try {
+      const ownServer = await serverName();
+      const caller = await validateOpenIdToken(req.body?.openid_token, { serverName: ownServer, baseUrl: process.env.MATRIX_HOMESERVER_URL ?? '' });
+      if (serverNameOf(caller) !== ownServer) return void res.status(403).json({ error: 'Not an account on this server', code: 'not_local' });
+    } catch {
+      return void res.status(401).json({ error: 'Authentication failed' });
+    }
+    try {
+      const peers = await readPeerEmotes(await getServiceClient(), await adminStore.peers());
+      res.set('Cache-Control', 'private, max-age=60').json({ peers });
+    } catch (err) {
+      console.error('Peer emotes failed', err);
+      res.status(503).json({ error: 'Not available right now' });
+    }
+  });
+
   router.post('/peers/join', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
     const target = typeof req.body?.user_id === 'string' ? req.body.user_id : '';

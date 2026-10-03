@@ -94,6 +94,35 @@ function ctl(service, method, path, form = {}) {
   return { status: Number(out.slice(0, newline)), text: out.slice(newline + 1) };
 }
 
+/** B's global emote library, as `purrlor emotes setup` makes it (docs/api.md), with bob's pack in it. */
+async function makeEmoteLibrary(admin, owner) {
+  const room = await as(admin)('POST', '/_matrix/client/v3/createRoom', {
+    name: 'Emote library',
+    room_alias_name: 'purrlor-emotes',
+    visibility: 'private',
+    creation_content: { type: 'xyz.nekous.emote_library' },
+    power_level_content_override: {
+      users_default: 0, events_default: 50, state_default: 50, invite: 50, kick: 50, ban: 50, redact: 50,
+      events: { 'im.ponies.room_emotes': 0, 'xyz.nekous.emote_moderation': 50, 'm.room.power_levels': 50 },
+    },
+    initial_state: [
+      { type: 'm.room.join_rules', state_key: '', content: { join_rule: 'public' } },
+      { type: 'm.room.history_visibility', state_key: '', content: { history_visibility: 'shared' } },
+    ],
+  });
+  if (!room.ok) throw new Error(`Making B's emote library: ${room.text}`);
+  const roomId = room.json.room_id;
+  await as(owner)('POST', `/_matrix/client/v3/join/${enc(roomId)}`, {});
+  const pack = await as(owner)('PUT', `/_matrix/client/v3/rooms/${enc(roomId)}/state/im.ponies.room_emotes/${enc(owner.userId)}`, {
+    images: {
+      wave: { url: 'mxc://hsb.test/wave', usage: ['emoticon'], 'xyz.nekous.added_at': 1 },
+      stamp: { url: 'mxc://hsb.test/stamp', usage: ['sticker'], body: 'A stamp', 'xyz.nekous.added_at': 2 },
+    },
+  });
+  if (!pack.ok) throw new Error(`Bob's pack: ${pack.text}`);
+  return roomId;
+}
+
 /** A profile room the way the web client makes one (profileFeed.ts), with a Global post in it. */
 async function makeProfile(who, name, postBody) {
   const room = await as(who)('POST', '/_matrix/client/v3/createRoom', {
@@ -208,6 +237,8 @@ async function main() {
   const carolProfile = await makeProfile(carol, 'Carol', 'hello from carol on B');
   const cafe = await makeSpaceWithFeed(bob);
   await customise(bob, bobProfile.roomId, { accent: '#ff3366', bio: 'bob’s bio on B', text: 'Welcome to my page' });
+  const bAdmin = await login(B.hs, 'fed-admin');
+  const library = await makeEmoteLibrary(bAdmin, bob);
 
   // The two homeservers must reach each other before anything else means anything.
   const dir = await until('A to read B’s directory over federation', async () => {
@@ -256,6 +287,30 @@ async function main() {
   check('alice now reads them too', (await readable(alice, other.room)).ok);
   const outsider = await call(A.app, undefined, 'POST', '/api/public/peers/join', { openid_token: openid, user_id: '@x:elsewhere.test', room_id: other.room });
   check('the on-demand join refuses someone on a server that isn’t a peer', outsider.status === 400 || outsider.status === 403, outsider.text);
+
+  console.log('Emotes and stickers');
+  // Someone from A slips into B's library (its join rule is public) and writes a pack of their own.
+  const intruderJoin = await as(alice)('POST', `/_matrix/client/v3/join/${enc(library)}?server_name=${B.server}`, {});
+  const intruderPack = intruderJoin.ok
+    ? await as(alice)('PUT', `/_matrix/client/v3/rooms/${enc(library)}/state/im.ponies.room_emotes/${enc(alice.userId)}`, {
+        images: { evil: { url: 'mxc://hsa.test/evil', 'xyz.nekous.added_at': 0 } },
+      })
+    : intruderJoin;
+  console.log(`      (alice's pack in B's library: ${intruderPack.status})`);
+  ctl(A.tokenService, 'POST', '/peers/sync');
+  const emotes = await until('B’s emotes to reach A', async () => {
+    const res = await call(A.app, undefined, 'POST', '/api/public/peers/emotes', { openid_token: openid });
+    return res.json?.peers?.[0]?.images?.length ? res : undefined;
+  });
+  const images = emotes?.json?.peers?.[0]?.images ?? [];
+  check('A’s people get B’s library, named after B', emotes?.json?.peers?.[0]?.serverName === B.server, emotes?.text.slice(0, 200));
+  check('with bob’s emote and sticker', images.some((i) => i.shortcode === 'wave' && i.emoticon) && images.some((i) => i.shortcode === 'stamp' && i.sticker && i.body === 'A stamp'), JSON.stringify(images));
+  check('and not a pack someone from another server wrote into it', !images.some((i) => i.shortcode === 'evil'));
+  const noToken = await call(A.app, undefined, 'POST', '/api/public/peers/emotes', {});
+  check('only for A’s own signed-in people', noToken.status === 401, noToken.text);
+  const bobOpenid = (await as(bob)('POST', `/_matrix/client/v3/user/${enc(bob.userId)}/openid/request_token`, {})).json;
+  const fromB = await call(A.app, undefined, 'POST', '/api/public/peers/emotes', { openid_token: bobOpenid });
+  check('not for someone on another server', fromB.status === 403 || fromB.status === 401, fromB.text);
 
   console.log('A’s public web');
   const feed = await until('B’s people on A’s public feed', async () => {
@@ -310,6 +365,8 @@ async function main() {
   check('nothing new from B reaches A after removal', newer.ok && !(await readable(alice, cafe.feedId)).posts.includes('after the defederation'));
   const after = await call(A.app, undefined, 'GET', `/api/public/pages/carol:${B.server}`);
   check('nobody on B has a page on A any more', after.status === 404);
+  const emotesAfter = await call(A.app, undefined, 'POST', '/api/public/peers/emotes', { openid_token: openid });
+  check('and B’s emotes are gone from A', emotesAfter.ok && Array.isArray(emotesAfter.json?.peers) && emotesAfter.json.peers.length === 0, emotesAfter.text);
   const audit = ctl(A.tokenService, 'GET', '/audit');
   check('A’s audit log has the peering', /peers\.add/.test(audit.text) && /peers\.remove/.test(audit.text));
 }

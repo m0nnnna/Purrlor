@@ -45,3 +45,64 @@
   font-size: var(--nu-font-size-xs);
   color: inherit;
 }
+
+/* "See who reacted": quieter than a reaction, since it isn't one. */
+.nu-reaction-pill--who {
+  background: transparent;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-reaction-pill--who:hover,
+.nu-reaction-pill--who:focus-visible {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-reactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  min-width: min(22rem, 80vw);
+}
+
+.nu-reactions-list__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  margin: 0 0 var(--nu-space-2);
+  font-size: var(--nu-font-size-md);
+}
+
+.nu-reactions-list__count {
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-reactions-list__people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+}
+
+.nu-reactions-list__person {
+  appearance: none;
+  border: none;
+  background: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-1) var(--nu-space-2);
+  border-radius: var(--nu-radius-md);
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-reactions-list__person:hover,
+.nu-reactions-list__person:focus-visible {
+  background: var(--nu-color-bg-tertiary);
+}

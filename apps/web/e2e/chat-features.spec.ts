@@ -134,3 +134,26 @@ test('an image sent on its own as a reply is a reply, and its quote jumps to the
   await expect(original).toBeInViewport();
   await expect(original).toHaveClass(/nu-timeline__message--highlighted/);
 });
+
+test('a reaction says who reacted, and the list shows everyone by reaction', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, [bob]);
+  await api(bob, 'PUT', `/profile/${enc(bob.userId)}/displayname`, { displayname: 'Bobby' });
+  const messageId = await sendText(alice, channelId, 'react to this');
+  await api(bob, 'PUT', `/rooms/${enc(channelId)}/send/m.reaction/${enc(`r${Date.now()}`)}`, {
+    'm.relates_to': { rel_type: 'm.annotation', event_id: messageId, key: '🎉' },
+  });
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  const row = page.locator(`[data-nu-role="timeline-message"][data-nu-event-id="${messageId}"]`);
+  await expect(role(row, 'reaction-pill')).toHaveAttribute('title', 'Bobby reacted with 🎉');
+
+  // Alice adds hers: she's named first, as "You".
+  await role(row, 'reaction-pill').click();
+  await expect(role(row, 'reaction-pill')).toHaveAttribute('title', 'You and Bobby reacted with 🎉');
+
+  await role(row, 'reaction-who').click();
+  await expect(role(page, 'reactions-list-group')).toContainText('🎉');
+  await expect(role(page, 'reactions-list-person')).toHaveText([/Bobby/, /alice/]);
+});

@@ -106,16 +106,29 @@ export function readHidden(room: Room): Set<string> {
   return new Set(Array.isArray(hidden) ? hidden.filter((url): url is string => typeof url === 'string') : []);
 }
 
-function isPersonalPack(event: MatrixEvent): boolean {
+/**
+ * Someone's own pack: under their own user ID, and by someone on the library's own server. The
+ * library's join rule is public, so a person from any other server can join it and write a pack
+ * under their own ID; it doesn't count. (A peer's library reaches this server's people through
+ * the token server instead: matrix/peerEmotes.ts.)
+ */
+function isPersonalPack(event: MatrixEvent, server: string | undefined): boolean {
   const key = event.getStateKey();
-  return !!key && key.startsWith('@') && key === event.getSender();
+  return !!key && key.startsWith('@') && key === event.getSender() && !!server && key.endsWith(`:${server}`);
+}
+
+/** The server a library belongs to: the one in the alias it's found by. */
+function libraryServer(room: Room): string | undefined {
+  const alias = room.getCanonicalAlias();
+  return alias ? alias.slice(alias.indexOf(':') + 1) || undefined : undefined;
 }
 
 /** Everyone's packs, hidden images included (flagged) — what moderation shows. */
 export function readLibraryPacks(room: Room): LibraryPack[] {
   const hidden = readHidden(room);
   const events = room.currentState.getStateEvents(EMOTE_EVENT_TYPE) as MatrixEvent[];
-  return events.filter(isPersonalPack).flatMap((event) => {
+  const server = libraryServer(room);
+  return events.filter((event) => isPersonalPack(event, server)).flatMap((event) => {
     const owner = event.getStateKey() as string;
     const entries = Object.entries(event.getContent<RoomEmotesContent>().images ?? {});
     const images = entries

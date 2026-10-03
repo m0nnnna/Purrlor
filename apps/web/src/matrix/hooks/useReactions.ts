@@ -15,6 +15,8 @@ export type ReactionGroup = {
    *  by whichever of this group's events set it first (reactions.ts) — for ReactionBar.tsx's
    *  tooltip/alt text. Absent if every reactor's client sent the key with no shortcode at all. */
   shortcode?: string;
+  /** Who reacted with it, each once, in the order they reacted. */
+  senders: string[];
 };
 
 /**
@@ -51,7 +53,15 @@ export function useReactions(roomId: string | null): Map<string, ReactionGroup[]
           const shortcode = live
             .map((e) => e.getContent()[REACTION_SHORTCODE_FIELD])
             .find((s): s is string => typeof s === 'string');
-          return { key, count: live.length, hasOwnReaction: !!own, ownEventId: own?.getId(), shortcode };
+          const senders = [
+            ...new Set(
+              [...live]
+                .sort((a, b) => a.getTs() - b.getTs())
+                .map((e) => e.getSender())
+                .filter((s): s is string => !!s)
+            ),
+          ];
+          return { key, count: live.length, hasOwnReaction: !!own, ownEventId: own?.getId(), shortcode, senders };
         })
         .filter((group) => group.count > 0);
     };
