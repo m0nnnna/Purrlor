@@ -1,9 +1,10 @@
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
 import { Lightbox } from '../../components/Lightbox';
 import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
 import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import { attachmentMxc, type PostAttachment } from '../../matrix/postMedia';
+import { TaggedImageOverlay } from './ImageTags';
 import './PostMedia.css';
 
 function ratioStyle(attachment: PostAttachment): CSSProperties | undefined {
@@ -16,6 +17,7 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
   const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype: attachment.info.mimetype });
   const [open, setOpen] = useState(false);
   const videoRef = usePauseWhenOffscreen();
+  const imgRef = useRef<HTMLImageElement>(null);
   // One item keeps its own shape (reserved up front from w/h, so nothing jumps when it loads);
   // in a grid every cell is square and the media is cropped to fill it.
   const style = single ? ratioStyle(attachment) : undefined;
@@ -44,17 +46,29 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
     );
   }
 
+  const image = (
+    <button
+      type="button"
+      className={attachment.tags?.length ? 'nu-post-media__open' : 'nu-post-media__item nu-post-media__item--image'}
+      data-nu-role="post-media-image"
+      style={attachment.tags?.length ? undefined : style}
+      onClick={() => setOpen(true)}
+    >
+      <img ref={imgRef} className="nu-post-media__img" src={src} alt={attachment.name} loading="lazy" />
+    </button>
+  );
+
   return (
     <>
-      <button
-        type="button"
-        className="nu-post-media__item nu-post-media__item--image"
-        data-nu-role="post-media-image"
-        style={style}
-        onClick={() => setOpen(true)}
-      >
-        <img className="nu-post-media__img" src={src} alt={attachment.name} loading="lazy" />
-      </button>
+      {attachment.tags?.length ? (
+        // People tagged in it (matrix/imageTags.ts): the picture, and their names over it on request.
+        <div className="nu-post-media__item nu-post-media__item--image nu-post-media__item--tagged" style={style}>
+          {image}
+          <TaggedImageOverlay tags={attachment.tags} imgRef={imgRef} fit={single ? 'contain' : 'cover'} />
+        </div>
+      ) : (
+        image
+      )}
       {open && <Lightbox src={src} alt={attachment.name} onClose={() => setOpen(false)} />}
     </>
   );

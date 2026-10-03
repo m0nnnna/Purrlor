@@ -417,7 +417,13 @@ export function CommentThread({
               {sending ? 'Sending…' : media.preparing ? 'Preparing…' : replyingTo ? 'Reply' : 'Comment'}
             </button>
           </div>
-          <StagedMediaPreviews staged={media.staged} onRemove={media.remove} role="post-comment-previews" />
+          <StagedMediaPreviews
+            staged={media.staged}
+            onRemove={media.remove}
+            role="post-comment-previews"
+            people={mentionPeople}
+            onSetTags={media.setTags}
+          />
         </form>
       ) : (
         cannotCommentReason && <p className="nu-comments__note" data-nu-role="post-comment-unavailable">{cannotCommentReason}</p>

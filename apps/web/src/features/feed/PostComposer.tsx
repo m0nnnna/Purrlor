@@ -211,7 +211,7 @@ ${shared}` : shared));
         placeholder={placeholder}
         rows={3}
       />
-      <StagedMediaPreviews staged={staged} onRemove={media.remove} role="feed-composer-previews" />
+      <StagedMediaPreviews staged={staged} onRemove={media.remove} role="feed-composer-previews" people={people} onSetTags={media.setTags} />
       <div className="nu-post-composer__bar">
         <button
           type="button"

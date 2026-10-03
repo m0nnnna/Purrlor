@@ -49,6 +49,28 @@ describe('describePostActivity', () => {
     assert.equal(describePostActivity({ type: 'm.room.member', content: { membership: 'invite' }, recipient: ALICE, highlight: false }), undefined);
   });
 
+  it('words a tag in a picture, in a post, a comment and an invite', () => {
+    const attachments = [{ kind: 'image', url: 'mxc://x/p', tags: [{ user_id: ALICE, x: 5000, y: 5000 }] }];
+    const mentions = { user_ids: [ALICE] };
+    assert.equal(
+      describePostActivity({ type: 'xyz.nekous.post', content: { body: 'beach', 'xyz.nekous.attachments': attachments, 'm.mentions': mentions }, recipient: ALICE, highlight: true }),
+      'Tagged you in a photo: beach'
+    );
+    assert.equal(
+      describePostActivity({ type: 'xyz.nekous.comment', content: { body: '', 'xyz.nekous.attachments': attachments, 'm.mentions': mentions }, recipient: ALICE, highlight: true }),
+      'Tagged you in a photo'
+    );
+    // Someone else in the same post is only mentioned.
+    assert.equal(
+      describePostActivity({ type: 'xyz.nekous.post', content: { body: '', 'xyz.nekous.attachments': attachments, 'm.mentions': { user_ids: ['@bo:x'] } }, recipient: '@bo:x', highlight: true }),
+      'Mentioned you in a post'
+    );
+    assert.equal(
+      describePostActivity({ type: 'm.room.member', content: { membership: 'invite', reason: 'Tagged you in a photo (xyz.nekous.mention $p)' }, recipient: ALICE, highlight: false }),
+      'Tagged you in a photo'
+    );
+  });
+
   it('leaves chat messages alone', () => {
     assert.equal(describePostActivity({ type: 'm.room.message', content: { body: 'hey' }, recipient: ALICE, highlight: false }), undefined);
   });

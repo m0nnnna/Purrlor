@@ -19,9 +19,9 @@ import { PROFILE_ROOM_TYPE } from './profileFeed';
  */
 export const MENTION_INVITE_MARKER = 'xyz.nekous.mention';
 
-/** Readable in any client, and parseable by this one. */
-export function mentionInviteReason(postId: string): string {
-  return `Mentioned you in a post (${MENTION_INVITE_MARKER} ${postId})`;
+/** Readable in any client, and parseable by this one. Someone tagged in a picture is told so. */
+export function mentionInviteReason(postId: string, tagged = false): string {
+  return `${tagged ? 'Tagged you in a photo' : 'Mentioned you in a post'} (${MENTION_INVITE_MARKER} ${postId})`;
 }
 
 export function parseMentionInviteReason(reason: unknown): string | undefined {
@@ -30,14 +30,16 @@ export function parseMentionInviteReason(reason: unknown): string | undefined {
   return match?.[1];
 }
 
-/** Invites everyone mentioned who isn't in the room already. One failing doesn't stop the rest. */
-export async function inviteMentioned(mx: MatrixClient, roomId: string, postId: string, userIds: string[]): Promise<void> {
+/**
+ * Invites everyone mentioned who isn't in the room already; those in `tagged` (tagged in a
+ * picture, imageTags.ts) are told that instead. One failing doesn't stop the rest.
+ */
+export async function inviteMentioned(mx: MatrixClient, roomId: string, postId: string, userIds: string[], tagged: string[] = []): Promise<void> {
   const room = mx.getRoom(roomId);
-  const reason = mentionInviteReason(postId);
   for (const userId of userIds) {
     const membership = room?.getMember(userId)?.membership;
     if (membership === 'join' || membership === 'ban' || userId === mx.getUserId()) continue;
-    await mx.invite(roomId, userId, reason).catch(() => undefined);
+    await mx.invite(roomId, userId, mentionInviteReason(postId, tagged.includes(userId))).catch(() => undefined);
   }
 }
 
@@ -46,14 +48,15 @@ export async function inviteMentioned(mx: MatrixClient, roomId: string, postId: 
  * Anything else — an ordinary invite, one to some other kind of room, one from someone who doesn't
  * own the room — is undefined, and stays an ordinary invite.
  */
-export function readMentionInvite(mx: MatrixClient, room: Room): { inviter: string; postId: string } | undefined {
+export function readMentionInvite(mx: MatrixClient, room: Room): { inviter: string; postId: string; tagged: boolean } | undefined {
   const myUserId = mx.getUserId();
   if (!myUserId || room.getMyMembership() !== 'invite') return undefined;
   const create = room.currentState.getStateEvents(EventType.RoomCreate, '');
   if (create?.getContent().type !== PROFILE_ROOM_TYPE) return undefined;
   const invite = room.currentState.getStateEvents(EventType.RoomMember, myUserId);
-  const postId = parseMentionInviteReason(invite?.getContent().reason);
+  const reason: unknown = invite?.getContent().reason;
+  const postId = parseMentionInviteReason(reason);
   const inviter = invite?.getSender();
   if (!postId || !inviter || inviter !== create.getSender()) return undefined;
-  return { inviter, postId };
+  return { inviter, postId, tagged: typeof reason === 'string' && reason.startsWith('Tagged you in a photo') };
 }

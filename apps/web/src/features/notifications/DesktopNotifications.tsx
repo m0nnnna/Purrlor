@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
+import { isTaggedIn } from '../../matrix/imageTags';
 import { RoomEvent, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -65,14 +66,20 @@ export function DesktopNotifications() {
         const mentionsMe = Array.isArray(mentioned) && mentioned.includes(myUserId);
         // A thread mentions everyone in it (postInteractions.ts).
         const inThread = typeof content['xyz.nekous.thread'] === 'string';
+        // Tagged in one of its pictures: said so, rather than "mentioned" (matrix/imageTags.ts).
+        const taggedMe = isTaggedIn(content, myUserId);
         const verb =
           postActivity === 'post'
-            ? 'Mentioned you in a post'
+            ? taggedMe
+              ? 'Tagged you in a photo'
+              : 'Mentioned you in a post'
             : repliedTo === myUserId
               ? 'Replied to your comment'
               : mentionsMe && inThread
                 ? 'Replied in a thread you’re in'
-                : mentionsMe
+                : taggedMe
+                  ? 'Tagged you in a photo'
+                  : mentionsMe
                   ? 'Mentioned you in a comment'
                   : 'Commented on your post';
         const quietBody = postActivity === 'like' ? 'Liked your post' : postActivity === 'commentLike' ? 'Liked your comment' : undefined;

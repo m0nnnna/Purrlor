@@ -30,7 +30,7 @@ const client = { getUserId: () => ME } as unknown as MatrixClient;
 
 describe('readMentionInvite', () => {
   it('recognises an invite to a profile room from its owner, naming a post', () => {
-    expect(readMentionInvite(client, inviteRoom())).toEqual({ inviter: '@alice:x', postId: '$p' });
+    expect(readMentionInvite(client, inviteRoom())).toEqual({ inviter: '@alice:x', postId: '$p', tagged: false });
   });
 
   it('leaves every other invite alone', () => {

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { Icon } from '../../components/Icon';
+import type { ImageTag } from '../../matrix/imageTags';
+import type { MentionPerson } from '../messaging/useMentionAutocomplete';
+import { ImageTagEditor } from './ImageTags';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
   formatBytes,
@@ -11,7 +14,8 @@ import {
   type PreparedMedia,
 } from '../../matrix/postMedia';
 
-export type Staged = PreparedMedia & { previewUrl: string };
+/** A picked file, ready to send, and anyone tagged in it (imageTags.ts). */
+export type Staged = PreparedMedia & { previewUrl: string; tags: ImageTag[] };
 
 /**
  * Images and videos picked for a post or a comment, held until it's sent: validated, JPG/PNG
@@ -69,7 +73,7 @@ export function useStagedMedia(onError: (message: string) => void) {
             onError(`${file.name} is ${formatBytes(media.file.size)}; this server takes up to ${formatBytes(limit)}.`);
             continue;
           }
-          prepared.push({ ...media, previewUrl: URL.createObjectURL(media.file) });
+          prepared.push({ ...media, previewUrl: URL.createObjectURL(media.file), tags: [] });
         } catch (err) {
           onError(err instanceof Error ? err.message : `${file.name} couldn’t be added.`);
         }
@@ -87,6 +91,10 @@ export function useStagedMedia(onError: (message: string) => void) {
     });
   };
 
+  const setTags = (index: number, tags: ImageTag[]) => {
+    setStaged((prev) => prev.map((item, i) => (i === index ? { ...item, tags } : item)));
+  };
+
   const clear = () => {
     staged.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setStaged([]);
@@ -95,23 +103,54 @@ export function useStagedMedia(onError: (message: string) => void) {
   /** Uploads everything staged — encrypted unless it's headed somewhere public (postMedia.ts). */
   const upload = async (encrypt: boolean): Promise<PostAttachment[]> => {
     const attachments: PostAttachment[] = [];
-    for (const media of staged) attachments.push(await uploadPostMedia(mx, media, { encrypt }));
+    for (const media of staged) attachments.push(await uploadPostMedia(mx, media, { encrypt, tags: media.tags }));
     return attachments;
   };
 
   const savedBytes = staged.reduce((sum, item) => sum + (item.originalSize ? item.originalSize - item.file.size : 0), 0);
 
-  return { staged, preparing, addFiles, addPasted, addPicked, remove, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
+  return { staged, preparing, addFiles, addPasted, addPicked, remove, setTags, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
 }
 
-export function StagedMediaPreviews({ staged, onRemove, role }: { staged: Staged[]; onRemove: (index: number) => void; role: string }) {
+/**
+ * The staged pictures and videos, each removable. With `people` and `onSetTags`, a picture also has
+ * a "Tag" button: who's in it, from the same people an @mention offers (ImageTagEditor).
+ */
+export function StagedMediaPreviews({
+  staged,
+  onRemove,
+  role,
+  people,
+  onSetTags,
+}: {
+  staged: Staged[];
+  onRemove: (index: number) => void;
+  role: string;
+  people?: MentionPerson[];
+  onSetTags?: (index: number, tags: ImageTag[]) => void;
+}) {
+  const [tagging, setTagging] = useState<number | null>(null);
   if (staged.length === 0) return null;
+  const taggingItem = tagging !== null ? staged[tagging] : undefined;
   return (
     <div className="nu-post-composer__previews" data-nu-role={role}>
       {staged.map((item, index) => (
         <div className="nu-post-composer__preview" key={item.previewUrl}>
           {item.kind === 'video' ? <video src={item.previewUrl} muted playsInline /> : <img src={item.previewUrl} alt={item.name} />}
           <span className="nu-post-composer__preview-type">{item.mimetype.split('/')[1].toUpperCase()}</span>
+          {item.kind === 'image' && people && onSetTags && (
+            <button
+              type="button"
+              className="nu-post-composer__preview-tag"
+              data-nu-role="composer-preview-tag"
+              aria-label={item.tags.length ? `Tagged: ${item.tags.length}. Change who's tagged` : 'Tag people in this picture'}
+              title="Tag people"
+              onClick={() => setTagging(index)}
+            >
+              <Icon name="users" size={11} />
+              {item.tags.length > 0 && item.tags.length}
+            </button>
+          )}
           <button
             type="button"
             className="nu-post-composer__preview-remove"
@@ -122,6 +161,16 @@ export function StagedMediaPreviews({ staged, onRemove, role }: { staged: Staged
           </button>
         </div>
       ))}
+      {taggingItem && people && onSetTags && (
+        <ImageTagEditor
+          src={taggingItem.previewUrl}
+          alt={taggingItem.name}
+          tags={taggingItem.tags}
+          people={people}
+          onChange={(tags) => onSetTags(tagging!, tags)}
+          onClose={() => setTagging(null)}
+        />
+      )}
     </div>
   );
 }

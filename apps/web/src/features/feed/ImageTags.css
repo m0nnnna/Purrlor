@@ -1,0 +1,192 @@
+/* People tagged in a picture (ImageTags.tsx). */
+
+.nu-image-tags__toggle {
+  position: absolute;
+  left: var(--nu-space-2);
+  bottom: var(--nu-space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  appearance: none;
+  border: none;
+  padding: 3px 8px;
+  border-radius: var(--nu-radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font: inherit;
+  font-size: var(--nu-font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nu-image-tags__toggle--on,
+.nu-image-tags__toggle:hover,
+.nu-image-tags__toggle:focus-visible {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* Laid over the picture itself (not its box), so each tag sits on the spot it was put. */
+.nu-image-tags__layer {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.nu-image-tags__label {
+  position: absolute;
+  transform: translate(-50%, 6px);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 12rem;
+  appearance: none;
+  border: none;
+  padding: 3px 8px;
+  border-radius: var(--nu-radius-md);
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font: inherit;
+  font-size: var(--nu-font-size-xs);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* The little point above a label, at the tagged spot. */
+.nu-image-tags__label::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -5px;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top: none;
+  border-bottom-color: rgba(0, 0, 0, 0.78);
+}
+
+.nu-image-tags__label--editing {
+  cursor: default;
+  overflow: visible;
+}
+
+.nu-image-tags__remove {
+  appearance: none;
+  border: none;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--nu-radius-full);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  cursor: pointer;
+}
+
+.nu-image-tagger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-image-tagger__stage {
+  position: relative;
+  align-self: center;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.nu-image-tagger__img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: var(--nu-radius-md);
+  cursor: crosshair;
+}
+
+.nu-image-tagger__picker {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, 8px);
+  width: 14rem;
+  padding: var(--nu-space-2);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-elevated);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  line-height: normal;
+}
+
+.nu-image-tagger__dot {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--nu-color-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
+}
+
+.nu-image-tagger__people {
+  list-style: none;
+  margin: var(--nu-space-1) 0 0;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.nu-image-tagger__person {
+  appearance: none;
+  border: none;
+  background: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-1);
+  border-radius: var(--nu-radius-sm);
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-image-tagger__person:hover,
+.nu-image-tagger__person:focus-visible {
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-image-tagger__none {
+  padding: var(--nu-space-1);
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-image-tagger__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--nu-space-2);
+}
+
+/* The staged picture's "Tag" button in the composer. */
+.nu-post-composer__preview-tag {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  appearance: none;
+  border: none;
+  padding: 2px 6px;
+  border-radius: var(--nu-radius-full);
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}

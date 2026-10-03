@@ -12,6 +12,7 @@ import {
 import { channelTypeInitialStateEvent } from './channelType';
 import { readFreshAccountData } from './freshAccountData';
 import { readAttachments, type PostAttachment } from './postMedia';
+import { taggedUsers } from './imageTags';
 import { serverNameOf } from './roomOrigin';
 
 /**
@@ -282,12 +283,14 @@ export function buildPostContent(
   extras: { attachments?: PostAttachment[]; repostOf?: RepostOf; mentions?: string[]; warning?: string; sensitive?: boolean } = {}
 ): PostContent {
   const warning = extras.warning?.trim();
+  // Someone tagged in a picture is mentioned too: that's what notifies them (imageTags.ts).
+  const mentions = [...new Set([...(extras.mentions ?? []), ...taggedUsers(extras.attachments)])];
   return {
     body,
     ...(formattedBody && { format: 'org.matrix.custom.html', formatted_body: formattedBody }),
     ...(extras.attachments?.length && { attachments: extras.attachments }),
     ...(extras.repostOf && { repostOf: extras.repostOf }),
-    ...(extras.mentions?.length && { mentions: extras.mentions }),
+    ...(mentions.length && { mentions }),
     ...(warning && { warning }),
     // Only meaningful with media to cover.
     ...(extras.sensitive && extras.attachments?.length && { sensitive: true }),

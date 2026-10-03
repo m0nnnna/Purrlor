@@ -1,5 +1,6 @@
 import { encryptAttachment, type EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import type { MatrixClient } from 'matrix-js-sdk';
+import { readTags, type ImageTag } from './imageTags';
 
 /**
  * Media attached to a post — images (including animated GIF/WebP) and video (WebM/MP4).
@@ -36,6 +37,8 @@ export type PostAttachment = {
   file?: EncryptedFile;
   name: string;
   info: { mimetype: string; size: number; w?: number; h?: number };
+  /** People tagged in a picture, and where (imageTags.ts). Pictures only. */
+  tags?: ImageTag[];
 };
 
 /** The mxc URL the bytes live at, whichever way they're stored. */
@@ -172,7 +175,12 @@ export async function getUploadLimit(mx: MatrixClient): Promise<number | undefin
  * comment): the ciphertext goes up as an anonymous `application/octet-stream` with no filename —
  * the name and type are only safe inside the post, which only its audience can read.
  */
-export async function uploadPostMedia(mx: MatrixClient, media: PreparedMedia, { encrypt }: { encrypt: boolean }): Promise<PostAttachment> {
+export async function uploadPostMedia(
+  mx: MatrixClient,
+  media: PreparedMedia,
+  { encrypt, tags = [] }: { encrypt: boolean; tags?: ImageTag[] }
+): Promise<PostAttachment> {
+  const tagged = media.kind === 'image' && tags.length ? { tags } : {};
   const info = {
     mimetype: media.mimetype,
     size: media.file.size,
@@ -184,10 +192,10 @@ export async function uploadPostMedia(mx: MatrixClient, media: PreparedMedia, { 
       type: 'application/octet-stream',
       includeFilename: false,
     });
-    return { kind: media.kind, file: { ...keyInfo, url }, name: media.name, info };
+    return { kind: media.kind, file: { ...keyInfo, url }, name: media.name, info, ...tagged };
   }
   const { content_uri: url } = await mx.uploadContent(media.file, { name: media.name, type: media.mimetype });
-  return { kind: media.kind, url, name: media.name, info };
+  return { kind: media.kind, url, name: media.name, info, ...tagged };
 }
 
 function isMxc(value: unknown): value is string {
@@ -217,7 +225,12 @@ export function readAttachments(raw: unknown): PostAttachment[] {
         typeof item.info.mimetype === 'string' &&
         mediaKindOf(item.info.mimetype) === item.kind
     )
-    .slice(0, MAX_ATTACHMENTS);
+    .slice(0, MAX_ATTACHMENTS)
+    // Tags checked like everything else, and only on pictures.
+    .map(({ tags, ...attachment }) => {
+      const checked = attachment.kind === 'image' ? readTags(tags) : [];
+      return checked.length ? { ...attachment, tags: checked } : attachment;
+    });
 }
 
 export function formatBytes(bytes: number): string {

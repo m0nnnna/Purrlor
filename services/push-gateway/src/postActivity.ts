@@ -23,6 +23,12 @@ export function describePostActivity({
   const withText = (verb: string) => (text ? `${verb}: ${text}` : verb);
   const mentioned: unknown = content?.['m.mentions']?.user_ids;
   const mentionsRecipient = recipient ? Array.isArray(mentioned) && mentioned.includes(recipient) : highlight;
+  // Tagged in one of its pictures (the web app's matrix/imageTags.ts): said so, rather than "mentioned".
+  const attachments: unknown = content?.['xyz.nekous.attachments'];
+  const taggedRecipient =
+    !!recipient &&
+    Array.isArray(attachments) &&
+    attachments.some((a) => Array.isArray(a?.tags) && a.tags.some((tag: { user_id?: unknown } | null) => tag?.user_id === recipient));
 
   if (type === 'xyz.nekous.comment') {
     const repliedTo = content?.['xyz.nekous.reply_to']?.sender;
@@ -31,15 +37,16 @@ export function describePostActivity({
     if (isReplyToRecipient) return withText('Replied to your comment');
     // A reply in a thread mentions everyone who has written in it (the web app's postInteractions.ts).
     if (mentionsRecipient && typeof content?.['xyz.nekous.thread'] === 'string') return withText('Replied in a thread you’re in');
+    if (taggedRecipient) return withText('Tagged you in a photo');
     if (mentionsRecipient) return withText('Mentioned you in a comment');
     return withText('Commented on your post');
   }
   // A post only ever notifies anyone through a mention (no push rule matches posts otherwise).
-  if (type === 'xyz.nekous.post') return withText('Mentioned you in a post');
+  if (type === 'xyz.nekous.post') return withText(taggedRecipient ? 'Tagged you in a photo' : 'Mentioned you in a post');
   // Mentioned in a Global post while not in its author's profile room: the mention arrives as an
   // invite to that room, marked in its reason (the web app's matrix/mentionInvites.ts).
   if (type === 'm.room.member' && content?.membership === 'invite' && /\(xyz\.nekous\.mention \$[^\s)]+\)/.test(String(content?.reason ?? ''))) {
-    return 'Mentioned you in a post';
+    return String(content?.reason).startsWith('Tagged you in a photo') ? 'Tagged you in a photo' : 'Mentioned you in a post';
   }
   if (type === 'm.reaction') return 'Liked your post';
   // Only ever reaches the comment's author, through the mention it carries.

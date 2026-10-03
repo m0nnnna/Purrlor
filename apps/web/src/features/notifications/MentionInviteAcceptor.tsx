@@ -32,7 +32,7 @@ export function MentionInviteAcceptor() {
         await mx.joinRoom(room.roomId, { viaServers: feedJoinVia(room.roomId, mention.inviter) });
         await addMentionToInbox(mx, room.roomId, mention.postId, mention.postId);
         if (live && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          const notification = new Notification(inviterName, { body: 'Mentioned you in a post', tag: `${room.roomId}:mention` });
+          const notification = new Notification(inviterName, { body: mention.tagged ? 'Tagged you in a photo' : 'Mentioned you in a post', tag: `${room.roomId}:mention` });
           notification.onclick = () => {
             window.focus();
             void openPostRef.current(room.roomId, mention.postId);

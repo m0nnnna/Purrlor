@@ -402,6 +402,38 @@ and so its notifications, only to the room's members. That decides how each kind
 Opening one opens that post's page (`useOpenPost`, which fetches the post with its latest edit)
 rather than a channel. So does clicking a desktop notification about a post, a comment or a like.
 
+## Tagging people in pictures
+
+A picture in a post or a comment can say who's in it (`matrix/imageTags.ts`). In the composer, a staged
+picture's **Tag** button opens it: tap where someone is and pick them from the same people an
+@mention offers (`ImageTagEditor`); tagging the same person again moves them, and a tag can be taken
+off. Up to 20 people a picture.
+
+Each image in `xyz.nekous.attachments` may carry `tags`:
+
+```json
+{ "kind": "image", "url": "mxc://…", "info": { … }, "tags": [ { "user_id": "@luna:purr.example", "x": 3333, "y": 5000 } ] }
+```
+
+`x` and `y` are how far across and down the picture the spot is, in ten-thousandths (0 to 10000).
+Whole numbers, since a Matrix event can't hold fractions (canonical JSON): a homeserver refuses an
+event with `0.5` in it. Readers keep only real user IDs, each once, clamped to the picture, and only
+on pictures.
+
+**Tagging mentions.** `buildPostContent` adds everyone tagged to `m.mentions`, so a tag notifies
+exactly as a mention does ("Mentions", above), including a Global post inviting them to the
+author's profile room. It's worded "Tagged you in a photo": the invite's reason, desktop
+notifications (`DesktopNotifications`, `MentionInviteAcceptor`) and background push
+(`services/push-gateway/src/postActivity.ts`) look for the reader among the tags.
+
+**On the post** (`PostMedia`, `TaggedImageOverlay`): a tagged picture has a small people button
+with a count; pressing it shows each name at its spot, on the picture itself however it's cropped
+or letterboxed, and a name opens that person's profile. A repost carries the picture and its tags,
+but doesn't notify anyone again. **The public web never shows tags**: the token server copies only a
+picture's file, type and size.
+
+Chat messages' pictures can't be tagged yet; only posts and comments.
+
 ## The global feed
 
 `useGlobalFeed` (logic in `matrix/globalFeed.ts`) reads posts from every place it can, **without
