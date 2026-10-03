@@ -21,7 +21,9 @@ controls on the left, the page as visitors see it on the right (one at a time on
 - **Discard changes** goes back to what's published. **Take page down** returns your profile to the
   plain look and keeps what you built as a draft.
 - Your name, avatar, banner, bio and real Matrix ID always go across the top, and your posts always
-  down the middle. A page can restyle them but not move or hide them.
+  down the middle. A page can restyle them but not move or hide them. The posts column (its tabs,
+  the composer, each post) takes the page's colours, font, corners and border; its cards are the
+  block colour at full strength, so posts stay readable over any background.
 - **The layout** (`ProfilePageLayout.tsx`): your blocks sit in two columns, one either side of the
   posts. Each block is in the column you put it in (`side`, "left" or "right"); the builder lists
   the two columns, with an "Add a block" under each and a button on each block to move it across.

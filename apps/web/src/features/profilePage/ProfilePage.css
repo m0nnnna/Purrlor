@@ -22,8 +22,32 @@
   min-height: 100%;
   color: var(--page-text);
   font-family: var(--page-body-font);
-  /* Links and buttons inside the page that use the app's tokens pick up the page's colours. */
+  /* Everything inside the page drawn with the app's tokens (the header's buttons, the posts column:
+     its tabs, the composer, each post) takes the page's colours instead. Surfaces are the block
+     colour at full strength (--page-block-solid), stepped toward the text colour for depth, so
+     they read over any background. Danger, success and role colours stay the app's. The gradients
+     are restated: a custom property that refers to another is worked out where it's defined
+     (:root), so they'd otherwise keep the app's accent. Fonts stay put here: the header keeps the
+     real Matrix ID in the app's own type (below); only the posts column takes the page's font. */
+  --nu-color-bg-app: var(--page-block-solid);
+  --nu-color-bg-primary: color-mix(in srgb, var(--page-block-solid) 94%, var(--page-text));
+  --nu-color-bg-secondary: color-mix(in srgb, var(--page-block-solid) 90%, var(--page-text));
+  --nu-color-bg-tertiary: color-mix(in srgb, var(--page-block-solid) 85%, var(--page-text));
+  --nu-color-bg-elevated: color-mix(in srgb, var(--page-block-solid) 78%, var(--page-text));
+  --nu-color-text-primary: var(--page-text);
+  --nu-color-text-secondary: color-mix(in srgb, var(--page-text) 80%, var(--page-block-solid));
+  --nu-color-text-muted: color-mix(in srgb, var(--page-text) 60%, var(--page-block-solid));
   --nu-color-text-link: var(--page-link);
+  --nu-color-accent: var(--page-accent);
+  --nu-color-accent-hover: color-mix(in srgb, var(--page-accent) 82%, var(--page-text));
+  --nu-color-accent-2: var(--page-link);
+  --nu-color-accent-2-hover: color-mix(in srgb, var(--page-link) 82%, var(--page-text));
+  --nu-color-on-accent: var(--page-on-accent);
+  --nu-color-border: color-mix(in srgb, var(--page-text) 16%, var(--page-block-solid));
+  --nu-gradient-accent: linear-gradient(180deg, var(--nu-color-accent-hover), var(--nu-color-accent));
+  --nu-gradient-accent-hover: linear-gradient(180deg, var(--nu-color-accent-hover), var(--nu-color-accent-hover));
+  --nu-gradient-accent-diagonal: linear-gradient(160deg, var(--nu-color-accent-hover), var(--nu-color-accent));
+  --nu-gradient-accent-text: linear-gradient(90deg, var(--nu-color-accent), var(--nu-color-accent-2));
 }
 
 .nu-profile-page__content {
@@ -82,17 +106,20 @@
   margin-top: 0;
 }
 
-/* Posts keep the app's own look on a solid card, whatever the page's background. */
+/* The posts column: the page's colours (from .nu-profile-page, above), its font, corners and
+   border, on a card of the block colour at full strength so posts read over any background. */
 .nu-profile-page__posts {
+  --nu-font-body: var(--page-body-font);
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-4);
   padding: var(--nu-space-4);
-  background: var(--nu-color-bg-app);
-  color: var(--nu-color-text-primary);
-  font-family: var(--nu-font-body, 'Figtree', system-ui, sans-serif);
+  background: var(--page-block-solid);
+  color: var(--page-text);
+  font-family: var(--page-body-font);
+  border: var(--page-border);
   border-radius: var(--page-corners);
-  --nu-color-text-link: initial;
+  box-shadow: var(--page-shadow);
 }
 
 .nu-profile-page__posts > * {

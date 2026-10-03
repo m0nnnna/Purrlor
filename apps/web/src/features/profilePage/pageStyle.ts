@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties } from 'react';
-import type { PageFont, PageStyle } from '../../matrix/profilePage';
+import { readableTextOn, type PageFont, type PageStyle } from '../../matrix/profilePage';
 
 /**
  * Turns a page's checked style (matrix/profilePage.ts) into CSS custom properties on the page's
@@ -64,6 +64,11 @@ export function pageStyleVars(style: PageStyle, backgroundSrc: string | null): C
     '--page-accent': colors.accent,
     '--page-link': colors.link,
     '--page-block': rgba(colors.block, style.blockOpacity),
+    // The posts column draws its cards in the block colour at full strength, so a post stays
+    // readable over a background image whatever the page's block opacity.
+    '--page-block-solid': colors.block,
+    // A button's label on the accent: black or white, whichever reads.
+    '--page-on-accent': readableTextOn(colors.accent),
     '--page-corners': `${style.corners}px`,
     '--page-border':
       border === 'none'
