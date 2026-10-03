@@ -12,6 +12,21 @@ import { PublicApp } from '../features/publicWeb/PublicApp';
 import { parsePublicRoute } from '../matrix/publicWeb';
 import { setHomeServer } from '../matrix/homeServer';
 
+const MASCOT_URL = '/icon-192.png';
+
+/** The mascot on the night sky while Purrlor starts. index.html draws the same markup before any
+ *  script has run, so the page goes straight from it to this without a blank frame between. */
+function BootSplash({ status }: { status?: string }) {
+  return (
+    <div className="nu-splash" data-nu-role="boot-splash">
+      <img className="nu-splash__mascot" src={MASCOT_URL} alt="" />
+      <p className="nu-splash__status" aria-live="polite">
+        {status ?? 'Loading…'}
+      </p>
+    </div>
+  );
+}
+
 type BootState =
   | { phase: 'checking-session' }
   | { phase: 'logged-out' }
@@ -97,13 +112,14 @@ export function App() {
   }, []);
 
   if (boot.phase === 'checking-session') {
-    return <div className="nu-splash">Loading…</div>;
+    return <BootSplash />;
   }
 
   if (boot.phase === 'error') {
     return (
       <div className="nu-splash" data-nu-role="boot-error">
         <div className="nu-splash__error">
+          <img className="nu-splash__mascot nu-splash__mascot--still" src={MASCOT_URL} alt="" />
           <p>Couldn't start Purrlor: {boot.message}</p>
           <button
             type="button"
@@ -138,7 +154,7 @@ export function App() {
   }
 
   if (boot.phase === 'starting') {
-    return <div className="nu-splash">Syncing…</div>;
+    return <BootSplash status="Syncing your chats…" />;
   }
 
   if (boot.phase === 'awaiting-recovery-setup') {

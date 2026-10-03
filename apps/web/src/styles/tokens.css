@@ -38,6 +38,9 @@
      warning) — a button's label, a badge's count. Gold is a light color, so this is dark ink
      rather than white; a theme with a deep accent repoints this one token back to white. */
   --nu-color-on-accent: #1a1206;
+  /* Which way the browser's own controls lean — checkboxes, <select> menus, date pickers,
+     scrollbars. Every preset is dark; a light custom theme sets this to `light`. */
+  --nu-color-scheme: dark;
 
   /* Role colors — a member's name in the timeline and member list takes their role's color, and
      the member list groups people under these roles (see matrix/roles.ts). */
@@ -110,6 +113,17 @@ body,
   margin: 0;
 }
 
+:root {
+  color-scheme: var(--nu-color-scheme);
+  /* Native checkboxes, radios and range sliders take the accent instead of browser blue. */
+  accent-color: var(--nu-color-accent);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--nu-color-accent-2) 45%, transparent);
+  color: var(--nu-color-text-primary);
+}
+
 body {
   background: var(--nu-color-bg-app);
   color: var(--nu-color-text-primary);
@@ -143,7 +157,11 @@ body {
   background: var(--nu-color-text-muted);
 }
 
-:focus-visible {
+/* Zero specificity on purpose. main.tsx imports App (and so every component stylesheet) before
+   this file, so a plain :focus-visible here would land later in the bundle and beat any
+   component's own `outline: none` — the composer's textarea drew a gold box inside the bar that
+   is already its focus ring. :where() lets the component rules win. */
+:where(:focus-visible) {
   outline: 2px solid var(--nu-color-accent);
   outline-offset: 2px;
 }
@@ -224,6 +242,18 @@ body {
     transform: translateY(-2px);
   }
   100% {
+    transform: translateY(0);
+  }
+}
+
+/* A card or screen arriving: a short lift and fade, for the sign-in card and the boot splash. */
+@keyframes nu-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
     transform: translateY(0);
   }
 }

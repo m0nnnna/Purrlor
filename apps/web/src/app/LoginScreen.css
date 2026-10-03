@@ -1,24 +1,58 @@
+/* Sign-in and register share this card. It's the first thing a visitor sees, so it gets the same
+   night sky as meowops.net: a violet glow from the top-left, a catseye glow top-right, a few
+   stars — all mixed from the theme's own tokens so a custom theme recolors it. */
 .nu-login {
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--nu-color-bg-app);
+  padding: var(--nu-space-6) var(--nu-space-4);
+  box-sizing: border-box;
+  background-color: var(--nu-color-bg-app);
+  background-image:
+    radial-gradient(ellipse 70% 45% at 10% -5%, color-mix(in srgb, var(--nu-color-accent-2) 14%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 95% 0%, color-mix(in srgb, var(--nu-color-accent) 9%, transparent), transparent 70%),
+    radial-gradient(1px 1px at 20px 30px, color-mix(in srgb, var(--nu-color-text-primary) 50%, transparent), transparent 1px),
+    radial-gradient(1px 1px at 140px 90px, color-mix(in srgb, var(--nu-color-text-primary) 30%, transparent), transparent 1px),
+    radial-gradient(1.5px 1.5px at 260px 200px, color-mix(in srgb, var(--nu-color-accent) 45%, transparent), transparent 2px),
+    radial-gradient(1px 1px at 330px 40px, color-mix(in srgb, var(--nu-color-text-primary) 25%, transparent), transparent 1px);
+  background-size: auto, auto, 380px 280px, 380px 280px, 380px 280px, 380px 280px;
+  overflow-y: auto;
 }
 
 .nu-login__form {
-  width: 360px;
-  background: var(--nu-color-bg-primary);
-  border-radius: var(--nu-radius-md);
-  padding: var(--nu-space-6);
+  position: relative;
+  width: min(400px, 100%);
+  margin: auto;
+  background: color-mix(in srgb, var(--nu-color-bg-primary) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--nu-color-text-primary) 6%, transparent) inset,
+    0 30px 80px -20px rgba(0, 0, 0, 0.6);
+  padding: var(--nu-space-6) calc(var(--nu-space-6) + var(--nu-space-1)) var(--nu-space-6);
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-4);
+  animation: nu-rise-in 0.35s ease-out both;
+}
+
+.nu-login__mascot {
+  display: block;
+  width: 88px;
+  height: 88px;
+  margin: calc(var(--nu-space-1) * -1) auto 0;
+  filter: drop-shadow(0 8px 22px color-mix(in srgb, var(--nu-color-accent-2) 45%, transparent));
 }
 
 .nu-login__title {
-  margin: 0 0 var(--nu-space-2);
-  font-size: var(--nu-font-size-lg);
+  margin: 0 0 var(--nu-space-1);
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.1;
   text-align: center;
 }
 
@@ -36,18 +70,30 @@
 .nu-login__field {
   display: flex;
   flex-direction: column;
-  gap: var(--nu-space-1);
+  gap: var(--nu-space-2);
   font-size: var(--nu-font-size-sm);
+  font-weight: 600;
   color: var(--nu-color-text-secondary);
 }
 
 .nu-login__input {
   background: var(--nu-color-bg-tertiary);
   border: 1px solid var(--nu-color-border);
-  border-radius: var(--nu-radius-sm);
-  padding: var(--nu-space-2) var(--nu-space-3);
+  border-radius: var(--nu-radius-md);
+  padding: 11px var(--nu-space-4);
   color: var(--nu-color-text-primary);
+  font-family: inherit;
   font-size: var(--nu-font-size-md);
+  font-weight: 400;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.nu-login__input:focus {
+  outline: none;
+  border-color: var(--nu-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nu-color-accent) 18%, transparent);
 }
 
 .nu-login__error {
@@ -57,22 +103,33 @@
 }
 
 .nu-login__submit {
-  background: var(--nu-color-accent);
+  margin-top: var(--nu-space-1);
+  background: var(--nu-gradient-accent);
   color: var(--nu-color-on-accent);
   border: none;
-  border-radius: var(--nu-radius-sm);
-  padding: var(--nu-space-3);
-  font-weight: 600;
+  border-radius: var(--nu-radius-md);
+  padding: 13px var(--nu-space-4);
+  font-family: inherit;
+  font-size: var(--nu-font-size-md);
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--nu-color-accent) 60%, transparent);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-.nu-login__submit:hover {
-  background: var(--nu-color-accent-hover);
+.nu-login__submit:hover:not(:disabled) {
+  background: var(--nu-gradient-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--nu-color-accent) 75%, transparent);
 }
 
 .nu-login__submit:disabled {
-  opacity: 0.6;
-  cursor: default;
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .nu-login__switch {
@@ -86,6 +143,12 @@
   text-align: center;
 }
 
-.nu-login__switch:hover {
+.nu-login__switch:hover:not(:disabled) {
   color: var(--nu-color-text-primary);
+}
+
+@media (max-width: 480px) {
+  .nu-login__form {
+    padding: var(--nu-space-5);
+  }
 }

@@ -25,7 +25,10 @@
     <script>
       window.global ||= window;
     </script>
-    <div id="root"></div>
+    <!-- Shown until React mounts (App.tsx's BootSplash replaces it with the same markup), so a cold
+         load starts on the mascot instead of a blank page. Styled by styles/base/shell.css, which
+         the production build links in the <head>. -->
+    <div id="root"><div class="nu-splash" data-nu-role="boot-splash"><img class="nu-splash__mascot" src="/icon-192.png" width="96" height="96" alt="" /><p class="nu-splash__status">Loading…</p></div></div>
     <div id="portalContainer"></div>
     <script type="module" src="./src/main.tsx"></script>
   </body>

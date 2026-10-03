@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
-import type { MentionCandidate } from '../../matrix/messageFormatting';
+import { mentionText, type MentionCandidate } from '../../matrix/messageFormatting';
 import './Composer.css';
 
 const MAX_MENTION_SUGGESTIONS = 8;
@@ -55,7 +55,7 @@ export function useMentionAutocomplete({
     const atIndex = cursor - match[1].length - 1;
     const before = text.slice(0, atIndex);
     const after = text.slice(cursor);
-    const inserted = `@${member.name} `;
+    const inserted = `${mentionText(member.name)} `;
     pickedRef.current.set(member.name, member.userId);
     setText(`${before}${inserted}${after}`);
     setQuery(null);

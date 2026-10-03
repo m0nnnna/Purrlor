@@ -82,7 +82,7 @@ export function buildMessageFormatting(
   }
 
   for (const mention of mentions) {
-    const pattern = new RegExp(`@${escapeRegExp(mention.displayName)}\\b`, 'g');
+    const pattern = new RegExp(`${escapeRegExp(mentionText(mention.displayName))}\\b`, 'g');
     for (const match of text.matchAll(pattern)) {
       replacements.push({
         index: match.index,
@@ -183,4 +183,10 @@ export function parseFormattedBodyEmotes(formattedBody: string | undefined, hidd
     emotes.push({ shortcode, mxcUrl: src });
   }
   return emotes;
+}
+
+/** How a mention of this name reads in a message: "@Alice". Someone with no display name goes by
+ *  their user ID, which already starts with "@", and prefixing another one gave "@@alice:server". */
+export function mentionText(name: string): string {
+  return name.startsWith('@') ? name : `@${name}`;
 }

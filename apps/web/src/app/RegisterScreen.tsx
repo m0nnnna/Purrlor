@@ -148,6 +148,7 @@ export function RegisterScreen({ onSwitchToLogin, onRegistered }: RegisterScreen
   return (
     <div className="nu-login" data-nu-role="register-screen">
       <form className="nu-login__form" onSubmit={handleSubmit}>
+        <img className="nu-login__mascot" src="/icon-192.png" alt="" />
         <h1 className="nu-login__title">Create an account</h1>
         {lockedHomeserver ? (
           <p className="nu-login__server" data-nu-role="register-locked-homeserver">

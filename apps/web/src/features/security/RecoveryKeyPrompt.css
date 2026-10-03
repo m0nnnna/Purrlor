@@ -95,6 +95,8 @@
 }
 
 .nu-recovery-prompt__submit:disabled {
-  opacity: 0.5;
-  cursor: default;
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
 }

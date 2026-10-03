@@ -63,13 +63,16 @@
   color: var(--nu-color-text-primary);
   font-family: inherit;
   font-size: var(--nu-font-size-md);
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .nu-field__input:focus,
 .nu-field__textarea:focus {
   outline: none;
   border-color: var(--nu-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nu-color-accent) 18%, transparent);
 }
 
 .nu-field__textarea {
@@ -126,7 +129,8 @@
     background 0.15s ease,
     border-color 0.15s ease,
     color 0.15s ease,
-    transform 0.1s ease;
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .nu-button:active:not(:disabled) {
@@ -136,16 +140,23 @@
 .nu-button--primary {
   background: var(--nu-gradient-accent);
   color: var(--nu-color-on-accent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--nu-color-accent) 22%, transparent);
+  box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--nu-color-accent) 55%, transparent);
 }
 
 .nu-button--primary:hover:not(:disabled) {
   background: var(--nu-gradient-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px -8px color-mix(in srgb, var(--nu-color-accent) 75%, transparent);
 }
 
-.nu-button--primary:disabled {
-  opacity: 0.5;
-  cursor: default;
+/* A disabled button is a quiet, flat surface rather than the accent at half strength — faded
+   gold over the dark background read as a muddy brown, as if the button were broken. */
+.nu-button--primary:disabled,
+.nu-button--danger:disabled {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-muted);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .nu-button--secondary {
@@ -154,9 +165,14 @@
   color: var(--nu-color-text-secondary);
 }
 
-.nu-button--secondary:hover {
-  border-color: var(--nu-color-text-muted);
+.nu-button--secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--nu-color-accent) 60%, var(--nu-color-border));
   color: var(--nu-color-text-primary);
+}
+
+.nu-button--secondary:disabled {
+  color: var(--nu-color-text-muted);
+  cursor: not-allowed;
 }
 
 .nu-button--danger {
@@ -168,10 +184,6 @@
   background: color-mix(in srgb, var(--nu-color-danger) 85%, #000);
 }
 
-.nu-button--danger:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
 /* File picker — a styled <label> standing in for the browser's own file input, with the real
    <input type="file"> stretched invisibly across it so a click anywhere on the label opens the

@@ -35,6 +35,7 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
   return (
     <div className="nu-login" data-nu-role="login-screen">
       <form className="nu-login__form" onSubmit={handleSubmit}>
+        <img className="nu-login__mascot" src="/icon-192.png" alt="" />
         <h1 className="nu-login__title">Purrlor</h1>
         {lockedHomeserver ? (
           <p className="nu-login__server" data-nu-role="login-locked-homeserver">

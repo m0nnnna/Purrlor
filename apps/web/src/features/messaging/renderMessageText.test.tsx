@@ -35,6 +35,11 @@ describe('renderMessageText', () => {
     expect(container.querySelector('.nu-mention--me')).toHaveTextContent('@Bob');
   });
 
+  it('highlights a member with no display name by their user ID, with a single @', () => {
+    const { container } = renderText('ping @mino:example.org', [fakeMember('@mino:example.org', '@mino:example.org')]);
+    expect(container.querySelector('.nu-mention')).toHaveTextContent(/^@mino:example\.org$/);
+  });
+
   it('does not highlight a member name that only partially matches', () => {
     // "@AliceInWonderland" should not match a mention for member "Alice".
     const { container } = renderText('@AliceInWonderland is not a mention of Alice', [

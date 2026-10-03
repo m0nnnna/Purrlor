@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { mergeByShortcode, type Emote } from '../../matrix/emotes';
 import { HASHTAG_PATTERN, normalizeTag } from '../../matrix/hashtags';
-import { parseFormattedBodyEmotes } from '../../matrix/messageFormatting';
+import { mentionText, parseFormattedBodyEmotes } from '../../matrix/messageFormatting';
 import { CodeBlock } from './CodeBlock';
 import { EmoteImage } from './EmoteImage';
 import { SpoilerText } from './SpoilerText';
@@ -163,7 +163,7 @@ export function renderMessageText(
 
   for (const member of members) {
     if (!member.name) continue;
-    const pattern = new RegExp(`@${escapeRegExp(member.name)}\\b`, 'g');
+    const pattern = new RegExp(`${escapeRegExp(mentionText(member.name))}\\b`, 'g');
     for (const match of text.matchAll(pattern)) {
       matches.push({
         index: match.index,

@@ -46,7 +46,8 @@ export function AppShell() {
   const [mobileMembersOpen, setMobileMembersOpen] = useAtom(mobileMemberListOpenAtom);
   const membersHidden = useAtomValue(desktopMemberListHiddenAtom);
   // The social side (the global feed, a profile, a post) and a Space's Posts and Events span many
-  // rooms, so there's no one member list that belongs beside them.
+  // rooms, so there's no one member list that belongs beside them. With no room open at all there
+  // are no members to list, and an empty column just looked unfinished.
   const globalFeedOpen = useAtomValue(globalFeedOpenAtom);
   const spaceView = useAtomValue(selectedSpaceViewAtom);
   const profileOpen = !!useAtomValue(profileUserIdAtom);
@@ -73,7 +74,7 @@ export function AppShell() {
       data-nu-mobile-pane={mainPaneHasContent ? 'chat' : 'sidebar'}
       data-nu-mobile-members-open={mobileMembersOpen}
       data-nu-music={musicOn ? 'on' : undefined}
-      data-nu-members-hidden={membersHidden || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
+      data-nu-members-hidden={membersHidden || !selectedRoomId || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
       <VoiceCallSession>
         <ServerRail />

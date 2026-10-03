@@ -40,12 +40,50 @@
   display: none;
 }
 
+/* Boot splash (App.tsx's BootSplash, and index.html before any script runs): the mascot,
+   breathing gently in a glow of its own, over the same night sky as the sign-in screen. */
 .nu-splash {
   height: 100vh;
+  height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--nu-space-4);
   color: var(--nu-color-text-muted);
+  background-color: var(--nu-color-bg-app);
+  background-image:
+    radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--nu-color-accent-2) 12%, transparent), transparent 28%),
+    radial-gradient(ellipse 70% 45% at 10% -5%, color-mix(in srgb, var(--nu-color-accent-2) 10%, transparent), transparent 70%);
+}
+
+.nu-splash__mascot {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 10px 28px color-mix(in srgb, var(--nu-color-accent-2) 45%, transparent));
+  animation: nu-splash-breathe 2.4s ease-in-out infinite;
+}
+
+.nu-splash__mascot--still {
+  animation: none;
+}
+
+.nu-splash__status {
+  margin: 0;
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  animation: nu-rise-in 0.4s ease-out 0.3s both;
+}
+
+@keyframes nu-splash-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.03);
+  }
 }
 
 .nu-splash__error {
