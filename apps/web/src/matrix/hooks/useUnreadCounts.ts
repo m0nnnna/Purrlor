@@ -55,6 +55,82 @@ export function hasUnreadMessages(room: Room, userId: string): boolean {
   return false;
 }
 
+/** How many messages others have sent since your read receipt (at most `cap`), counted from the
+ *  loaded live timeline. Unlike the server's counts it covers encrypted rooms (an undecryptable
+ *  message still counts) and doesn't depend on push rules: what a DM's badge shows. */
+export function countUnreadMessages(room: Room, userId: string, cap = 100): number {
+  const events = room.getLiveTimeline().getEvents();
+  let count = 0;
+  for (let i = events.length - 1; i >= 0 && count < cap; i--) {
+    const event = events[i];
+    if (event.getSender() === userId) break;
+    const eventId = event.getId();
+    if (eventId && room.hasUserReadEvent(userId, eventId)) break;
+    if (UNREAD_TYPES.has(event.getType()) && !event.isRedacted()) count++;
+  }
+  return count;
+}
+
+/** A DM's unread count for its badge: every message counts, as a mention would in a channel. The
+ *  larger of the server's count and the one counted here, since each can miss what the other sees
+ *  (the server, encrypted messages; this, anything older than the loaded timeline). */
+export function directMessageUnread(room: Room, userId: string): number {
+  return Math.max(room.getUnreadNotificationCount(NotificationCountType.Total), countUnreadMessages(room, userId));
+}
+
+/** Calls `update` on whatever can change a DM's count: a message, a read receipt, new counts. */
+function onDirectMessageActivity(room: Room, update: () => void): () => void {
+  room.on(RoomEvent.Timeline, update);
+  room.on(RoomEvent.Receipt, update);
+  room.on(RoomEvent.UnreadNotifications, update);
+  return () => {
+    room.removeListener(RoomEvent.Timeline, update);
+    room.removeListener(RoomEvent.Receipt, update);
+    room.removeListener(RoomEvent.UnreadNotifications, update);
+  };
+}
+
+/**
+ * Each DM's unread count (directMessageUnread), for the rooms given, leaving out any muted ones
+ * (`isMuted`). Recounted whenever one of them gets a message, a read receipt or new counts.
+ */
+export function useDirectMessageUnreads(rooms: Room[], userId: string, isMuted: (roomId: string) => boolean): Map<string, number> {
+  const [, forceRender] = useState(0);
+  const roomIdsKey = rooms.map((room) => room.roomId).join(',');
+
+  useEffect(() => {
+    const update = () => forceRender((n) => n + 1);
+    const unsubscribes = rooms.map((room) => onDirectMessageActivity(room, update));
+    return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomIdsKey]);
+
+  const counts = new Map<string, number>();
+  for (const room of rooms) {
+    if (isMuted(room.roomId)) continue;
+    const count = directMessageUnread(room, userId);
+    if (count > 0) counts.set(room.roomId, count);
+  }
+  return counts;
+}
+
+/** One DM row's unread count (directMessageUnread), kept current. 0 when `enabled` is false. */
+export function useDirectMessageUnread(room: Room, userId: string, enabled: boolean): number {
+  const [count, setCount] = useState(() => (enabled ? directMessageUnread(room, userId) : 0));
+
+  useEffect(() => {
+    if (!enabled) {
+      setCount(0);
+      return undefined;
+    }
+    const update = () => setCount(directMessageUnread(room, userId));
+    update();
+    return onDirectMessageActivity(room, update);
+  }, [room, userId, enabled]);
+
+  return count;
+}
+
 /**
  * For a channel set to "Only @mentions" or "Nothing" (matrix/notificationSettings.ts): the
  * counts above stay at zero for plain messages there, so they can't say whether it has anything

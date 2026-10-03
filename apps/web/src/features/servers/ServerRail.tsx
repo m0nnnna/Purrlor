@@ -21,7 +21,8 @@ import { useInvites } from '../../matrix/hooks/useInvites';
 import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
-import { useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { useDirectMessageUnreads, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { describeRoomLevel } from '../../matrix/notificationSettings';
 import { classifyInvite, parentSpaceOf } from '../../matrix/invites';
 import { getParentSpace } from '../../matrix/voice';
 import { CreateSpaceModal } from './CreateSpaceModal';
@@ -71,6 +72,31 @@ function ServerRailItem({ space, active, onSelect }: { space: Room; active: bool
   );
 }
 
+/** How many unread DMs get their own tile under Home; the rest are in Home's count. */
+const MAX_DM_TILES = 3;
+
+/** An unread DM in the rail, under Home: who it's with, and how many messages, one click away. */
+function DirectMessageRailItem({ room, count, onSelect }: { room: Room; count: number; onSelect: () => void }) {
+  const mxc = room.getMxcAvatarUrl() ?? room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? null;
+  const src = useMediaUrl(mxc, { width: 96, height: 96, method: 'crop' });
+  const label = `${room.name}, ${count === 1 ? '1 unread message' : `${count > 99 ? '99+' : count} unread messages`}`;
+  return (
+    <button
+      type="button"
+      className="nu-server-rail__item nu-server-rail__item--dm nu-server-rail__item--unread"
+      data-nu-role="server-rail-dm"
+      title={label}
+      aria-label={label}
+      onClick={onSelect}
+    >
+      {src ? <img className="nu-server-rail__item-image" src={src} alt="" /> : (room.name || '?').slice(0, 1).toUpperCase()}
+      <span className="nu-server-rail__item-badge">
+        <UnreadBadge total={count} highlight={count} />
+      </span>
+    </button>
+  );
+}
+
 /** Left icon rail — one icon per joined Matrix Space, mapped to a Discord "server". */
 export function ServerRail() {
   const mx = useMatrixClient();
@@ -88,7 +114,13 @@ export function ServerRail() {
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showDiscover, setShowDiscover] = useState(false);
   const [showInvites, setShowInvites] = useState(false);
-  const dmUnread = useUnreadSummary(useSpacelessRooms());
+  const spacelessRooms = useSpacelessRooms();
+  const dmUnread = useUnreadSummary(spacelessRooms);
+  // Every unread message in a DM counts, as a mention does in a channel (useDirectMessageUnreads);
+  // DMs set to "Only @mentions" or muted keep to the server's counts above.
+  const dmCounts = useDirectMessageUnreads(spacelessRooms, mx.getUserId() ?? '', (roomId) => describeRoomLevel(mx, roomId).effective !== 'all');
+  const dmCountTotal = [...dmCounts.values()].reduce((sum, n) => sum + n, 0) + dmUnread.highlight;
+  const unreadDms = spacelessRooms.filter((room) => dmCounts.has(room.roomId)).slice(0, MAX_DM_TILES);
 
   // A Space opens fresh, with nothing chosen in it: ChannelList then lands on its unseen news or its
   // first text channel (matrix/spaceNews.ts), rather than whatever view the last Space was on.
@@ -98,6 +130,14 @@ export function ServerRail() {
     setSelectedSpaceId(id);
     setSelectedRoomId(null);
     setSpaceView(null);
+  };
+
+  const openDirectMessage = (roomId: string) => {
+    setGlobalFeedOpen(false);
+    setProfileUserId(null);
+    setSpaceView(null);
+    setSelectedSpaceId(null);
+    setSelectedRoomId(roomId);
   };
 
   const handleInviteAccepted = (room: Room) => {
@@ -119,21 +159,34 @@ export function ServerRail() {
       <button
         type="button"
         className={
-          selectedSpaceId === null && !globalFeedOpen
-            ? 'nu-server-rail__item nu-server-rail__item--home nu-server-rail__item--active'
-            : 'nu-server-rail__item nu-server-rail__item--home'
+          [
+            'nu-server-rail__item',
+            'nu-server-rail__item--home',
+            selectedSpaceId === null && !globalFeedOpen && 'nu-server-rail__item--active',
+            (dmCountTotal > 0 || dmUnread.total > 0) && 'nu-server-rail__item--unread',
+          ]
+            .filter(Boolean)
+            .join(' ')
         }
         data-nu-role="server-rail-home"
         title="Direct Messages"
-        aria-label="Direct Messages"
+        aria-label={dmCountTotal > 0 ? `Direct Messages, ${dmCountTotal} unread` : 'Direct Messages'}
         onClick={() => selectSpace(null)}
       >
         <CatEars />
         <Icon name="paw" size={24} />
         <span className="nu-server-rail__item-badge">
-          <UnreadBadge total={dmUnread.total} highlight={dmUnread.highlight} />
+          <UnreadBadge total={dmCountTotal || dmUnread.total} highlight={dmCountTotal} />
         </span>
       </button>
+      {unreadDms.map((room) => (
+        <DirectMessageRailItem
+          key={room.roomId}
+          room={room}
+          count={dmCounts.get(room.roomId) ?? 0}
+          onSelect={() => openDirectMessage(room.roomId)}
+        />
+      ))}
       <button
         type="button"
         className={

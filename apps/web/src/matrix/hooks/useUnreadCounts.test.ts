@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Room } from 'matrix-js-sdk';
-import { hasUnreadMessages } from './useUnreadCounts';
+import { countUnreadMessages, directMessageUnread, hasUnreadMessages } from './useUnreadCounts';
 
 type Fake = { id: string; sender: string; type?: string; redacted?: boolean };
 
@@ -45,5 +45,35 @@ describe('hasUnreadMessages', () => {
   it('counts encrypted messages and polls', () => {
     expect(hasUnreadMessages(room([{ id: '$1', sender: '@bob', type: 'm.room.encrypted' }], []), '@me')).toBe(true);
     expect(hasUnreadMessages(room([{ id: '$1', sender: '@bob', type: 'org.matrix.msc3381.poll.start' }], []), '@me')).toBe(true);
+  });
+});
+
+describe('countUnreadMessages', () => {
+  it("counts others' messages since your receipt, stopping at it", () => {
+    const events = [
+      { id: '$1', sender: '@bob' },
+      { id: '$2', sender: '@bob' },
+      { id: '$3', sender: '@bob', type: 'm.room.encrypted' },
+      { id: '$4', sender: '@bob', type: 'm.reaction' },
+    ];
+    expect(countUnreadMessages(room(events, []), '@me')).toBe(3);
+    expect(countUnreadMessages(room(events, ['$1']), '@me')).toBe(2);
+  });
+
+  it('stops at your own last message', () => {
+    expect(countUnreadMessages(room([{ id: '$1', sender: '@bob' }, { id: '$2', sender: '@me' }, { id: '$3', sender: '@bob' }], []), '@me')).toBe(1);
+  });
+
+  it('stops counting at the cap', () => {
+    const events = Array.from({ length: 150 }, (_, i) => ({ id: `$${i}`, sender: '@bob' }));
+    expect(countUnreadMessages(room(events, []), '@me')).toBe(100);
+  });
+});
+
+describe('directMessageUnread', () => {
+  it("takes the larger of the server's count and the counted one", () => {
+    const withServer = (r: Room, total: number) => Object.assign(r, { getUnreadNotificationCount: () => total });
+    expect(directMessageUnread(withServer(room([{ id: '$1', sender: '@bob', type: 'm.room.encrypted' }], []), 0), '@me')).toBe(1);
+    expect(directMessageUnread(withServer(room([{ id: '$1', sender: '@bob' }], []), 5), '@me')).toBe(5);
   });
 });

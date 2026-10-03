@@ -29,7 +29,7 @@ import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
-import { useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { useDirectMessageUnread, useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
 import { useRoomNotificationLevel } from '../../matrix/hooks/useNotificationLevel';
 import { LEVEL_LABELS, RoomNotificationMenu } from '../notifications/NotificationLevelMenu';
 import { useSpaceHierarchy, type HierarchyChannel } from '../../matrix/hooks/useSpaceHierarchy';
@@ -154,8 +154,11 @@ function ChannelListRow({
   // Under "Only @mentions" or "Nothing" plain messages don't count, so the counts can't say
   // whether there's anything new; read receipts can. A muted channel stays quiet regardless.
   const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level === 'mentions');
-  const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages);
   const myUserId = mx.getUserId() ?? '';
+  // In a DM every message is for you, so each one counts the way a mention does in a channel:
+  // a red number (Discord's DMs work the same way). Set to "Only @mentions", it's back to mentions.
+  const dmUnread = useDirectMessageUnread(room, myUserId, isDirectMessage && level === 'all');
+  const isUnread = level !== 'nothing' && (unread.total > 0 || hasNewMessages || dmUnread > 0);
   const canEditWebhooks = !!onOpenWebhooks && canManageWebhooks(room, myUserId);
   const canEditSettings = !!onOpenSettings && canEditChannelSettings(room, myUserId);
   const canEditPermissions =
@@ -214,7 +217,11 @@ function ChannelListRow({
             <Icon name={level === 'nothing' ? 'bellOff' : 'at'} size={12} />
           </span>
         )}
-        <UnreadBadge total={unread.total} highlight={unread.highlight} />
+        {dmUnread > 0 ? (
+          <UnreadBadge total={dmUnread} highlight={dmUnread} />
+        ) : (
+          <UnreadBadge total={unread.total} highlight={unread.highlight} />
+        )}
       </button>
       <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
