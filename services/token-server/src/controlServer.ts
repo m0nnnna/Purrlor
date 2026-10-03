@@ -559,7 +559,7 @@ export function controlApp(deps: ControlDeps): express.Express {
       } catch (err) {
         throw new ControlError(502, `Couldn't reach ${url}: ${cleanReason((err as Error).message)}`);
       }
-      const info = parseInstanceInfo(answer);
+      const info = parseInstanceInfo(answer, url);
       if ('error' in info) throw new ControlError(400, `${url}: ${info.error}`);
       const own = await deps.serverName();
       if (info.serverName === own) throw new ControlError(400, `${url} is this instance.`);

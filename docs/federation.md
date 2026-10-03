@@ -66,7 +66,8 @@ What this instance is, asked by an admin adding it as a peer:
 
 `name` is `PURRLOR_INSTANCE_NAME`, or the server name. `url` is `PUBLIC_WEB_URL`, or the address it
 was asked at. `federation` is bumped only when instances need to know a change in what they say to
-each other.
+each other. An instance that answers with an empty `url` (every one without `PUBLIC_WEB_URL` did,
+before that was fixed) is taken to be at the address `purrlor peers add` reached it at.
 
 ### `GET /api/public/peers`
 

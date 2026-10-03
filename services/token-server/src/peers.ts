@@ -68,13 +68,19 @@ export function normalizePeerUrl(input: string): string | undefined {
   return url.origin;
 }
 
-/** An instance's self-description, if it's a Purrlor instance this one can peer with. */
-export function parseInstanceInfo(raw: unknown): InstanceInfo | { error: string } {
+/**
+ * An instance's self-description, if it's a Purrlor instance this one can peer with. `askedAt` is
+ * the address it was just reached at: what an instance that doesn't give its own address (`url`
+ * empty, as every instance without PUBLIC_WEB_URL said before that was fixed) is taken to be at.
+ * An address it does give still has to be a usable one.
+ */
+export function parseInstanceInfo(raw: unknown, askedAt?: string): InstanceInfo | { error: string } {
   if (!isRecord(raw) || raw.software !== 'purrlor') return { error: "That address doesn't answer as a Purrlor instance." };
   if (typeof raw.federation !== 'number' || raw.federation < 1) return { error: "That Purrlor instance doesn't federate yet (it needs updating)." };
   if (raw.federation > FEDERATION_VERSION) return { error: 'That Purrlor instance is newer than this one: update this one first.' };
   if (!isServerName(raw.serverName)) return { error: "That Purrlor instance didn't say which homeserver it runs." };
-  const url = typeof raw.url === 'string' ? normalizePeerUrl(raw.url) : undefined;
+  const given = typeof raw.url === 'string' ? raw.url.trim() : '';
+  const url = given ? normalizePeerUrl(given) : askedAt;
   if (!url) return { error: "That Purrlor instance didn't give a usable address." };
   return { software: 'purrlor', federation: raw.federation, serverName: raw.serverName, name: cleanInstanceName(raw.name, raw.serverName), url };
 }

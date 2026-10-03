@@ -80,7 +80,10 @@ const EVENTS_PER_ROOM = 100;
 const FEED_PAGE_SIZE = 20;
 const READ_CONCURRENCY = 4;
 
-const PUBLIC_URL = process.env.PUBLIC_WEB_URL?.replace(/\/+$/, '');
+// `||`, not `??`: docker-compose.yml passes `PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-}`, so unset in .env it
+// arrives as an empty string, and `??` kept that. Every instance without it then told its peers
+// its address was "", and adding it as a peer failed ("didn't give a usable address").
+const PUBLIC_URL = process.env.PUBLIC_WEB_URL?.replace(/\/+$/, '') || undefined;
 /** What this instance calls itself to its peers; its server name when unset. */
 const INSTANCE_NAME = process.env.PURRLOR_INSTANCE_NAME;
 /** How long a peer's answer about its people stands when it can't be asked again; then they're hidden. */

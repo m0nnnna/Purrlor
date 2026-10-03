@@ -2,15 +2,15 @@ import { useState, type FormEvent } from 'react';
 import type { Room } from 'matrix-js-sdk';
 import { Modal } from '../../components/Modal';
 import { isValidUserId } from '../../matrix/directMessages';
-import { inviteMember } from '../../matrix/moderation';
+import { inviteToChannel } from '../../matrix/invites';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import './InviteToChannelModal.css';
 
 /**
- * Invites a Matrix ID into this one channel — Space membership (SpaceMembersSettings.tsx)
- * doesn't cascade to child rooms, so a member who should only see one specific channel needs a
- * separate, room-scoped invite. `inviteMember` is already fully generic (matrix/moderation.ts);
- * this is just the per-channel entry point to it, mirroring StartDmModal's form.
+ * Invites a Matrix ID into this channel, and into its Space when they aren't in it yet
+ * (inviteToChannel, matrix/invites.ts): Space membership doesn't cascade to child rooms, and a
+ * channel invited to on its own, with no Space of theirs around it, showed up among the other
+ * person's Direct Messages. Mirrors StartDmModal's form.
  *
  * The voice token server's service bot used to be the main thing people had to do this for, and
  * nothing in the app told them so — that's now automatic (matrix/voiceBot.ts): new voice
@@ -22,7 +22,7 @@ export function InviteToChannelModal({ room, onClose }: { room: Room; onClose: (
   const [userId, setUserId] = useState('');
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string>();
-  const [invited, setInvited] = useState<string[]>([]);
+  const [invited, setInvited] = useState<{ userId: string; space: boolean }[]>([]);
 
   const handleSubmit = async (evt: FormEvent) => {
     evt.preventDefault();
@@ -35,8 +35,8 @@ export function InviteToChannelModal({ room, onClose }: { room: Room; onClose: (
     setInviting(true);
     setError(undefined);
     try {
-      await inviteMember(mx, room.roomId, trimmed);
-      setInvited((prev) => [trimmed, ...prev]);
+      const { space } = await inviteToChannel(mx, room, trimmed);
+      setInvited((prev) => [{ userId: trimmed, space }, ...prev]);
       setUserId('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to invite');
@@ -60,8 +60,8 @@ export function InviteToChannelModal({ room, onClose }: { room: Room; onClose: (
             required
           />
           <span className="nu-field__hint">
-            This invites into this one channel only — it doesn't affect their access to the rest
-            of the Space, and Space membership doesn't reach this channel either. Voice channels
+            Someone who isn't in this Space yet is invited to the Space as well (when you're
+            allowed to invite there), so the channel shows up inside it for them. Voice channels
             invite the voice service account for you, so this is only needed for it if the Space
             has none configured (Space Settings → General).
           </span>
@@ -82,8 +82,11 @@ export function InviteToChannelModal({ room, onClose }: { room: Room; onClose: (
       </form>
       {invited.length > 0 && (
         <ul className="nu-invite-channel__sent" data-nu-role="invite-channel-sent-list">
-          {invited.map((id) => (
-            <li key={id}>Invited {id}</li>
+          {invited.map(({ userId: id, space }) => (
+            <li key={id}>
+              Invited {id}
+              {space && ' to this channel and the Space'}
+            </li>
           ))}
         </ul>
       )}

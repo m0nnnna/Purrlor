@@ -53,6 +53,15 @@ describe('parseInstanceInfo', () => {
     assert.ok('error' in parseInstanceInfo('nope'));
   });
 
+  it('takes an instance that gives no address to be where it was asked', () => {
+    for (const url of ['', '  ', undefined]) {
+      assert.equal((parseInstanceInfo({ ...good, url }, 'https://app.cats.example') as { url: string }).url, 'https://app.cats.example');
+    }
+    assert.match((parseInstanceInfo({ ...good, url: '' }) as { error: string }).error, /address/);
+    // An address it does give still has to be usable: no falling back past a bad one.
+    assert.match((parseInstanceInfo({ ...good, url: 'http://cats.example' }, 'https://app.cats.example') as { error: string }).error, /address/);
+  });
+
   it('falls back to the server name, and strips terminal escapes from the name', () => {
     assert.equal((parseInstanceInfo({ ...good, name: '' }) as { name: string }).name, PEER);
     assert.equal((parseInstanceInfo({ ...good, name: '\u001b]52;c;x\u0007Cats‮' }) as { name: string }).name.includes('\u001b'), false);

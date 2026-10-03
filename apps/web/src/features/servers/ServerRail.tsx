@@ -22,7 +22,7 @@ import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
 import { useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
-import { classifyInvite } from '../../matrix/invites';
+import { classifyInvite, parentSpaceOf } from '../../matrix/invites';
 import { getParentSpace } from '../../matrix/voice';
 import { CreateSpaceModal } from './CreateSpaceModal';
 import './ServerRail.css';
@@ -105,7 +105,7 @@ export function ServerRail() {
     if (kind === 'space') {
       selectSpace(room.roomId);
     } else if (kind === 'channel') {
-      const parentId = getParentSpace(mx, room)?.roomId ?? null;
+      const parentId = getParentSpace(mx, room)?.roomId ?? parentSpaceOf(room)?.roomId ?? null;
       setSelectedSpaceId(parentId);
       setSelectedRoomId(room.roomId);
     } else {
