@@ -10,6 +10,10 @@ export const role = (page: Page | Locator, name: string) => page.locator(`[data-
 
 /** Opens the app locked to the test homeserver, as a deployment's `/config.json` would, at `path`. */
 export async function openApp(page: Page, path = '/'): Promise<void> {
+  // Anything the Content-Security-Policy blocks (deploy/security-headers.conf) shows in the output.
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /Content Security Policy/i.test(msg.text())) console.log(`[csp] ${msg.text()}`);
+  });
   await page.route('**/config.json', (route) => route.fulfill({ json: { homeserver: HOMESERVER } }));
   await page.goto(path);
 }

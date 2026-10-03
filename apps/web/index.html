@@ -22,9 +22,8 @@
     />
   </head>
   <body id="appBody">
-    <script>
-      window.global ||= window;
-    </script>
+    <!-- A file, not an inline script, so the Content-Security-Policy can refuse every inline one. -->
+    <script src="/global-shim.js"></script>
     <!-- Shown until React mounts (App.tsx's BootSplash replaces it with the same markup), so a cold
          load starts on the mascot instead of a blank page. Styled by styles/base/shell.css, which
          the production build links in the <head>. -->

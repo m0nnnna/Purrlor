@@ -58,16 +58,18 @@ const THEME_PRESETS: { name: string; swatch: [string, string]; css: string }[] =
 export function AppearanceSettings() {
   const [css, setCss] = useState(() => getStoredThemeCss());
   const [justApplied, setJustApplied] = useState(false);
+  // Rules of the applied theme that were left out because they could read the page (themeSanitize.ts).
+  const [leftOut, setLeftOut] = useState<string[]>([]);
 
   const handleApply = () => {
-    saveThemeCss(css);
+    setLeftOut(saveThemeCss(css));
     setJustApplied(true);
     setTimeout(() => setJustApplied(false), 1500);
   };
 
   const handleReset = () => {
     setCss('');
-    saveThemeCss('');
+    setLeftOut(saveThemeCss(''));
   };
 
   const handleFile = (evt: ChangeEvent<HTMLInputElement>) => {
@@ -140,6 +142,22 @@ export function AppearanceSettings() {
           {justApplied ? 'Applied ✓' : 'Apply'}
         </button>
       </div>
+      {leftOut.length > 0 && (
+        <div className="nu-field__error" role="status" data-nu-role="appearance-settings-left-out">
+          <p>
+            {leftOut.length === 1 ? 'One rule was' : `${leftOut.length} rules were`} left out: they match on what an attribute
+            holds (a typed value, a name, a link), which a theme can use to send what's on your screen elsewhere. Target
+            parts of the app with <code>[data-nu-role="…"]</code> instead.
+          </p>
+          <ul>
+            {leftOut.map((selector, i) => (
+              <li key={i}>
+                <code>{selector}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <details className="nu-appearance-settings__reference">
         <summary>Available tokens</summary>
         <ul className="nu-appearance-settings__reference-list">

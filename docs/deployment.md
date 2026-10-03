@@ -697,3 +697,30 @@ and 3002; `sudo purrlor metrics prometheus` prints the scrape config. Those rout
 `purrlor errors` and `purrlor metrics` use) need `PURRLOR_METRICS_TOKEN` from `.env` as a bearer
 token, since the push gateway is reachable from outside under `/api/push/`. The installer makes it, as
 does `purrlor update` on an install from before it; `... metrics new-token` replaces it.
+
+### Security headers
+
+The web container sends its own security headers (`apps/web/deploy/security-headers.conf`), so every
+setup gets them whatever proxy is in front. The one that matters most is the Content-Security-Policy:
+the Matrix access token is kept in the page, and the policy is what stops a script that got into it
+(through a bug, a malicious link, a hostile theme) from running. It allows:
+
+- scripts from the app itself, WebAssembly (Matrix's encryption) and YouTube's player (watch
+  parties), and nothing inline or `eval`'d
+- connections, images and media to any `https` / `wss` address, since the homeserver, a Space's
+  voice server, a push gateway and federated media can be anywhere
+- styles and fonts from the app and Google Fonts only, which also limits what a theme's `@import`
+  can load; frames from YouTube only
+
+Alongside it: no framing by other sites (`frame-ancestors 'none'`, `X-Frame-Options: DENY`),
+`nosniff`, a `Referrer-Policy` that sends other sites no more than the origin, camera, microphone and
+screen sharing for this site only, and HSTS for a year on the app's own address (not its subdomains).
+
+A homeserver or voice server reached over plain `http` is refused by the policy: put it behind HTTPS.
+If you add something to the app that loads from elsewhere, add its address to the matching directive
+in that file; `vite preview` serves the same file, so the end-to-end tests run under it and
+`e2e/security.spec.ts` checks that nothing the app does is blocked.
+
+Two things stay in memory in the token server, by design for a single server: the per-address rate
+limits and the "online now" count. Both rebuild within minutes after a restart. Running a second
+token server instance would need them in a shared store first.

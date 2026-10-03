@@ -188,8 +188,17 @@ described above: anyone who wants something else entirely — including a flatte
 Discord-literal look — reskins it the same way any other custom theme would, by overriding the
 tokens and selectors in this document, not by patching the shipped CSS.
 
-**Known gap, not yet addressed:** if themes are ever shared between users (rather than
-self-authored), `@import` and remote `url()` in loaded CSS need sanitizing before untrusted
-themes are allowed — a CSS file can be used to beacon out via network-fetching properties. Not
-a concern for self-hosted single-user theming today, since `AppearanceSettings.tsx` only ever
-loads a theme *you* pasted or picked from your own filesystem.
+**Themes from other people.** "Load from file" means a theme can come from anyone, and CSS can leak
+what's on the page without running code: a rule like `input[value^="a"] { background: url(…) }`
+fetches a different address for each letter typed. Two things stop that:
+
+- The Content-Security-Policy (`apps/web/deploy/security-headers.conf`, docs/deployment.md,
+  "Security headers") lets `@import` and fonts load only from the app and Google Fonts. Background
+  images may come from any `https` address, since themes use them.
+- `app/themeSanitize.ts` leaves out every rule whose selector matches on an attribute's value,
+  unless the attribute is one of the app's own presentational ones: `data-nu-role`, `data-nu-icon`
+  and the other `data-nu-*` (except `data-nu-event-id` and `data-nu-link`), `class`, `id`, `type`,
+  ARIA states. Presence checks (`[title]`) are fine. Appearance settings lists any rule it left out.
+  The theme is saved as written, so editing it later shows what you wrote.
+
+A theme that targets the documented tokens and `[data-nu-role="…"]` selectors is never changed.

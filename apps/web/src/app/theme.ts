@@ -8,6 +8,8 @@
  * the documented token variables (`--nu-color-*` etc.) on `:root` needs no specificity fight at
  * all. See AppearanceSettings.tsx for the editor UI.
  */
+import { sanitizeThemeCss } from './themeSanitize';
+
 const STORAGE_KEY = 'nekous_custom_theme_css';
 const STYLE_ELEMENT_ID = 'nu-theme-override';
 
@@ -29,12 +31,19 @@ export function getStoredThemeCss(): string {
   }
 }
 
-function applyThemeCss(css: string): void {
-  getStyleElement().textContent = css;
+/** Applies the theme without the rules that could read the page (themeSanitize.ts), and says which those were. */
+function applyThemeCss(css: string): string[] {
+  const { css: safe, removed } = sanitizeThemeCss(css);
+  getStyleElement().textContent = safe;
+  return removed;
 }
 
-/** Saves (or, given an empty string, clears) the custom theme and applies it immediately. */
-export function saveThemeCss(css: string): void {
+/**
+ * Saves (or, given an empty string, clears) the custom theme and applies it immediately. Returns the
+ * selectors of any rules left out because they could read what's on the page. The theme is saved as
+ * written, so editing it later shows what the person wrote.
+ */
+export function saveThemeCss(css: string): string[] {
   try {
     if (css) {
       localStorage.setItem(STORAGE_KEY, css);
@@ -45,7 +54,7 @@ export function saveThemeCss(css: string): void {
     // Best-effort: a full/blocked localStorage just means the override won't survive a reload,
     // not that applying it right now should fail too.
   }
-  applyThemeCss(css);
+  return applyThemeCss(css);
 }
 
 /** Call once at boot (main.tsx) so a previously saved theme survives a reload — before React

@@ -174,6 +174,8 @@ services:
       - PORT=3002
       # Reminders it fires as Web Push (services/push-gateway/src/reminders.ts), kept across restarts.
       - REMINDERS_FILE=/data/reminders.json
+      # Browsers registered for notifications (subscriptions.ts), so a restart doesn't drop them.
+      - SUBSCRIPTIONS_FILE=/data/subscriptions.json
       # Errors and metrics, the same as the token server's above.
       - ERRORS_FILE=/data/errors.json
       - METRICS_TOKEN=${PURRLOR_METRICS_TOKEN:-}

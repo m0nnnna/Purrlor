@@ -62,10 +62,11 @@ an existing subscription and re-sets its pusher (`refreshBackgroundPush`) — no
 Two roles, both in `src/server.ts`:
 
 - **Subscription store** (`POST /subscribe`, `DELETE /subscribe/:pushkey`, both requiring a
-  Matrix OpenID token) — an in-memory `pushkey -> { subscription, owner }` map
-  (`src/subscriptions.ts`), same "no persistent store, single process" posture as the token
-  server. Lost on restart, and refilled as clients start (`refreshBackgroundPush`). Its
-  `src/openid.ts` is a copy of the token server's; a test fails if they differ.
+  Matrix OpenID token) — a `pushkey -> { subscription, owner }` map (`src/subscriptions.ts`),
+  kept in `SUBSCRIPTIONS_FILE` (`/data/subscriptions.json` in the data volume) so a restart doesn't
+  stop anyone's notifications until they next open the app. Only an https endpoint and its two keys
+  are kept from what a client sends. Its `src/openid.ts` is a copy of the token server's;
+  `copies.test.ts` fails if they differ.
 - **`POST /_matrix/push/v1/notify`** — the actual Push Gateway API endpoint the homeserver calls.
   For each device in the request, looks up its stored subscription and sends a real Web Push
   message (the `web-push` npm package, VAPID-signed) built from the notification's sender/room/

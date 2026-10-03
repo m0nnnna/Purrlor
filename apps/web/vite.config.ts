@@ -6,6 +6,7 @@ import { wasm } from '@rollup/plugin-wasm';
 import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
 import inject from '@rollup/plugin-inject';
 import topLevelAwait from 'vite-plugin-top-level-await';
+import { parseSecurityHeaders, previewHeaders } from './src/app/securityHeaders';
 
 /**
  * matrix-js-sdk's Rust/WASM crypto stack (@matrix-org/matrix-sdk-crypto-wasm) needs its .wasm
@@ -44,6 +45,12 @@ export default defineConfig({
   server: {
     port: 8080,
     host: true,
+  },
+  // The production build under production's headers (deploy/security-headers.conf), so the
+  // end-to-end tests catch anything the Content-Security-Policy would block. Not the dev server,
+  // whose hot reloading needs inline scripts.
+  preview: {
+    headers: previewHeaders(parseSecurityHeaders(fs.readFileSync(path.resolve('deploy/security-headers.conf'), 'utf8'))),
   },
   plugins: [
     serveMatrixSdkCryptoWasm('/node_modules/.vite/deps/pkg/matrix_sdk_crypto_wasm_bg.wasm'),

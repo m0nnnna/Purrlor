@@ -29,6 +29,7 @@ RUN npm run build
 FROM nginx:1.30-alpine
 COPY --from=builder /src/dist /usr/share/nginx/html
 COPY apps/web/deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/web/deploy/security-headers.conf /etc/nginx/purrlor/security-headers.conf
 COPY --chmod=755 apps/web/deploy/40-purrlor-config.sh /docker-entrypoint.d/40-purrlor-config.sh
 
 EXPOSE 80

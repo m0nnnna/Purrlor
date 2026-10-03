@@ -8,6 +8,8 @@ import {
   claimSubscription,
   deleteSubscription,
   getSubscription,
+  loadSubscriptions,
+  parseSubscription,
   releaseSubscription,
   subscriptionCount,
   subscriptionsOf,
@@ -44,6 +46,8 @@ webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 // Where reminders are kept across restarts (reminders.ts). Unset: memory only.
 loadReminders(process.env.REMINDERS_FILE || undefined);
+// And browsers' subscriptions (subscriptions.ts), so notifications keep coming after a restart.
+loadSubscriptions(process.env.SUBSCRIPTIONS_FILE || undefined);
 /** How often due reminders are looked for. */
 const REMINDER_SWEEP_MS = 30_000;
 
@@ -96,8 +100,10 @@ async function callerOf(body: unknown): Promise<string | undefined> {
  * notifications to your own browser.
  */
 app.post('/subscribe', async (req, res) => {
-  const { pushkey, subscription } = req.body ?? {};
-  if (typeof pushkey !== 'string' || !pushkey || !subscription?.endpoint) {
+  const pushkey: unknown = req.body?.pushkey;
+  // Only the parts Web Push uses are kept (and saved): an https endpoint and its two keys.
+  const subscription = parseSubscription(req.body?.subscription);
+  if (typeof pushkey !== 'string' || !pushkey || pushkey.length > 512 || !subscription) {
     res.status(400).json({ error: 'pushkey and subscription are required' });
     return;
   }

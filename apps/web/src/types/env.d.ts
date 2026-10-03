@@ -7,3 +7,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env?: ImportMetaEnv;
 }
+
+// A file's text, as Vite's `?raw` import gives it (tests read config files this way).
+declare module '*?raw' {
+  const text: string;
+  export default text;
+}

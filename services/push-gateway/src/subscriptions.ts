@@ -1,3 +1,4 @@
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { PushSubscription } from 'web-push';
 
 /**
@@ -11,18 +12,68 @@ import type { PushSubscription } from 'web-push';
  * anyone who learned a pushkey could point it at their own browser and receive that person's
  * notifications — message previews included — or quietly switch them off.
  *
- * In-memory and single-process, matching this project's other services. That's survivable
- * because the web client re-registers its subscription on every start (refreshBackgroundPush),
- * so a restarted gateway fills back up as people open the app.
+ * Kept in memory, and in SUBSCRIPTIONS_FILE when it's set (the data volume, so it's in backups too):
+ * the web client registers again each time it starts (refreshBackgroundPush), but someone who
+ * doesn't open the app after a restart should still get their notifications.
  */
 type Entry = { subscription: PushSubscription; owner: string };
 const subscriptionsByPushKey = new Map<string, Entry>();
+let file: string | undefined;
+
+function save(): void {
+  if (!file) return;
+  try {
+    // Written aside, then moved over: a crash mid-write can't leave half a file behind.
+    writeFileSync(`${file}.tmp`, JSON.stringify(Object.fromEntries(subscriptionsByPushKey)), { mode: 0o600 });
+    renameSync(`${file}.tmp`, file);
+  } catch (err) {
+    console.error('Couldn’t save push subscriptions', err);
+  }
+}
+
+const isText = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
+
+/**
+ * A browser's subscription as a client sent it, or as it was saved: an https endpoint and both
+ * keys, nothing else kept. Undefined when anything is missing or out of shape.
+ */
+export function parseSubscription(value: unknown): PushSubscription | undefined {
+  const sub = value as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
+  if (!sub || !isText(sub.endpoint, 2048) || !sub.endpoint.startsWith('https://')) return undefined;
+  if (!isText(sub.keys?.p256dh, 512) || !isText(sub.keys?.auth, 512)) return undefined;
+  return { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } };
+}
+
+function parseEntry(value: unknown): Entry | undefined {
+  const entry = value as { owner?: unknown; subscription?: unknown } | null;
+  const subscription = parseSubscription(entry?.subscription);
+  return entry && isText(entry.owner, 255) && subscription ? { owner: entry.owner, subscription } : undefined;
+}
+
+/** Where subscriptions are kept across restarts, and what was kept there last time. */
+export function loadSubscriptions(path: string | undefined): void {
+  file = path;
+  subscriptionsByPushKey.clear();
+  if (!path) return;
+  try {
+    const stored = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    for (const [pushkey, value] of Object.entries(stored)) {
+      const entry = parseEntry(value);
+      if (entry && isText(pushkey, 512)) subscriptionsByPushKey.set(pushkey, entry);
+    }
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'ENOENT') console.error('Couldn’t read saved push subscriptions', err);
+  }
+}
 
 /** Saves (or refreshes) a subscription for its owner. `taken` when the pushkey belongs to someone else. */
 export function claimSubscription(pushkey: string, owner: string, subscription: PushSubscription): 'saved' | 'taken' {
   const existing = subscriptionsByPushKey.get(pushkey);
   if (existing && existing.owner !== owner) return 'taken';
+  const unchanged = existing && JSON.stringify(existing.subscription) === JSON.stringify(subscription);
   subscriptionsByPushKey.set(pushkey, { subscription, owner });
+  // Every app start sends its subscription again; only a new or changed one is written.
+  if (!unchanged) save();
   return 'saved';
 }
 
@@ -32,6 +83,7 @@ export function releaseSubscription(pushkey: string, owner: string): boolean {
   const existing = subscriptionsByPushKey.get(pushkey);
   if (!existing || existing.owner !== owner) return false;
   subscriptionsByPushKey.delete(pushkey);
+  save();
   return true;
 }
 
@@ -46,7 +98,7 @@ export function subscriptionsOf(owner: string): { pushkey: string; subscription:
 
 /** For a pushkey the push service reports gone (404/410): forgotten regardless of owner. */
 export function deleteSubscription(pushkey: string): void {
-  subscriptionsByPushKey.delete(pushkey);
+  if (subscriptionsByPushKey.delete(pushkey)) save();
 }
 
 /** How many browsers are registered, for the metrics. */

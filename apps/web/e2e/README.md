@@ -24,6 +24,7 @@ the same server.
 | `music-albums.spec.ts` | A creator uploads tracks into two albums in the page builder, gives one a year and a cover, moves a track between them and publishes, shown to everyone; the page shows a shelf of covers, an album opens over it and plays in the app's player, which keeps playing in the DMs and on a phone's feed; the album's and a track's links open it signed in and signed out (the public API through the token server), and the track's link previews with its title |
 | `post-links.spec.ts` | A Global post's "Copy link", opened signed in (the post's page) and signed out (the public post and its preview), after it's been buried past the public web's window |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
+| `security.spec.ts` | The security headers are sent, signing in, a channel and the feed run with no Content-Security-Policy violation, an injected inline script is refused, and a theme's rules that read attribute values are left out while the rest applies |
 | `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
 
 ## Running locally
