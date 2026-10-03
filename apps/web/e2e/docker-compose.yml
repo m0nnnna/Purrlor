@@ -23,6 +23,11 @@ services:
       # server checks who's asking (the online count's ping). It has no other server to talk to.
       CONTINUWUITY_ALLOW_FEDERATION: 'true'
       CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ''
+      # Link previews for every site, as deploy/docker-compose.yml sets them.
+      CONTINUWUITY_URL_PREVIEW_DOMAIN_CONTAINS_ALLOWLIST: '["*"]'
+      # Test only: previews may fetch private addresses, so a test can preview a page the token server
+      # serves here (its link cards) instead of a site on the internet. Deployed, they never can.
+      CONTINUWUITY_IP_RANGE_DENYLIST: '[]'
     tmpfs:
       - /var/lib/continuwuity
 

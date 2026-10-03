@@ -268,6 +268,12 @@ services:
       # account. Off here, so names come out exactly as people type them; set
       # MATRIX_NEW_USER_DISPLAYNAME_SUFFIX in .env to bring one back.
       CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ${MATRIX_NEW_USER_DISPLAYNAME_SUFFIX:-}
+      # Link previews (the card under a message or post with a link): the homeserver fetches the page
+      # and reads its title, picture and description. Continuwuity previews nothing until told which
+      # sites it may fetch; "*" is every site. It still never fetches a private or internal address
+      # (its ip_range_denylist), and a site sees this server fetching, never the person who posted.
+      # The app asks only outside encrypted conversations. MATRIX_URL_PREVIEWS='[]' in .env turns them off.
+      CONTINUWUITY_URL_PREVIEW_DOMAIN_CONTAINS_ALLOWLIST: '${MATRIX_URL_PREVIEWS:-["*"]}'
       # Largest upload, in bytes: 100 MiB, so a music track fits (Continuwuity's own default is 20 MB).
       # nginx's client_max_body_size for the homeserver has to match (setup.sh writes 100M).
       CONTINUWUITY_MAX_REQUEST_SIZE: ${MATRIX_MAX_UPLOAD_BYTES:-104857600}

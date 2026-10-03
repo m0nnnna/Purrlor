@@ -244,8 +244,10 @@ function MessageRow({
   // Only plain m.text/m.notice bodies get a preview card — m.emote's body is a third-person
   // action line, not really "a message with a link in it" in the same sense, and media/edit
   // states render their own content instead of this branch at all.
+  // Not in an encrypted conversation: a preview is the homeserver fetching the link, which would
+  // tell it what was said there (Element skips them in encrypted rooms too).
   const firstUrl =
-    content.msgtype !== 'm.emote' ? extractFirstUrl(String(content.body ?? '')) : undefined;
+    content.msgtype !== 'm.emote' && !isEncryptedRoom(room) ? extractFirstUrl(String(content.body ?? '')) : undefined;
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
