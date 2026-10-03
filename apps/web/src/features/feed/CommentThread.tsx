@@ -383,6 +383,7 @@ export function CommentThread({
                 }
                 if (e.key === 'Escape' && replyingTo) setReplyingTo(undefined);
               }}
+              onPaste={media.addPasted}
               placeholder={replyingTo ? 'Write a reply…' : 'Write a comment…'}
               rows={1}
             />

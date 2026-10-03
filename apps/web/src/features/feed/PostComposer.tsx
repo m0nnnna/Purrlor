@@ -206,6 +206,7 @@ ${shared}` : shared));
             e.currentTarget.form?.requestSubmit();
           }
         }}
+        onPaste={media.addPasted}
         placeholder={placeholder}
         rows={3}
       />

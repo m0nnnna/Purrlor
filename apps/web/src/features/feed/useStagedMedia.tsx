@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import {
@@ -33,6 +33,24 @@ export function useStagedMedia(onError: (message: string) => void) {
     const files = Array.from(evt.target.files ?? []);
     evt.target.value = '';
     return addPicked(files);
+  };
+
+  /** A paste into the text box: a copied picture or video, or a screenshot, is staged the way a
+   *  picked one is, and the paste stops there. A paste with no image or video on the clipboard
+   *  goes into the text as usual. */
+  const addPasted = (evt: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(evt.clipboardData.items)
+      .filter((item) => item.kind === 'file' && /^(image|video)\//.test(item.type))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (!files.length) return;
+    evt.preventDefault();
+    if (preparing) return;
+    if (staged.length >= MAX_ATTACHMENTS) {
+      onError(`Up to ${MAX_ATTACHMENTS} images or videos at a time.`);
+      return;
+    }
+    void addPicked(files);
   };
 
   /** Stages files that didn't come from the picker, such as ones shared in from another app. */
@@ -83,7 +101,7 @@ export function useStagedMedia(onError: (message: string) => void) {
 
   const savedBytes = staged.reduce((sum, item) => sum + (item.originalSize ? item.originalSize - item.file.size : 0), 0);
 
-  return { staged, preparing, addFiles, addPicked, remove, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
+  return { staged, preparing, addFiles, addPasted, addPicked, remove, clear, upload, savedBytes, full: staged.length >= MAX_ATTACHMENTS };
 }
 
 export function StagedMediaPreviews({ staged, onRemove, role }: { staged: Staged[]; onRemove: (index: number) => void; role: string }) {
