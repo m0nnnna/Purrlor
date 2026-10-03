@@ -2,7 +2,13 @@ import type { ReactNode } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { mergeByShortcode, type Emote } from '../../matrix/emotes';
 import { HASHTAG_PATTERN, normalizeTag } from '../../matrix/hashtags';
-import { mentionText, parseFormattedBodyEmotes } from '../../matrix/messageFormatting';
+import {
+  findMentions,
+  mentionCandidatesFor,
+  mentionText,
+  parseFormattedBodyEmotes,
+  parseFormattedBodyMentions,
+} from '../../matrix/messageFormatting';
 import { CodeBlock } from './CodeBlock';
 import { EmoteImage } from './EmoteImage';
 import { SpoilerText } from './SpoilerText';
@@ -35,10 +41,6 @@ const STRIKE_PATTERN = /~~(?!\s)([^~\n]+?)(?<!\s)~~/g;
 const SPOILER_PATTERN = /\|\|(?!\s)([^|\n]+?)(?<!\s)\|\|/g;
 const ITALIC_STAR_PATTERN = /\*(?!\s)([^*\n]+?)(?<!\s)\*/g;
 const ITALIC_UNDERSCORE_PATTERN = /_(?!\s)([^_\n]+?)(?<!\s)_/g;
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /** First bare URL in a message body, if any — used to decide whether to fetch/show a link
  *  preview card below the message, matching Element/Discord's "unfurl the first link" rule. */
@@ -161,16 +163,21 @@ export function renderMessageText(
     });
   }
 
-  for (const member of members) {
-    if (!member.name) continue;
-    const pattern = new RegExp(`${escapeRegExp(mentionText(member.name))}\\b`, 'g');
-    for (const match of text.matchAll(pattern)) {
+  // Mentions: the ones the message itself links (what the sender's client meant, so someone who
+  // isn't a member here, like a Global post's mention, still lights up), then anyone here by
+  // name, handle or user ID. The same matching the sending side uses (messageFormatting.ts).
+  if (text.includes('@')) {
+    const targets = [
+      ...parseFormattedBodyMentions(options.formattedBody),
+      ...mentionCandidatesFor(members).map((m) => ({ text: mentionText(m.displayName), userId: m.userId })),
+    ];
+    for (const found of findMentions(text, targets)) {
       matches.push({
-        index: match.index,
-        length: match[0].length,
+        index: found.index,
+        length: found.length,
         node: (
-          <span key={key++} className={member.userId === myUserId ? 'nu-mention nu-mention--me' : 'nu-mention'}>
-            {match[0]}
+          <span key={key++} className={found.userId === myUserId ? 'nu-mention nu-mention--me' : 'nu-mention'}>
+            {text.slice(found.index, found.index + found.length)}
           </span>
         ),
       });

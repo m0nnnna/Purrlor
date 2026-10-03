@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
-import { mentionText, type MentionCandidate } from '../../matrix/messageFormatting';
+import { mentionCandidatesFor, mentionText, type MentionCandidate } from '../../matrix/messageFormatting';
 import './Composer.css';
 
 const MAX_MENTION_SUGGESTIONS = 8;
@@ -14,9 +14,9 @@ const MENTION_TRIGGER_PATTERN = /(?:^|\s)@([^\s@]*)$/;
 /**
  * `@name` autocomplete for any textarea: the chat composer, the post composer and comment boxes.
  *
- * Only a name picked from the dropdown becomes a real mention (`candidates()`), which is what
- * buildMessageFormatting turns into a pill and an `m.mentions` entry. A name typed by hand stays
- * text, so a coincidental "@word" never notifies anyone (see matrix/messageFormatting.ts).
+ * A name picked from the dropdown, or anyone's name, handle or user ID typed out in full after an
+ * "@", is a real mention (`candidates()`): buildMessageFormatting turns it into a pill and an
+ * `m.mentions` entry, which is what notifies them. An "@word" that is nobody here stays text.
  */
 export function useMentionAutocomplete({
   text,
@@ -92,8 +92,12 @@ export function useMentionAutocomplete({
     return false;
   };
 
-  const candidates = (): MentionCandidate[] =>
-    [...pickedRef.current.entries()].map(([displayName, userId]) => ({ displayName, userId }));
+  /** Who the draft can mention: names picked from the dropdown first (they decide a name two
+   *  people share), then everyone here by name, handle or full user ID, typed out in full. */
+  const candidates = (): MentionCandidate[] => [
+    ...[...pickedRef.current.entries()].map(([displayName, userId]) => ({ displayName, userId })),
+    ...mentionCandidatesFor(people),
+  ];
 
   /** Hides the dropdown, keeping what's been picked (a failed send restores the draft with them). */
   const close = () => setQuery(null);

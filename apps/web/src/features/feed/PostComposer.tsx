@@ -7,6 +7,7 @@ import type { Emote } from '../../matrix/emotes';
 import { buildPostContent, savePrivatePost } from '../../matrix/feed';
 import type { FeedSource } from '../../matrix/globalFeed';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
+import { nameOrFallback } from '../../matrix/displayName';
 import { ACCEPTED_MEDIA_TYPES, formatBytes } from '../../matrix/postMedia';
 import { publishToTarget, type PostTarget } from '../../matrix/postPublishing';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
@@ -87,7 +88,7 @@ export function PostComposer({
   const spaceMembers = useRoomMembers(target?.target.kind === 'space' ? target.target.space.roomId : null);
   const people = useMemo(() => {
     const everyone = isGlobal
-      ? mx.getUsers().map((user) => ({ userId: user.userId, name: user.displayName || user.userId, avatarUrl: user.avatarUrl }))
+      ? mx.getUsers().map((user) => ({ userId: user.userId, name: nameOrFallback(user.displayName, user.userId), avatarUrl: user.avatarUrl }))
       : membersAsPeople(spaceMembers);
     return everyone.filter((person) => person.userId !== mx.getUserId());
   }, [isGlobal, spaceMembers, mx]);

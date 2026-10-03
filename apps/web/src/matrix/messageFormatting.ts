@@ -1,4 +1,5 @@
 import type { Emote } from './emotes';
+import { fallbackName } from './displayName';
 
 const SHORTCODE_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 
@@ -81,16 +82,13 @@ export function buildMessageFormatting(
     }
   }
 
-  for (const mention of mentions) {
-    const pattern = new RegExp(`${escapeRegExp(mentionText(mention.displayName))}\\b`, 'g');
-    for (const match of text.matchAll(pattern)) {
-      replacements.push({
-        index: match.index,
-        length: match[0].length,
-        html: `<a href="https://matrix.to/#/${mention.userId}">${escapeHtml(match[0])}</a>`,
-        mentionedUserId: mention.userId,
-      });
-    }
+  for (const found of findMentions(text, mentions.map((m) => ({ text: mentionText(m.displayName), userId: m.userId })))) {
+    replacements.push({
+      index: found.index,
+      length: found.length,
+      html: `<a href="https://matrix.to/#/${found.userId}">${escapeHtml(text.slice(found.index, found.index + found.length))}</a>`,
+      mentionedUserId: found.userId,
+    });
   }
 
   for (const match of text.matchAll(FENCE_PATTERN)) {
@@ -189,4 +187,73 @@ export function parseFormattedBodyEmotes(formattedBody: string | undefined, hidd
  *  their user ID, which already starts with "@", and prefixing another one gave "@@alice:server". */
 export function mentionText(name: string): string {
   return name.startsWith('@') ? name : `@${name}`;
+}
+
+/** One way of writing a mention of someone, `@` included: "@Luna", "@luna", "@luna:cats.example". */
+export type MentionTarget = { text: string; userId: string };
+
+/**
+ * Every way a person can be @-mentioned by typing: their name, their handle (`luna`, or
+ * `luna:cats.example` for another server's people, displayName.ts) and their full user ID. Typing
+ * any of them in full is as deliberate as picking the name from the dropdown, so it's a mention too.
+ */
+export function mentionCandidatesFor(people: { userId: string; name: string }[]): MentionCandidate[] {
+  return people.flatMap(({ userId, name }) => [
+    ...(name ? [{ userId, displayName: name }] : []),
+    { userId, displayName: fallbackName(userId) },
+    { userId, displayName: userId },
+  ]);
+}
+
+// A mention starts where a word doesn't (so `me@luna.example` isn't one), and ends where the next
+// character isn't a letter, a digit, `_`, or a `:` going on into a server name: `@luna` is not a
+// mention of a local luna inside `@luna:cats.example`. Unicode-aware, so a name ending in an
+// accented letter, an emoji or a `)` still matches, which `\b` (ASCII word characters only) didn't.
+const MENTION_START = String.raw`(?<![\p{L}\p{N}_])`;
+const MENTION_END = String.raw`(?![\p{L}\p{N}_]|:[\p{L}\p{N}])`;
+
+/**
+ * Where `text` mentions any of `targets`, ignoring case. One pattern for all of them, longest
+ * first, so `@iNSo (@inso:server)` wins over `@iNSo`, and a full user ID over its handle. The
+ * first target given for a piece of text decides who it is.
+ */
+export function findMentions(text: string, targets: MentionTarget[]): { index: number; length: number; userId: string }[] {
+  const byText = new Map<string, string>();
+  for (const target of targets) {
+    const key = target.text.toLowerCase();
+    if (target.text.length > 1 && !byText.has(key)) byText.set(key, target.userId);
+  }
+  if (byText.size === 0 || !text.includes('@')) return [];
+  const alternatives = [...byText.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
+  const pattern = new RegExp(`${MENTION_START}(?:${alternatives.join('|')})${MENTION_END}`, 'giu');
+  return [...text.matchAll(pattern)].map((match) => ({
+    index: match.index,
+    length: match[0].length,
+    userId: byText.get(match[0].toLowerCase()) as string,
+  }));
+}
+
+// A mention link the way Matrix clients write them: <a href="https://matrix.to/#/@user:server">Name</a>.
+// The ID may be URL-encoded (`%40luna%3Acats.example`), as some clients write it.
+const MENTION_LINK_PATTERN = /<a\b[^>]*\bhref\s*=\s*["']https:\/\/matrix\.to\/#\/((?:@|%40)[^"'/?]+)["'][^>]*>([^<]{1,255})<\/a>/gi;
+
+/**
+ * The mentions a message's own `formatted_body` links, as written: what the sender's client
+ * meant, so the reader can highlight them even when the person isn't a member here (a Global
+ * post's mention, say). Only the link's user ID and its text are read; the HTML is never rendered.
+ */
+export function parseFormattedBodyMentions(formattedBody: string | undefined): MentionTarget[] {
+  if (!formattedBody) return [];
+  const targets: MentionTarget[] = [];
+  for (const match of formattedBody.matchAll(MENTION_LINK_PATTERN)) {
+    let userId: string;
+    try {
+      userId = decodeURIComponent(match[1]);
+    } catch {
+      continue;
+    }
+    const label = decodeEntities(match[2]).trim();
+    if (label && userId.startsWith('@')) targets.push({ text: mentionText(label), userId });
+  }
+  return targets;
 }
