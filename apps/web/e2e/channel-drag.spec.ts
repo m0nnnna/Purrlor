@@ -145,3 +145,41 @@ test('on a touch screen, a long press drags a channel and a swipe still scrolls'
   await expect.poll(() => listed(page)).toEqual(['art', 'general', 'rules']);
   await context.close();
 });
+
+test('Spaces are dragged into your own order in the rail, which is saved for your other devices', async ({ page }) => {
+  test.setTimeout(120_000);
+  const me = await createUser('me');
+  const made: string[] = [];
+  for (const name of ['Alpha', 'Beta', 'Gamma']) {
+    const { room_id: roomId } = await api<{ room_id: string }>(me, 'POST', '/createRoom', {
+      name: `${name} ${Date.now()}`,
+      preset: 'private_chat',
+      creation_content: { type: 'm.space' },
+    });
+    made.push(roomId);
+  }
+  await logIn(page, me);
+  const tiles = () =>
+    page.locator('[data-nu-role="server-rail-list"] [data-nu-role="server-rail-item"]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')!.split(' ')[0]));
+  await expect.poll(tiles).toEqual(['Alpha', 'Beta', 'Gamma']);
+
+  const tile = (name: string) => page.locator(`[data-nu-role="server-rail-item"][aria-label^="${name} "]`);
+  await dragTo(page, tile('Gamma'), tile('Alpha'), 'above');
+  await expect.poll(tiles).toEqual(['Gamma', 'Alpha', 'Beta']);
+  await dragTo(page, tile('Alpha'), tile('Beta'), 'below');
+  await expect.poll(tiles).toEqual(['Gamma', 'Beta', 'Alpha']);
+
+  // Saved where Element keeps it, so it's the same everywhere.
+  const order = async (roomId: string) =>
+    (await api<{ order?: string }>(me, 'GET', `/user/${enc(me.userId)}/rooms/${enc(roomId)}/account_data/org.matrix.msc3230.space_order`)).order ?? '';
+  await eventually(
+    async () => Promise.all(made.map(order)),
+    ([alpha, beta, gamma]) => !!alpha && !!beta && !!gamma && gamma < beta && beta < alpha
+  );
+  await page.reload();
+  await expect.poll(tiles).toEqual(['Gamma', 'Beta', 'Alpha']);
+
+  // A click still opens the Space.
+  await tile('Beta').click();
+  await expect(tile('Beta')).toHaveAttribute('aria-current', 'page');
+});

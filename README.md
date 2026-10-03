@@ -175,7 +175,8 @@ opens a new post with it.
 - Rich link/URL previews (server-side OpenGraph unfurling, no client-side scraping).
 - Drag-and-drop and paste-to-upload for attachments.
 - Discord-style channel categories (collapsible) inside a Space; channels and categories are
-  arranged by dragging them in the channel list (a long press on a touch screen).
+  arranged by dragging them in the channel list (a long press on a touch screen). Spaces are
+  dragged into your own order in the server rail, kept where Element keeps it.
 
 ### Voice & Video
 - Voice channels as a distinct channel type — join instantly from the channel list, with a live

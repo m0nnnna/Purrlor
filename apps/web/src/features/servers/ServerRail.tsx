@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { unreadActivityCountAtom } from '../../app/state/feed';
 import type { Room } from 'matrix-js-sdk';
@@ -26,6 +26,8 @@ import { describeRoomLevel } from '../../matrix/notificationSettings';
 import { classifyInvite, parentSpaceOf } from '../../matrix/invites';
 import { getParentSpace } from '../../matrix/voice';
 import { CreateSpaceModal } from './CreateSpaceModal';
+import { locateInList, usePointerDrag } from '../../components/usePointerDrag';
+import { moveSpace } from '../../matrix/spaceOrder';
 import './ServerRail.css';
 
 /** The selected tile's cat ears — drawn on every tile, shown only on the active one (CSS),
@@ -41,11 +43,20 @@ function CatEars() {
   );
 }
 
-function ServerRailItem({ space, active, onSelect }: { space: Room; active: boolean; onSelect: () => void }) {
+/** A Space's tile can be dragged to another place in the rail (usePointerDrag, matrix/spaceOrder.ts). */
+type TileDrag = { dragging: boolean; clickAllowed: () => boolean; onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
+
+function ServerRailItem({ space, active, onSelect, drag }: { space: Room; active: boolean; onSelect: () => void; drag?: TileDrag }) {
   const src = useMediaUrl(space.getMxcAvatarUrl(), { width: 96, height: 96, method: 'crop' });
   const unread = useUnreadSummary(useSpaceRooms(space.roomId));
 
-  const className = ['nu-server-rail__item', active && 'nu-server-rail__item--active', unread.total > 0 && 'nu-server-rail__item--unread']
+  const className = [
+    'nu-server-rail__item',
+    active && 'nu-server-rail__item--active',
+    unread.total > 0 && 'nu-server-rail__item--unread',
+    drag && 'nu-server-rail__item--draggable',
+    drag?.dragging && 'nu-server-rail__item--dragging',
+  ]
     .filter(Boolean)
     .join(' ');
 
@@ -57,7 +68,11 @@ function ServerRailItem({ space, active, onSelect }: { space: Room; active: bool
       title={space.name}
       aria-label={space.name}
       aria-current={active ? 'page' : undefined}
-      onClick={onSelect}
+      data-nu-drag-space={space.roomId}
+      onPointerDown={drag?.onPointerDown}
+      onClick={() => {
+        if (!drag || drag.clickAllowed()) onSelect();
+      }}
     >
       <CatEars />
       {src ? (
@@ -100,7 +115,44 @@ function DirectMessageRailItem({ room, count, onSelect }: { room: Room; count: n
 /** Left icon rail — one icon per joined Matrix Space, mapped to a Discord "server". */
 export function ServerRail() {
   const mx = useMatrixClient();
-  const spaces = useSpaces();
+  const storedSpaces = useSpaces();
+  // Dragging a Space to another place (matrix/spaceOrder.ts): shown at once, saved behind it.
+  const [pendingOrder, setPendingOrder] = useState<string[] | null>(null);
+  const storedIds = storedSpaces.map((space) => space.roomId).join('\n');
+  useEffect(() => {
+    if (!pendingOrder) return undefined;
+    if (pendingOrder.join('\n') === storedIds) {
+      setPendingOrder(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setPendingOrder(null), 20_000);
+    return () => clearTimeout(timer);
+  }, [pendingOrder, storedIds]);
+  const spaces = pendingOrder
+    ? [
+        ...pendingOrder.flatMap((id) => storedSpaces.filter((space) => space.roomId === id)),
+        ...storedSpaces.filter((space) => !pendingOrder.includes(space.roomId)),
+      ]
+    : storedSpaces;
+  const listRef = useRef<HTMLDivElement>(null);
+  const spaceDrag = usePointerDrag<{ id: string; label: string }, number>({
+    containerRef: listRef,
+    enabled: true,
+    locate: (item, clientY, container) => locateInList(container, 'data-nu-drag-space', item.id, clientY),
+    drop: (item, index) => {
+      const from = spaces.findIndex((space) => space.roomId === item.id);
+      const ids = spaces.map((space) => space.roomId).filter((id) => id !== item.id);
+      const at = Math.max(0, Math.min(from < index ? index - 1 : index, ids.length));
+      const next = [...ids.slice(0, at), item.id, ...ids.slice(at)];
+      if (next.join('\n') === spaces.map((space) => space.roomId).join('\n')) return;
+      const before = spaces;
+      setPendingOrder(next);
+      moveSpace(mx, before, item.id, index).catch((err: unknown) => {
+        console.error('Moving a Space failed', err);
+        setPendingOrder(null);
+      });
+    },
+  });
   const invites = useInvites();
   const [selectedSpaceId, setSelectedSpaceId] = useAtom(selectedSpaceIdAtom);
   const [, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
@@ -204,16 +256,31 @@ export function ServerRail() {
         <Icon name="globe" size={22} />
       </button>
       <div className="nu-server-rail__divider" />
-      <div className="nu-server-rail__list" data-nu-role="server-rail-list">
+      <div
+        className={spaceDrag.dragging ? 'nu-server-rail__list nu-server-rail__list--dragging' : 'nu-server-rail__list'}
+        data-nu-role="server-rail-list"
+        ref={listRef}
+      >
+        {spaceDrag.lineTop !== null && <div className="nu-server-rail__drop-line" style={{ top: spaceDrag.lineTop }} aria-hidden="true" />}
         {spaces.map((space) => (
           <ServerRailItem
             key={space.roomId}
+            drag={{
+              dragging: spaceDrag.dragging?.id === space.roomId,
+              clickAllowed: spaceDrag.clickAllowed,
+              onPointerDown: (event) => spaceDrag.start({ id: space.roomId, label: space.name }, event),
+            }}
             space={space}
             active={selectedSpaceId === space.roomId && !globalFeedOpen}
             onSelect={() => selectSpace(space.roomId)}
           />
         ))}
       </div>
+      {spaceDrag.dragging && spaceDrag.pointer && (
+        <div className="nu-server-rail__drag-label" style={{ left: spaceDrag.pointer.x + 14, top: spaceDrag.pointer.y + 14 }} aria-hidden="true">
+          {spaceDrag.dragging.label}
+        </div>
+      )}
       <div className="nu-server-rail__divider" />
       {/* Everything that's about you, in one place: mentions anywhere, and what people did with
           your posts and profile (the social side's Notifications page). */}
