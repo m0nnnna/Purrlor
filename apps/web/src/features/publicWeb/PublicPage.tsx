@@ -4,7 +4,7 @@ import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { parseProfilePage } from '../../matrix/profilePage';
 import { fetchPublicPage, type PageTarget, type PublicPageAnswer } from '../../matrix/publicWeb';
 import { handleFor } from '../../matrix/roles';
-import { PageBlocks } from '../profilePage/PageBlocks';
+import { ProfilePageLayout } from '../profilePage/ProfilePageLayout';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
 import { PageTargetContext } from '../profilePage/PageTargetContext';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
@@ -76,38 +76,40 @@ function PublicProfile({
   return (
     <main className="nu-public__page" data-nu-role="public-page">
       <ProfilePageFrame page={page}>
-        <section className="nu-profile-view__card">
-          <div
-            className="nu-profile-view__banner"
-            style={bannerSrc ? { backgroundImage: `url(${bannerSrc})` } : undefined}
-            data-nu-role="profile-view-banner"
-          />
-          <div className="nu-profile-view__identity">
-            <div className="nu-profile-view__avatar">
-              <Avatar name={name} mxcUrl={answer.avatarUrl ?? null} size={88} animated={answer.avatarAnimated} />
-            </div>
-            <div className="nu-profile-view__actions">
-              <button type="button" className="nu-follow-button nu-follow-button--on" onClick={onRegister} data-nu-role="public-make-page">
-                Make your own page
-              </button>
-            </div>
-          </div>
-          <h1 className="nu-profile-view__name">{name}</h1>
-          <p className="nu-profile-view__handle">{handleFor(answer.userId)}</p>
-          {answer.bio && <p className="nu-profile-view__bio">{answer.bio}</p>}
-        </section>
-
-        {page && page.blocks.length > 0 && (
-          <PageOwnerContext.Provider value={{ userId: answer.userId, isMe: false }}>
-            <PageTargetContext.Provider value={target}>
-              <PageBlocks blocks={page.blocks} />
-            </PageTargetContext.Provider>
-          </PageOwnerContext.Provider>
-        )}
-
-        <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
-          <PublicPosts userId={answer.userId} onSignIn={onSignIn} />
-        </div>
+        <PageOwnerContext.Provider value={{ userId: answer.userId, isMe: false }}>
+          <PageTargetContext.Provider value={target}>
+            <ProfilePageLayout
+              page={page}
+              header={
+                <section className="nu-profile-view__card">
+                  <div
+                    className="nu-profile-view__banner"
+                    style={bannerSrc ? { backgroundImage: `url(${bannerSrc})` } : undefined}
+                    data-nu-role="profile-view-banner"
+                  />
+                  <div className="nu-profile-view__identity">
+                    <div className="nu-profile-view__avatar">
+                      <Avatar name={name} mxcUrl={answer.avatarUrl ?? null} size={88} animated={answer.avatarAnimated} />
+                    </div>
+                    <div className="nu-profile-view__actions">
+                      <button type="button" className="nu-follow-button nu-follow-button--on" onClick={onRegister} data-nu-role="public-make-page">
+                        Make your own page
+                      </button>
+                    </div>
+                  </div>
+                  <h1 className="nu-profile-view__name">{name}</h1>
+                  <p className="nu-profile-view__handle">{handleFor(answer.userId)}</p>
+                  {answer.bio && <p className="nu-profile-view__bio">{answer.bio}</p>}
+                </section>
+              }
+              posts={
+                <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
+                  <PublicPosts userId={answer.userId} onSignIn={onSignIn} />
+                </div>
+              }
+            />
+          </PageTargetContext.Provider>
+        </PageOwnerContext.Provider>
       </ProfilePageFrame>
     </main>
   );

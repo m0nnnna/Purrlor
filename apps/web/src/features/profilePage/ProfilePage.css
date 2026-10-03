@@ -38,8 +38,9 @@
   box-sizing: border-box;
 }
 
-.nu-profile-page--two-columns .nu-profile-page__content {
-  max-width: calc(1000px + 2 * var(--nu-space-5));
+/* With modules beside the posts, the page widens to hold its side columns. */
+.nu-profile-page__content:has(.nu-profile-page__layout--left, .nu-profile-page__layout--right) {
+  max-width: calc(1360px + 2 * var(--nu-space-5));
 }
 
 .nu-profile-page__content > * {
@@ -117,21 +118,127 @@
   cursor: pointer;
 }
 
+/* --- Layout (ProfilePageLayout.tsx) ---
+   One column by default: the header, the left modules, the right ones, then the posts. With room
+   for three, the header spans the top and the modules sit either side of the posts. */
+
+.nu-profile-page__layout,
+.nu-profile-page__header,
+.nu-profile-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  min-width: 0;
+}
+
+.nu-profile-page__layout > *,
+.nu-profile-page__header > *,
+.nu-profile-page__main > * {
+  flex: none;
+}
+
+@container (min-width: 980px) {
+  .nu-profile-page__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'header' 'main';
+    align-items: start;
+    gap: var(--nu-space-4) var(--nu-space-5);
+  }
+
+  /* Three columns once there are modules, even on one side only, so the posts stay in the middle
+     and an empty side is just margin. */
+  .nu-profile-page__layout--left,
+  .nu-profile-page__layout--right {
+    grid-template-columns: minmax(200px, 300px) minmax(0, 680px) minmax(200px, 300px);
+    grid-template-areas: 'header header header' 'left main right';
+    justify-content: center;
+  }
+
+  .nu-profile-page__header {
+    grid-area: header;
+  }
+
+  .nu-profile-page__side--left {
+    grid-area: left;
+  }
+
+  .nu-profile-page__side--right {
+    grid-area: right;
+  }
+
+  .nu-profile-page__main {
+    grid-area: main;
+    /* The posts keep a reading width, centred in the space between the columns. */
+    width: 100%;
+    max-width: 680px;
+    justify-self: center;
+  }
+}
+
 /* --- Blocks --- */
 
 .nu-profile-page__blocks {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--nu-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
 }
 
-@container (min-width: 720px) {
-  .nu-profile-page--two-columns .nu-profile-page__blocks {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
+/* A module: its header opens and closes it (PageBlocks.tsx). */
+.nu-profile-page__module {
+  padding: 0;
+}
 
-  .nu-profile-page--two-columns .nu-profile-page__plain {
-    grid-column: 1 / -1;
+.nu-profile-page__module-head {
+  margin: 0;
+  font: inherit;
+}
+
+.nu-profile-page__module-head button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  width: 100%;
+  padding: var(--nu-space-3) var(--nu-space-4);
+  border: none;
+  background: none;
+  color: var(--page-accent);
+  font-family: var(--page-heading-font);
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-profile-page__module-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-profile-page__module-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.nu-profile-page__module[data-open='true'] .nu-profile-page__module-chevron {
+  transform: rotate(45deg);
+}
+
+.nu-profile-page__module-body {
+  padding: 0 var(--nu-space-4) var(--nu-space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nu-profile-page__module-chevron {
+    transition: none;
   }
 }
 
@@ -239,18 +346,7 @@
   opacity: 0.85;
 }
 
-.nu-profile-page__youtube {
-  display: block;
-  width: 100%;
-  min-height: 200px;
-  aspect-ratio: 16 / 9;
-  border: 0;
-  border-radius: calc(var(--page-corners) * 0.5);
-}
 
-.nu-profile-page__audio {
-  width: 100%;
-}
 
 .nu-profile-page__spaces {
   display: flex;
@@ -483,39 +579,10 @@
   gap: var(--nu-space-4);
 }
 
-.nu-profile-page__album-head {
-  display: flex;
-  align-items: center;
-  gap: var(--nu-space-3);
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
 
-.nu-profile-page__album-cover {
-  flex: none;
-  width: 72px;
-  height: 72px;
-  overflow: hidden;
-  border-radius: var(--page-corners);
-  background: var(--page-bg);
-}
 
-.nu-profile-page__album-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 
-.nu-profile-page__album-cover--blurred img {
-  filter: blur(14px);
-}
+
 
 .nu-profile-page__album-text {
   display: flex;
@@ -986,3 +1053,161 @@
   font-variant-numeric: tabular-nums;
 }
 
+
+/* --- A gallery album's preview strip (GalleryBlock.tsx) --- */
+
+.nu-profile-page__album-title {
+  margin: 0 0 var(--nu-space-2);
+  font-size: 14px;
+}
+
+.nu-profile-page__strip {
+  appearance: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.nu-profile-page__strip-thumb {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: calc(var(--page-corners) / 3);
+  background: color-mix(in srgb, var(--page-text) 10%, transparent);
+  overflow: hidden;
+}
+
+.nu-profile-page__strip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nu-profile-page__strip-thumb--blurred img {
+  filter: blur(12px);
+}
+
+.nu-profile-page__view-all {
+  appearance: none;
+  margin-top: var(--nu-space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--page-link);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nu-profile-page__view-all:hover {
+  text-decoration: underline;
+}
+
+.nu-profile-page__album-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+/* --- The profile song's floating window (FloatingSong.tsx); outside the page, in the app's look --- */
+
+.nu-floating-song {
+  --song-accent: var(--nu-color-accent);
+  position: fixed;
+  right: var(--nu-space-4);
+  bottom: var(--nu-space-4);
+  z-index: 40;
+  width: min(300px, calc(100vw - 2 * var(--nu-space-4)));
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+  border: 1px solid var(--song-accent);
+  border-radius: var(--nu-radius-lg);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+/* Clear of the signed-out page's music bar along the bottom, while it's showing. */
+body:has(.nu-music-player--bar) .nu-floating-song {
+  bottom: calc(var(--nu-space-4) + 72px);
+}
+
+/* YouTube's player has to stay at least 200px tall. */
+.nu-floating-song--video {
+  width: min(380px, calc(100vw - 2 * var(--nu-space-4)));
+}
+
+.nu-floating-song__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-2) var(--nu-space-3);
+}
+
+.nu-floating-song__play {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--nu-radius-full);
+  background: var(--song-accent);
+  color: var(--nu-color-on-accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nu-floating-song__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-floating-song__title,
+.nu-floating-song__source {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-floating-song__title {
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+}
+
+.nu-floating-song__source {
+  font-size: var(--nu-font-size-xs);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-floating-song__close {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--nu-color-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: var(--nu-space-1);
+}
+
+.nu-floating-song__close:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-floating-song__video {
+  display: block;
+  width: 100%;
+  height: 214px;
+  min-height: 200px;
+  border: 0;
+}
+
+.nu-floating-song__audio {
+  display: block;
+  width: calc(100% - 2 * var(--nu-space-3));
+  margin: 0 var(--nu-space-3) var(--nu-space-3);
+}

@@ -254,16 +254,8 @@ export function StyleControls({ style, onChange }: { style: PageStyle; onChange:
         )}
       </div>
 
-      <h3 className="nu-page-editor__heading">Layout and effects</h3>
+      <h3 className="nu-page-editor__heading">Effects</h3>
       <div className="nu-page-editor__row">
-        <Select
-          label="Columns"
-          value={String(style.columns) as '1' | '2'}
-          options={['1', '2'] as const}
-          labels={{ '1': 'One column', '2': 'Two on wide screens' }}
-          onChange={(columns) => set({ columns: columns === '2' ? 2 : 1 })}
-          role="page-editor-columns"
-        />
         <Select
           label="Effect"
           value={style.effect}

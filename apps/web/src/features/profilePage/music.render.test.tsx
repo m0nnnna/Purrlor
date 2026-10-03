@@ -90,7 +90,7 @@ function renderPage(page: ProfilePage, target?: PageTarget) {
     <Provider store={createStore()}>
       <PageOwnerContext.Provider value={{ userId: OWNER, isMe: false }}>
         <PageTargetContext.Provider value={target}>
-          <PageBlocks blocks={page.blocks} />
+          <PageBlocks blocks={page.blocks} openIds={page.blocks.map((b) => b.id)} />
         </PageTargetContext.Provider>
       </PageOwnerContext.Provider>
       <MusicPlayerHost />

@@ -27,7 +27,7 @@ import { usePageHidden } from '../../matrix/hooks/usePageHidden';
 import { ReportDialog } from './ReportDialog';
 import { useProfilePage } from '../../matrix/hooks/useProfilePage';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
-import { PageBlocks } from '../profilePage/PageBlocks';
+import { ProfilePageLayout } from '../profilePage/ProfilePageLayout';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
 import { PageTargetContext, pageTargetAtom } from '../profilePage/PageTargetContext';
 import { ShareLinkButton } from '../../components/ShareLinkButton';
@@ -189,208 +189,215 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
         style={editingPage && isMe ? { display: 'none' } : undefined}
       >
         <ProfilePageFrame page={page}>
-          <section className="nu-profile-view__card">
-            <div
-              className="nu-profile-view__banner"
-              style={bannerSrc ? { backgroundImage: `url(${bannerSrc})` } : undefined}
-              data-nu-role="profile-view-banner"
-            />
-            <div className="nu-profile-view__identity">
-              <div className="nu-profile-view__avatar">
-                <Avatar name={basic.name} mxcUrl={basic.avatarUrl ?? null} size={88} animated={extended.avatarAnimated} />
-              </div>
-              {isMe && (
-                <div className="nu-profile-view__actions">
-                  <button
-                    type="button"
-                    className="nu-follow-button nu-follow-button--on"
-                    data-nu-role="profile-edit-page"
-                    onClick={() => setEditingPage(true)}
-                  >
-                    {page ? 'Edit page' : 'Build your page'}
-                  </button>
-                  <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
-                </div>
-              )}
-              {!isMe && (
-                <div className="nu-profile-view__actions">
-                  <button
-                    type="button"
-                    className="nu-follow-button nu-follow-button--on"
-                    data-nu-role="profile-message"
-                    disabled={startingDm}
-                    onClick={() => void handleMessage()}
-                  >
-                    {startingDm ? 'Opening…' : 'Message'}
-                  </button>
-                  <button
-                    type="button"
-                    className={following ? 'nu-follow-button nu-follow-button--on' : 'nu-follow-button'}
-                    data-nu-role="profile-follow"
-                    aria-pressed={following}
-                    onClick={() => {
-                      setFollowError(undefined);
-                      setFollowing(mx, 'user', userId).catch((err) =>
-                        setFollowError(err instanceof Error ? err.message : 'Couldn’t update follows')
-                      );
-                    }}
-                  >
-                    {following ? 'Following' : 'Follow'}
-                  </button>
-                  <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
-                  {page && (
-                    <button
-                      type="button"
-                      className="nu-follow-button nu-follow-button--on"
-                      data-nu-role="profile-copy-style"
-                      disabled={styleCopied}
-                      title="Use this page's colours, background and fonts on your own page"
-                      onClick={() => {
-                        setFollowError(undefined);
-                        copyStyleToDraft(mx, page.style)
-                          .then(() => setStyleCopied(true))
-                          .catch((err) => setFollowError(err instanceof Error ? err.message : 'Couldn’t copy this style'));
-                      }}
-                    >
-                      {styleCopied ? 'Style copied' : 'Copy style'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-            <h2 className="nu-profile-view__name">{basic.name}</h2>
-            <p className="nu-profile-view__handle">{handleFor(userId)}</p>
-            {page?.blocks.some((block) => block.type === 'commissions') && (
-              <p className="nu-profile-view__commissions">
-                <HeaderCommissionBadge roomId={profileRoomId} />
-              </p>
-            )}
-            {extended.bio && <p className="nu-profile-view__bio">{extended.bio}</p>}
-            <p className="nu-profile-view__counts">
-              <button type="button" className="nu-profile-view__count-link" data-nu-role="profile-following" onClick={() => setPeopleList('following')}>
-                <strong>{followingList.length}</strong> Following
-              </button>
-              <button type="button" className="nu-profile-view__count-link" data-nu-role="profile-followers" onClick={() => setPeopleList('followers')}>
-                <strong>{feed.loading && !isMe ? '…' : followerList.length}</strong> {followerList.length === 1 ? 'Follower' : 'Followers'}
-              </button>
-            </p>
-            {followError && <p className="nu-field__error">{followError}</p>}
-            {isMe && pageHidden && (
-              <p className="nu-field__warning" data-nu-role="profile-page-hidden">
-                An admin has hidden your page after a report. Everyone else sees your plain profile until they show it again.
-              </p>
-            )}
-            {styleCopied && (
-              <p className="nu-field__hint" data-nu-role="profile-style-copied">
-                Copied to your page’s draft. Open your profile and choose Edit page to see it.
-              </p>
-            )}
-          </section>
+          <PageOwnerContext.Provider value={{ userId, roomId: profileRoomId, isMe }}>
+            <PageTargetContext.Provider value={linkedTarget}>
+              <ProfilePageLayout
+                page={page}
+                showSong={!(editingPage && isMe)}
+                header={
+                  <>
+                    <section className="nu-profile-view__card">
+                      <div
+                        className="nu-profile-view__banner"
+                        style={bannerSrc ? { backgroundImage: `url(${bannerSrc})` } : undefined}
+                        data-nu-role="profile-view-banner"
+                      />
+                      <div className="nu-profile-view__identity">
+                        <div className="nu-profile-view__avatar">
+                          <Avatar name={basic.name} mxcUrl={basic.avatarUrl ?? null} size={88} animated={extended.avatarAnimated} />
+                        </div>
+                        {isMe && (
+                          <div className="nu-profile-view__actions">
+                            <button
+                              type="button"
+                              className="nu-follow-button nu-follow-button--on"
+                              data-nu-role="profile-edit-page"
+                              onClick={() => setEditingPage(true)}
+                            >
+                              {page ? 'Edit page' : 'Build your page'}
+                            </button>
+                            <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
+                          </div>
+                        )}
+                        {!isMe && (
+                          <div className="nu-profile-view__actions">
+                            <button
+                              type="button"
+                              className="nu-follow-button nu-follow-button--on"
+                              data-nu-role="profile-message"
+                              disabled={startingDm}
+                              onClick={() => void handleMessage()}
+                            >
+                              {startingDm ? 'Opening…' : 'Message'}
+                            </button>
+                            <button
+                              type="button"
+                              className={following ? 'nu-follow-button nu-follow-button--on' : 'nu-follow-button'}
+                              data-nu-role="profile-follow"
+                              aria-pressed={following}
+                              onClick={() => {
+                                setFollowError(undefined);
+                                setFollowing(mx, 'user', userId).catch((err) =>
+                                  setFollowError(err instanceof Error ? err.message : 'Couldn’t update follows')
+                                );
+                              }}
+                            >
+                              {following ? 'Following' : 'Follow'}
+                            </button>
+                            <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
+                            {page && (
+                              <button
+                                type="button"
+                                className="nu-follow-button nu-follow-button--on"
+                                data-nu-role="profile-copy-style"
+                                disabled={styleCopied}
+                                title="Use this page's colours, background and fonts on your own page"
+                                onClick={() => {
+                                  setFollowError(undefined);
+                                  copyStyleToDraft(mx, page.style)
+                                    .then(() => setStyleCopied(true))
+                                    .catch((err) => setFollowError(err instanceof Error ? err.message : 'Couldn’t copy this style'));
+                                }}
+                              >
+                                {styleCopied ? 'Style copied' : 'Copy style'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <h2 className="nu-profile-view__name">{basic.name}</h2>
+                      <p className="nu-profile-view__handle">{handleFor(userId)}</p>
+                      {page?.blocks.some((block) => block.type === 'commissions') && (
+                        <p className="nu-profile-view__commissions">
+                          <HeaderCommissionBadge roomId={profileRoomId} />
+                        </p>
+                      )}
+                      {extended.bio && <p className="nu-profile-view__bio">{extended.bio}</p>}
+                      <p className="nu-profile-view__counts">
+                        <button type="button" className="nu-profile-view__count-link" data-nu-role="profile-following" onClick={() => setPeopleList('following')}>
+                          <strong>{followingList.length}</strong> Following
+                        </button>
+                        <button type="button" className="nu-profile-view__count-link" data-nu-role="profile-followers" onClick={() => setPeopleList('followers')}>
+                          <strong>{feed.loading && !isMe ? '…' : followerList.length}</strong> {followerList.length === 1 ? 'Follower' : 'Followers'}
+                        </button>
+                      </p>
+                      {followError && <p className="nu-field__error">{followError}</p>}
+                      {isMe && pageHidden && (
+                        <p className="nu-field__warning" data-nu-role="profile-page-hidden">
+                          An admin has hidden your page after a report. Everyone else sees your plain profile until they show it again.
+                        </p>
+                      )}
+                      {styleCopied && (
+                        <p className="nu-field__hint" data-nu-role="profile-style-copied">
+                          Copied to your page’s draft. Open your profile and choose Edit page to see it.
+                        </p>
+                      )}
+                    </section>
 
-          {isMe && !publicOn && (
-            <p className="nu-field__hint" data-nu-role="profile-share-hint">
-              Only people signed in to Purrlor can open your link until you show your page to everyone (Edit page, or Settings → Privacy).
-            </p>
-          )}
-          {page && page.blocks.length > 0 && (
-            <PageOwnerContext.Provider value={{ userId, roomId: profileRoomId, isMe }}>
-              <PageTargetContext.Provider value={linkedTarget}>
-                <PageBlocks blocks={page.blocks} />
-              </PageTargetContext.Provider>
-            </PageOwnerContext.Provider>
-          )}
-          {page && !isMe && profileRoomId && (
-            <p className="nu-profile-page__report">
-              <button
-                type="button"
-                data-nu-role="profile-report-page"
-                onClick={() => {
-                  setFollowError(undefined);
-                  readProfilePageEventId(mx, profileRoomId)
-                    .then((eventId) =>
-                      eventId ? setReportingPage({ roomId: profileRoomId, eventId }) : setFollowError('Couldn’t find this page to report it')
-                    )
-                    .catch(() => setFollowError('Couldn’t find this page to report it'));
-                }}
-              >
-                Report this page
-              </button>
-            </p>
-          )}
+                    {isMe && !publicOn && (
+                      <p className="nu-field__hint" data-nu-role="profile-share-hint">
+                        Only people signed in to Purrlor can open your link until you show your page to everyone (Edit page, or Settings → Privacy).
+                      </p>
+                    )}
+                    {page && !isMe && profileRoomId && (
+                      <p className="nu-profile-page__report">
+                        <button
+                          type="button"
+                          data-nu-role="profile-report-page"
+                          onClick={() => {
+                            setFollowError(undefined);
+                            readProfilePageEventId(mx, profileRoomId)
+                              .then((eventId) =>
+                                eventId ? setReportingPage({ roomId: profileRoomId, eventId }) : setFollowError('Couldn’t find this page to report it')
+                              )
+                              .catch(() => setFollowError('Couldn’t find this page to report it'));
+                          }}
+                        >
+                          Report this page
+                        </button>
+                      </p>
+                    )}
 
-          <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
-            <div className="nu-profile-view__tabs" role="tablist">
-              {tabButton('posts', 'Posts')}
-              {tabButton('media', 'Media')}
-              {isMe && tabButton('likes', 'Likes')}
-            </div>
+                  </>
+                }
+                posts={
+                  <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
+                    <div className="nu-profile-view__tabs" role="tablist">
+                      {tabButton('posts', 'Posts')}
+                      {tabButton('media', 'Media')}
+                      {isMe && tabButton('likes', 'Likes')}
+                    </div>
 
-            {tab === 'posts' && (
-              <>
-                {isMe && <PostComposer targets={targets} ready={feed.directoryLoaded} placeholder="Post something…" onPublished={feed.addSource} />}
-                {newCount > 0 && (
-                  <button
-                    type="button"
-                    className="nu-feed__new-posts"
-                    data-nu-role="profile-new-posts"
-                    onClick={() => {
-                      feed.showNew();
-                      scroll.ref.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  >
-                    <Icon name="arrowUp" size={14} />
-                    {newCount === 1 ? '1 new post' : `${newCount} new posts`}
-                  </button>
-                )}
-                {pinnedPost && (
-                  <div className="nu-profile-view__pinned" data-nu-role="profile-pinned">
-                    <span className="nu-profile-view__pinned-label">
-                      <Icon name="pin" size={13} />
-                      Pinned
-                    </span>
-                    <GlobalPostList posts={[pinnedPost]} targets={targets} onReposted={feed.addSource} />
+                    {tab === 'posts' && (
+                      <>
+                        {isMe && <PostComposer targets={targets} ready={feed.directoryLoaded} placeholder="Post something…" onPublished={feed.addSource} />}
+                        {newCount > 0 && (
+                          <button
+                            type="button"
+                            className="nu-feed__new-posts"
+                            data-nu-role="profile-new-posts"
+                            onClick={() => {
+                              feed.showNew();
+                              scroll.ref.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                          >
+                            <Icon name="arrowUp" size={14} />
+                            {newCount === 1 ? '1 new post' : `${newCount} new posts`}
+                          </button>
+                        )}
+                        {pinnedPost && (
+                          <div className="nu-profile-view__pinned" data-nu-role="profile-pinned">
+                            <span className="nu-profile-view__pinned-label">
+                              <Icon name="pin" size={13} />
+                              Pinned
+                            </span>
+                            <GlobalPostList posts={[pinnedPost]} targets={targets} onReposted={feed.addSource} />
+                          </div>
+                        )}
+                        <GlobalPostList posts={listed} targets={targets} onReposted={feed.addSource} />
+                        {!feed.loading && posts.length === 0 && !pinnedPost && (
+                          <p className="nu-feed__status" data-nu-role="profile-view-empty">
+                            {isMe ? 'You haven’t posted anywhere yet.' : `${basic.name} hasn’t posted anywhere you can see.`}
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {tab === 'media' && (
+                      <>
+                        <MediaGrid posts={posts} />
+                        {!feed.loading && !feed.hasMore && !posts.some((post) => readPost(post.event)?.attachments?.length) && (
+                          <p className="nu-feed__status" data-nu-role="profile-media-empty">
+                            {isMe ? 'Photos and videos you post show up here.' : `${basic.name} hasn’t posted any photos or videos you can see.`}
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {tab === 'likes' && isMe && (
+                      <>
+                        <p className="nu-profile-view__private-note">
+                          <Icon name="eyeOff" size={13} />
+                          Only you can see your likes.
+                        </p>
+                        <GlobalPostList posts={liked.posts} targets={targets} onReposted={feed.addSource} />
+                        {liked.loading && <p className="nu-feed__status">Loading your likes…</p>}
+                        {!liked.loading && liked.posts.length === 0 && (
+                          <p className="nu-feed__status" data-nu-role="profile-likes-empty">
+                            Posts you like show up here.
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {tab !== 'likes' && (feed.loading || feed.loadingMore) && (
+                      <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
+                    )}
                   </div>
-                )}
-                <GlobalPostList posts={listed} targets={targets} onReposted={feed.addSource} />
-                {!feed.loading && posts.length === 0 && !pinnedPost && (
-                  <p className="nu-feed__status" data-nu-role="profile-view-empty">
-                    {isMe ? 'You haven’t posted anywhere yet.' : `${basic.name} hasn’t posted anywhere you can see.`}
-                  </p>
-                )}
-              </>
-            )}
-
-            {tab === 'media' && (
-              <>
-                <MediaGrid posts={posts} />
-                {!feed.loading && !feed.hasMore && !posts.some((post) => readPost(post.event)?.attachments?.length) && (
-                  <p className="nu-feed__status" data-nu-role="profile-media-empty">
-                    {isMe ? 'Photos and videos you post show up here.' : `${basic.name} hasn’t posted any photos or videos you can see.`}
-                  </p>
-                )}
-              </>
-            )}
-
-            {tab === 'likes' && isMe && (
-              <>
-                <p className="nu-profile-view__private-note">
-                  <Icon name="eyeOff" size={13} />
-                  Only you can see your likes.
-                </p>
-                <GlobalPostList posts={liked.posts} targets={targets} onReposted={feed.addSource} />
-                {liked.loading && <p className="nu-feed__status">Loading your likes…</p>}
-                {!liked.loading && liked.posts.length === 0 && (
-                  <p className="nu-feed__status" data-nu-role="profile-likes-empty">
-                    Posts you like show up here.
-                  </p>
-                )}
-              </>
-            )}
-
-            {tab !== 'likes' && (feed.loading || feed.loadingMore) && (
-              <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
-            )}
-          </div>
+                }
+              />
+            </PageTargetContext.Provider>
+          </PageOwnerContext.Provider>
         </ProfilePageFrame>
         <div ref={sentinelRef} className="nu-feed__sentinel" aria-hidden="true" />
       </div>

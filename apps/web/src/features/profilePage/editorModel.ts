@@ -3,12 +3,14 @@ import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import {
   contrastRatio,
   DEFAULT_PAGE_STYLE,
+  defaultSide,
   LIMITS,
   musicTrackCount,
   newBlockId,
   READABLE_CONTRAST,
   type PageBlock,
   type PageBlockType,
+  type PageSide,
   type PageStyle,
   type ProfilePage,
 } from '../../matrix/profilePage';
@@ -70,8 +72,8 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   music: 'Music',
 };
 
-/** A new, empty block of a kind, at the end of the page. */
-export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
+/** A new, empty block of a kind, at the end of a column (the profile song has no column). */
+export function addBlock(page: ProfilePage, type: PageBlockType, side: PageSide = defaultSide(type)): ProfilePage {
   const id = newBlockId(page.blocks);
   const block: PageBlock = (() => {
     switch (type) {
@@ -100,15 +102,45 @@ export function addBlock(page: ProfilePage, type: PageBlockType): ProfilePage {
         return { id, type, albums: [{ id: 'a0', tracks: [] }] };
     }
   })();
-  return { ...page, blocks: [...page.blocks, block] };
+  return { ...page, blocks: [...page.blocks, type === 'song' ? block : { ...block, side }] };
 }
 
+/** Whether another block of this kind fits: a page has one profile song. */
+export function canAddType(page: ProfilePage, type: PageBlockType): boolean {
+  return type !== 'song' || !page.blocks.some((block) => block.type === 'song');
+}
+
+/** The column a block is in (the song is in none). */
+export function sideOf(block: PageBlock): PageSide | undefined {
+  return block.type === 'song' ? undefined : (block.side ?? defaultSide(block.type));
+}
+
+/** A column's blocks, in page order. */
+export function columnBlocks(page: ProfilePage, side: PageSide): PageBlock[] {
+  return page.blocks.filter((block) => sideOf(block) === side);
+}
+
+/** Up or down within its own column, past the blocks of the other one. */
 export function moveBlock(page: ProfilePage, id: string, delta: -1 | 1): ProfilePage {
   const from = page.blocks.findIndex((block) => block.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= page.blocks.length) return page;
+  if (from < 0) return page;
+  const side = sideOf(page.blocks[from]);
+  let to = from + delta;
+  while (to >= 0 && to < page.blocks.length && sideOf(page.blocks[to]) !== side) to += delta;
+  if (to < 0 || to >= page.blocks.length) return page;
   const blocks = [...page.blocks];
   [blocks[from], blocks[to]] = [blocks[to], blocks[from]];
+  return { ...page, blocks };
+}
+
+/** To the other column, at its end. */
+export function setBlockSide(page: ProfilePage, id: string, side: PageSide): ProfilePage {
+  const block = page.blocks.find((b) => b.id === id);
+  if (!block || block.type === 'song' || sideOf(block) === side) return page;
+  const rest = page.blocks.filter((b) => b.id !== id);
+  const lastOfSide = rest.reduce((last, b, index) => (sideOf(b) === side ? index : last), -1);
+  const blocks = [...rest];
+  blocks.splice(lastOfSide + 1, 0, { ...block, side });
   return { ...page, blocks };
 }
 

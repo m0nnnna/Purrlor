@@ -24,9 +24,6 @@ import { PageOwnerContext } from './PageOwnerContext';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 
-function BlockTitle({ title }: { title?: string }) {
-  return title ? <h3 className="nu-profile-page__block-title">{title}</h3> : null;
-}
 
 // --- Top 8 ------------------------------------------------------------------------------------
 
@@ -106,7 +103,6 @@ export function FriendsBlock({ block }: { block: Block<'friends'> }) {
   if (!owner) return null;
   return (
     <>
-      <BlockTitle title={block.title ?? 'Top friends'} />
       {mx ? <SignedInFriends block={block} owner={owner.userId} /> : <PublicFriends block={block} />}
     </>
   );
@@ -284,7 +280,6 @@ export function GuestbookBlock({ block }: { block: Block<'guestbook'> }) {
   if (!owner) return null;
   return (
     <>
-      <BlockTitle title={block.title ?? 'Guestbook'} />
       {mx ? (
         <SignedInGuestbook block={block} owner={owner} />
       ) : (

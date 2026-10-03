@@ -94,7 +94,10 @@ test('a creator sorts tracks into albums; visitors browse them, play on while mo
   await role(page, 'page-editor-publish').click();
   await expect(role(page, 'page-editor')).toBeHidden({ timeout: 30_000 });
 
-  // The page: a shelf of covers and titles, nothing more, so the posts stay in reach.
+  // The page: the music module, closed to its title until opened; then a shelf of covers and
+  // titles, nothing more, so the posts stay in reach.
+  await expect(role(page, 'music-album-card')).toHaveCount(0);
+  await role(page, 'profile-page-module-toggle').click();
   const cards = role(page, 'music-album-card');
   await expect(cards).toHaveCount(2);
   await expect(cards.nth(0)).toContainText('Night Drive');

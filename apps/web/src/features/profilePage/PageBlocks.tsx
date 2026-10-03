@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useId, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
@@ -6,32 +6,27 @@ import { MatrixClientContext } from '../../matrix/MatrixClientContext';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import type { PageBlock, PageLink, PageSpace } from '../../matrix/profilePage';
 import { renderMessageText } from '../messaging/renderMessageText';
-import { parseWatchUrl } from '../voice/watchTogether';
 import { linkDomain } from './pageStyle';
 import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
 import { GalleryBlock } from './GalleryBlock';
 import { MusicBlock } from './MusicBlock';
 import { CommissionsBlock } from './CommissionsBlock';
+import { PageOwnerContext } from './PageOwnerContext';
+import { PageTargetContext } from './PageTargetContext';
+import type { PageTarget } from '../../matrix/publicWeb';
 
 type Block<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 
 /** Links off the page: a new tab, no access back to Purrlor, and no endorsement for search engines. */
 const EXTERNAL = { target: '_blank', rel: 'noopener noreferrer nofollow ugc' } as const;
 
-function BlockTitle({ title }: { title?: string }) {
-  return title ? <h3 className="nu-profile-page__block-title">{title}</h3> : null;
-}
-
 function TextBlock({ block }: { block: Block<'text'> }) {
   // Signed-out visitors have no client (the public page, features/publicWeb/).
   const mx = useContext(MatrixClientContext);
   return (
-    <>
-      <BlockTitle title={block.title} />
-      <div className="nu-profile-page__text">
-        {renderMessageText(block.body, [], [], mx?.getUserId() ?? undefined, { formattedBody: block.formatted })}
-      </div>
-    </>
+    <div className="nu-profile-page__text">
+      {renderMessageText(block.body, [], [], mx?.getUserId() ?? undefined, { formattedBody: block.formatted })}
+    </div>
   );
 }
 
@@ -60,14 +55,11 @@ function LinkButton({ link }: { link: PageLink }) {
 
 function LinksBlock({ block }: { block: Block<'links'> }) {
   return (
-    <>
-      <BlockTitle title={block.title} />
-      <div className="nu-profile-page__links">
-        {block.items.map((link, index) => (
-          <LinkButton key={index} link={link} />
-        ))}
-      </div>
-    </>
+    <div className="nu-profile-page__links">
+      {block.items.map((link, index) => (
+        <LinkButton key={index} link={link} />
+      ))}
+    </div>
   );
 }
 
@@ -86,42 +78,6 @@ function ImageBlock({ block }: { block: Block<'image'> }) {
       )}
       {block.caption && <figcaption className="nu-profile-page__caption">{block.caption}</figcaption>}
     </figure>
-  );
-}
-
-/**
- * The profile song. Nothing loads until the visitor presses play: no autoplay, and no request to
- * YouTube or the file's host before then. YouTube's player stays at least 200px tall, as its
- * terms ask (see watchTogether.ts).
- */
-function SongBlock({ block }: { block: Block<'song'> }) {
-  const [playing, setPlaying] = useState(false);
-  const source = parseWatchUrl(block.url);
-  if (!source) return null;
-  const videoId = source.kind === 'youtube' && /^[\w-]{6,20}$/.test(source.videoId) ? source.videoId : undefined;
-  if (source.kind === 'youtube' && !videoId) return null;
-
-  return (
-    <>
-      <BlockTitle title={block.title ?? 'Profile song'} />
-      {!playing ? (
-        <button type="button" className="nu-profile-page__play" data-nu-role="profile-page-play" onClick={() => setPlaying(true)}>
-          ▶ Play
-          <span className="nu-profile-page__link-domain">{linkDomain(block.url)}</span>
-        </button>
-      ) : videoId ? (
-        <iframe
-          className="nu-profile-page__youtube"
-          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`}
-          title={block.title ?? 'Profile song'}
-          allow="autoplay; encrypted-media"
-          sandbox="allow-scripts allow-same-origin allow-presentation"
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
-      ) : (
-        <audio className="nu-profile-page__audio" src={block.url} controls autoPlay />
-      )}
-    </>
   );
 }
 
@@ -176,14 +132,11 @@ function SpaceRow({ space }: { space: PageSpace }) {
 
 function SpacesBlock({ block }: { block: Block<'spaces'> }) {
   return (
-    <>
-      <BlockTitle title={block.title ?? 'Spaces'} />
-      <div className="nu-profile-page__spaces">
-        {block.spaces.map((space) => (
-          <SpaceRow key={space.roomId} space={space} />
-        ))}
-      </div>
-    </>
+    <div className="nu-profile-page__spaces">
+      {block.spaces.map((space) => (
+        <SpaceRow key={space.roomId} space={space} />
+      ))}
+    </div>
   );
 }
 
@@ -210,8 +163,6 @@ function BlockBody({ block }: { block: PageBlock }) {
       return <ImageBlock block={block} />;
     case 'gallery':
       return <GalleryBlock block={block} />;
-    case 'song':
-      return <SongBlock block={block} />;
     case 'spaces':
       return <SpacesBlock block={block} />;
     case 'divider':
@@ -223,25 +174,113 @@ function BlockBody({ block }: { block: PageBlock }) {
     case 'music':
       return <MusicBlock block={block} />;
     case 'commissions':
-      return <CommissionsBlock title={block.title} />;
+      return <CommissionsBlock />;
     default:
       return null;
   }
 }
 
-/** A page's blocks, in its own order. Dividers sit on the page; everything else gets a card. */
-export function PageBlocks({ blocks }: { blocks: PageBlock[] }) {
+/** What a module's header says when its owner didn't give it a title. */
+export function moduleTitle(block: PageBlock): string {
+  if ('title' in block && block.title) return block.title;
+  switch (block.type) {
+    case 'text':
+      return 'About';
+    case 'links':
+      return 'Links';
+    case 'image':
+      return block.caption ?? 'Picture';
+    case 'gallery':
+      return 'Gallery';
+    case 'spaces':
+      return 'Spaces';
+    case 'friends':
+      return 'Top 8';
+    case 'guestbook':
+      return 'Guestbook';
+    case 'commissions':
+      return 'Commissions';
+    case 'music':
+      return 'Music';
+    default:
+      return '';
+  }
+}
+
+/** The module a link to something on the page (an album, a piece, a commission) points into. */
+function targetBlockId(blocks: PageBlock[], target: PageTarget | undefined): string | undefined {
+  if (!target) return undefined;
+  const found = blocks.find((block) => {
+    if (target.kind === 'art') return block.type === 'gallery' && block.albums.some((album) => album.id === target.album);
+    if (target.kind === 'music') return block.type === 'music' && block.albums.some((album) => album.id === target.album);
+    return block.type === 'commissions';
+  });
+  return found?.id;
+}
+
+// Modules opened during this visit to the app, by page owner and block, so coming back to a
+// profile finds them as you left them. Every module starts closed otherwise.
+const openedModules = new Set<string>();
+
+/**
+ * One block as a module: a header with its title that opens and closes it. Closed, only the header
+ * shows and nothing inside loads (a gallery's pictures, a guestbook's entries).
+ */
+function Module({ block, ownerId, forceOpen }: { block: PageBlock; ownerId?: string; forceOpen: boolean }) {
+  const key = `${ownerId ?? ''}/${block.id}`;
+  const [open, setOpen] = useState(() => forceOpen || openedModules.has(key));
+  const bodyId = useId();
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) openedModules.add(key);
+    else openedModules.delete(key);
+  };
+
+  return (
+    <section
+      className={`nu-profile-page__block nu-profile-page__module nu-profile-page__block--${block.type}`}
+      data-nu-role={`profile-page-block-${block.type}`}
+      data-open={open}
+    >
+      <h3 className="nu-profile-page__module-head">
+        <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={toggle} data-nu-role="profile-page-module-toggle">
+          <span className="nu-profile-page__module-title">{moduleTitle(block)}</span>
+          <span className="nu-profile-page__module-chevron" aria-hidden="true" />
+        </button>
+      </h3>
+      {open && (
+        <div className="nu-profile-page__module-body" id={bodyId}>
+          <BlockBody block={block} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A column of a page's blocks, in its own order, each a module that starts closed (one a link
+ * points into starts open). Dividers sit on the page between them. The profile song isn't drawn
+ * here: it's the floating player (FloatingSong). `openIds`: modules to show open, as the builder's
+ * preview does for the block being edited.
+ */
+export function PageBlocks({ blocks, openIds }: { blocks: PageBlock[]; openIds?: string[] }) {
+  const owner = useContext(PageOwnerContext);
+  const linked = targetBlockId(blocks, useContext(PageTargetContext));
   return (
     <div className="nu-profile-page__blocks" data-nu-role="profile-page-blocks">
-      {blocks.map((block) => (
-        <section
-          key={block.id}
-          className={block.type === 'divider' ? 'nu-profile-page__plain' : `nu-profile-page__block nu-profile-page__block--${block.type}`}
-          data-nu-role={`profile-page-block-${block.type}`}
-        >
-          <BlockBody block={block} />
-        </section>
-      ))}
+      {blocks.map((block) =>
+        block.type === 'song' ? null : block.type === 'divider' ? (
+          <section key={block.id} className="nu-profile-page__plain" data-nu-role="profile-page-block-divider">
+            <DividerBlock block={block} />
+          </section>
+        ) : (
+          <Module key={block.id} block={block} ownerId={owner?.userId} forceOpen={block.id === linked || !!openIds?.includes(block.id)} />
+        )
+      )}
     </div>
   );
 }

@@ -164,7 +164,6 @@ export function MusicBlock({ block }: { block: MusicBlockType }) {
 
   return (
     <>
-      {block.title && <h3 className="nu-profile-page__block-title">{block.title}</h3>}
       <div className="nu-profile-page__music-shelf" data-nu-role="music-albums">
         {block.albums.map((album, index) => (
           <AlbumCard

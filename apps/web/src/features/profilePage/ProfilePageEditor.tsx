@@ -4,7 +4,7 @@ import { profileRevisionAtom } from '../../app/state/feed';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
-import { emptyProfilePage, LIMITS, parseProfilePage, type PageBlockType, type ProfilePage } from '../../matrix/profilePage';
+import { emptyProfilePage, LIMITS, parseProfilePage, type PageBlockType, type PageSide, type ProfilePage } from '../../matrix/profilePage';
 import {
   discardProfilePageDraft,
   publishProfilePage,
@@ -13,8 +13,22 @@ import {
   unpublishProfilePage,
 } from '../../matrix/profilePageStore';
 import { BlockEditor } from './BlockEditor';
-import { addBlock, BLOCK_LABELS, canAddBlock, imageCount, moveBlock, musicAlbumCount, removeBlock, trackCount, updateBlock, withFormattedText } from './editorModel';
-import { PageBlocks } from './PageBlocks';
+import {
+  addBlock,
+  BLOCK_LABELS,
+  canAddBlock,
+  canAddType,
+  columnBlocks,
+  imageCount,
+  moveBlock,
+  musicAlbumCount,
+  removeBlock,
+  setBlockSide,
+  trackCount,
+  updateBlock,
+  withFormattedText,
+} from './editorModel';
+import { ProfilePageLayout } from './ProfilePageLayout';
 import { PageOwnerContext } from './PageOwnerContext';
 import { getOwnProfileRoomId } from '../../matrix/profileFeed';
 import { PublicPageSwitch } from '../../app/PublicPageSwitch';
@@ -123,8 +137,10 @@ export function ProfilePageEditor({
     }
   };
 
-  const addType = (type: PageBlockType) => {
-    const next = addBlock(page, type);
+  const song = page.blocks.find((block) => block.type === 'song');
+
+  const addType = (type: PageBlockType, side: PageSide) => {
+    const next = addBlock(page, type, side);
     edit(next);
     setOpenBlock(next.blocks[next.blocks.length - 1].id);
   };
@@ -175,42 +191,66 @@ export function ProfilePageEditor({
                 {page.blocks.length} of {LIMITS.blocks} · {Math.max(0, imagesLeft)} images left
               </span>
             </h3>
-            <p className="nu-field__hint">Your name, avatar, banner and bio are always at the top. Your posts are always below.</p>
-            {page.blocks.map((block, index) => (
-              <BlockEditor
-                key={block.id}
-                block={block}
-                open={openBlock === block.id}
-                first={index === 0}
-                last={index === page.blocks.length - 1}
-                emotes={emotes}
-                imagesLeft={imagesLeft}
-                tracksLeft={tracksLeft}
-                musicAlbumsLeft={musicAlbumsLeft}
-                onToggle={() => setOpenBlock(openBlock === block.id ? undefined : block.id)}
-                onChange={(next) => edit(updateBlock(page, next))}
-                onMove={(delta) => edit(moveBlock(page, block.id, delta))}
-                onRemove={() => edit(removeBlock(page, block.id))}
-              />
-            ))}
-            {canAddBlock(page) && (
-              <label className="nu-field">
-                Add a block
-                <select
-                  className="nu-field__input"
-                  value=""
-                  onChange={(evt) => evt.target.value && addType(evt.target.value as PageBlockType)}
-                  data-nu-role="page-editor-add-block"
-                >
-                  <option value="">Choose…</option>
-                  {(Object.keys(BLOCK_LABELS) as PageBlockType[]).map((type) => (
-                    <option key={type} value={type}>
-                      {BLOCK_LABELS[type]}
-                    </option>
+            <p className="nu-field__hint">
+              Your name, avatar, banner and bio go across the top, and your posts down the middle. Your blocks sit in a
+              column either side, each closed to its title until a visitor opens it. On a phone, both columns go above
+              your posts.
+            </p>
+            {(['left', 'right'] as const).map((side) => {
+              const column = columnBlocks(page, side);
+              return (
+                <div key={side} className="nu-page-editor__column" data-nu-role={`page-editor-column-${side}`}>
+                  <h4 className="nu-page-editor__subheading">{side === 'left' ? 'Left column' : 'Right column'}</h4>
+                  {column.length === 0 && <p className="nu-field__hint">Nothing here yet.</p>}
+                  {column.map((block, index) => (
+                    <BlockEditor
+                      key={block.id}
+                      block={block}
+                      open={openBlock === block.id}
+                      first={index === 0}
+                      last={index === column.length - 1}
+                      side={side}
+                      emotes={emotes}
+                      imagesLeft={imagesLeft}
+                      tracksLeft={tracksLeft}
+                      musicAlbumsLeft={musicAlbumsLeft}
+                      onToggle={() => setOpenBlock(openBlock === block.id ? undefined : block.id)}
+                      onChange={(next) => edit(updateBlock(page, next))}
+                      onMove={(delta) => edit(moveBlock(page, block.id, delta))}
+                      onSide={(next) => edit(setBlockSide(page, block.id, next))}
+                      onRemove={() => edit(removeBlock(page, block.id))}
+                    />
                   ))}
-                </select>
-              </label>
-            )}
+                  {canAddBlock(page) && <AddBlock page={page} side={side} onAdd={addType} />}
+                </div>
+              );
+            })}
+            <div className="nu-page-editor__column" data-nu-role="page-editor-song">
+              <h4 className="nu-page-editor__subheading">Profile song</h4>
+              <p className="nu-field__hint">Plays in a small window in the corner of your profile, once a visitor presses play.</p>
+              {song ? (
+                <BlockEditor
+                  block={song}
+                  open={openBlock === song.id}
+                  first
+                  last
+                  emotes={emotes}
+                  imagesLeft={imagesLeft}
+                  tracksLeft={tracksLeft}
+                  musicAlbumsLeft={musicAlbumsLeft}
+                  onToggle={() => setOpenBlock(openBlock === song.id ? undefined : song.id)}
+                  onChange={(next) => edit(updateBlock(page, next))}
+                  onMove={() => undefined}
+                  onRemove={() => edit(removeBlock(page, song.id))}
+                />
+              ) : (
+                canAddBlock(page) && (
+                  <button type="button" className="nu-button nu-button--secondary" onClick={() => addType('song', 'left')} data-nu-role="page-editor-add-song">
+                    Add a profile song
+                  </button>
+                )
+              )}
+            </div>
           </div>
 
           <div className="nu-page-editor__section" data-nu-role="page-editor-public">
@@ -238,21 +278,50 @@ export function ProfilePageEditor({
 
         <div className="nu-page-editor__preview" data-nu-role="page-editor-preview" aria-label="Preview">
           <ProfilePageFrame page={preview}>
-            <section className="nu-profile-view__card nu-page-editor__preview-card">
-              <h2 className="nu-profile-view__name">{displayName}</h2>
-              <p className="nu-profile-view__handle">{mx.getUserId()}</p>
-            </section>
-            {preview && preview.blocks.length > 0 ? (
-              <PageOwnerContext.Provider value={{ userId: mx.getUserId() ?? '', roomId: getOwnProfileRoomId(mx), isMe: true }}>
-                <PageBlocks blocks={preview.blocks} />
-              </PageOwnerContext.Provider>
-            ) : (
-              <p className="nu-page-editor__empty">Add a block to see it here.</p>
-            )}
+            <PageOwnerContext.Provider value={{ userId: mx.getUserId() ?? '', roomId: getOwnProfileRoomId(mx), isMe: true }}>
+              <ProfilePageLayout
+                page={preview}
+                openIds={openBlock ? [openBlock] : undefined}
+                header={
+                  <section className="nu-profile-view__card nu-page-editor__preview-card">
+                    <h2 className="nu-profile-view__name">{displayName}</h2>
+                    <p className="nu-profile-view__handle">{mx.getUserId()}</p>
+                  </section>
+                }
+                posts={
+                  <div className="nu-profile-page__posts nu-page-editor__preview-posts">
+                    {preview && preview.blocks.length > 0 ? 'Your posts go here.' : 'Add a block to see it here.'}
+                  </div>
+                }
+              />
+            </PageOwnerContext.Provider>
           </ProfilePageFrame>
         </div>
       </div>
       {dialog}
     </div>
+  );
+}
+
+/** "Add a block" under a column: the kinds there's room for, the profile song apart. */
+function AddBlock({ page, side, onAdd }: { page: ProfilePage; side: PageSide; onAdd: (type: PageBlockType, side: PageSide) => void }) {
+  const types = (Object.keys(BLOCK_LABELS) as PageBlockType[]).filter((type) => type !== 'song' && canAddType(page, type));
+  return (
+    <label className="nu-field">
+      <select
+        className="nu-field__input"
+        aria-label={`Add a block to the ${side} column`}
+        value=""
+        onChange={(evt) => evt.target.value && onAdd(evt.target.value as PageBlockType, side)}
+        data-nu-role={side === 'left' ? 'page-editor-add-block' : 'page-editor-add-block-right'}
+      >
+        <option value="">Add a block…</option>
+        {types.map((type) => (
+          <option key={type} value={type}>
+            {BLOCK_LABELS[type]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

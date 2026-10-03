@@ -18,7 +18,7 @@ export function ProfilePageFrame({ page, children }: { page?: ProfilePage; child
 
   return (
     <div
-      className={page.style.columns === 2 ? 'nu-profile-page nu-profile-page--two-columns' : 'nu-profile-page'}
+      className="nu-profile-page"
       style={pageStyleVars(page.style, backgroundSrc)}
       data-nu-role="profile-page"
     >

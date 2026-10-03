@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { LIMITS, parseProfilePage, type PageBlock } from './profilePage';
 
 const MXC = 'mxc://purr.example.org/abcDEF123';
-const page = (extra: Record<string, unknown>) => parseProfilePage({ version: 1, ...extra });
+// What these blocks hold; which column each sits in is profilePage.test.ts's ("block sides").
+const page = (extra: Record<string, unknown>) => {
+  const parsed = parseProfilePage({ version: 1, ...extra });
+  return parsed && { ...parsed, blocks: parsed.blocks.map(({ side: _side, ...block }) => block as PageBlock) };
+};
 type Of<T extends PageBlock['type']> = Extract<PageBlock, { type: T }>;
 
 describe('the social blocks', () => {

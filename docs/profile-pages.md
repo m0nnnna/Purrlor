@@ -1,7 +1,7 @@
 # Profile pages
 
 Everyone can build a **page** on their profile: colours, a background, fonts, an effect, and a
-stack of blocks (text, link buttons, images, a gallery, a profile song, Spaces, dividers). It's
+set of blocks (text, link buttons, images, a gallery, music, Spaces, dividers…) in columns beside your posts, and a profile song. It's
 built with a page builder, not custom CSS: every choice is a control with a fixed range, and
 Purrlor draws the page with its own stylesheet. Code: `apps/web/src/matrix/profilePage.ts` (the
 format and its checks), `matrix/profilePageStore.ts` (reading and writing),
@@ -20,8 +20,20 @@ controls on the left, the page as visitors see it on the right (one at a time on
   until **Publish**.
 - **Discard changes** goes back to what's published. **Take page down** returns your profile to the
   plain look and keeps what you built as a draft.
-- Your name, avatar, banner, bio and real Matrix ID always sit at the top, and your posts always
-  sit below the blocks. A page can restyle them but not move or hide them.
+- Your name, avatar, banner, bio and real Matrix ID always go across the top, and your posts always
+  down the middle. A page can restyle them but not move or hide them.
+- **The layout** (`ProfilePageLayout.tsx`): your blocks sit in two columns, one either side of the
+  posts. Each block is in the column you put it in (`side`, "left" or "right"); the builder lists
+  the two columns, with an "Add a block" under each and a button on each block to move it across.
+  Where there isn't room for three columns (a phone, a narrow window, under 980px of page) it's one:
+  the left blocks, then the right ones, then the posts.
+- **Every block is a module that starts closed** to its title (its own, or the kind's: About,
+  Links, Gallery, Top 8…), so a page is the header and two short lists of titles beside the posts.
+  A visitor opens what they want, and what they opened stays open while they're in the app. Nothing
+  inside a closed module loads. A link to something in one (an album, a piece, a commission type)
+  opens that module. Dividers stay plain lines between modules.
+- **The profile song** isn't a block in a column: it plays in a small floating window in the corner
+  of the profile (`FloatingSong.tsx`), once the visitor presses play. A page has one.
 - On someone else's page, **Copy style** puts their colours, background, fonts and effect into your
   own draft, keeping your blocks.
 
@@ -34,8 +46,8 @@ controls on the left, the page as visitors see it on the right (one at a time on
              "background": { "kind": "gradient", "from": "#1d1450", "to": "#05040f", "angle": 170 },
              "fonts": { "heading": "handwriting", "body": "rounded" }, "corners": 18, "border": "glow",
              "borderColor": "#7c6cff", "blockOpacity": 85, "columns": 1, "effect": "stars" },
-  "blocks": [ { "id": "hello", "type": "text", "title": "Hi", "body": "…", "formatted": "…" },
-              { "id": "links", "type": "links", "items": [ { "label": "My art", "url": "https://…", "emote": "mxc://…", "color": "#3a2a7a" } ] } ] }
+  "blocks": [ { "id": "hello", "type": "text", "side": "left", "title": "Hi", "body": "…", "formatted": "…" },
+              { "id": "links", "type": "links", "side": "right", "items": [ { "label": "My art", "url": "https://…", "emote": "mxc://…", "color": "#3a2a7a" } ] } ] }
 ```
 
 - The **profile room** (`matrix/profileFeed.ts`) is world-readable, and only its owner can set its
@@ -43,6 +55,11 @@ controls on the left, the page as visitors see it on the right (one at a time on
 - Empty content (`{}`) means no page; that's what **Take page down** writes.
 - The **draft** is account data, `xyz.nekous.profile_page_draft` (`{ "page": …, "updated_ts": … }`),
   so it follows you between devices and nobody else sees it.
+- `side` is the column a block sits in. A block saved before there were columns (or with a side
+  the app doesn't know) goes where its kind does: gallery, music, Top 8, guestbook and commissions
+  on the right, everything else on the left. The profile song has no side, and only the first song
+  block on a page is kept. `style.columns`, from when blocks could be laid out in two columns
+  above the posts, is still read and kept but no longer drawn.
 - A text block keeps its Markdown `body` plus the `formatted` body a message would have, worked out
   from the author's emotes when the page is saved, so visitors see emotes they don't have.
 
@@ -76,10 +93,11 @@ Two blocks that depend on other people, so they're checked when the page is draw
 A gallery for anyone, and a commissions block for artists.
 
 - **Gallery** (`gallery` block): the one block for pictures. Albums (title, description) of pieces
-  (image, title, caption, up to 6 tags). Only an open album's pieces load, so pieces have their own
-  cap (60 across a page, 24 per album, 12 albums) instead of counting toward the 20 images a page
-  shows, and a block with a single album shows it open, with no header. Tapping a tag filters an
-  album. `ratings` is an option on the block (the builder's "Let me rate pieces as Mature"): on, each
+  (image, title, caption, up to 6 tags). On the page each album is a strip of its first four
+  pieces as small squares and "View all (n)", which opens the whole album over the page, where
+  tapping a tag filters it. Only those small thumbnails load until an album is opened, so pieces
+  have their own cap (60 across a page, 24 per album, 12 albums) instead of counting toward the 20
+  images a page shows. `ratings` is an option on the block (the builder's "Let me rate pieces as Mature"): on, each
   piece is **General** or **Mature**; off, every piece is General. **Mature** pieces are blurred
   until clicked for signed-in people. There's no age setting: every account is 18+ (section 1 of the
   terms), and 18+ content must carry a content warning. Signed-out visitors never see them (the
@@ -137,7 +155,7 @@ builds itself from a checked `mxc://` URL.
 
 - **Links** open in a new tab with `rel="noopener noreferrer nofollow ugc"`, and every link shows
   the site's domain under its label.
-- **The profile song** loads nothing until the visitor presses play: no autoplay, and no request
+- **The profile song** (the floating window) loads nothing until the visitor presses play: no autoplay, and no request
   to YouTube (`youtube-nocookie.com`, at least 200 px tall as its terms ask) or the file's host
   before then.
 - **Effects** are built in; a page only names one. They're hidden for anyone whose device asks for
@@ -238,9 +256,9 @@ everyone, that only people signed in can open it. Things on a page have addresse
 
 | Address | Opens |
 | --- | --- |
-| `/@name/music/<album>` | the page with that album's songs open |
+| `/@name/music/<album>` | the page with that album's songs open (and its module) |
 | `/@name/music/<album>/<n>` | the same, track n marked (not played: a browser won't play sound before the visitor presses something) |
-| `/@name/art/<album>` | the page with that gallery album open |
+| `/@name/art/<album>` | the page with that gallery album open over it (and its module) |
 | `/@name/art/<album>/<n>` | the same, piece n shown large (unless it's Mature) |
 | `/@name/commissions/<type>` | the page scrolled to that commission type, marked, its example shown large |
 

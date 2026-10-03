@@ -16,7 +16,11 @@ import {
 } from './profilePage';
 
 const MXC = 'mxc://purr.example.org/abcDEF123';
-const page = (extra: Record<string, unknown>) => parseProfilePage({ version: 1, ...extra });
+const parse = (extra: Record<string, unknown>) => parseProfilePage({ version: 1, ...extra });
+// Most tests are about what a block holds; which column it sits in has tests of its own (below).
+const withoutSides = (parsed: ProfilePage | undefined) =>
+  parsed && { ...parsed, blocks: parsed.blocks.map(({ side: _side, ...block }) => block as PageBlock) };
+const page = (extra: Record<string, unknown>) => withoutSides(parse(extra));
 
 describe('parseProfilePage', () => {
   it('is undefined for no page: empty content, no version, or not an object', () => {
@@ -413,5 +417,28 @@ describe('newBlockId', () => {
     const id = newBlockId(blocks);
     expect(id).toMatch(/^b[a-z0-9]{1,8}$/);
     expect(id).not.toBe('b1');
+  });
+});
+
+describe('block sides', () => {
+  const sides = (blocks: unknown[]) => parse({ blocks })?.blocks.map((block) => [block.type, block.side]);
+
+  it('keeps the column the owner chose', () => {
+    expect(sides([{ id: 'a', type: 'text', body: 'hi', side: 'right' }, { id: 'b', type: 'friends', users: ['@a:s'], side: 'left' }])).toEqual([
+      ['text', 'right'],
+      ['friends', 'left'],
+    ]);
+  });
+
+  it('puts a block from before sides, or with a side it does not know, where its kind goes', () => {
+    expect(sides([{ id: 'a', type: 'text', body: 'hi' }, { id: 'b', type: 'friends', users: ['@a:s'], side: 'middle' }])).toEqual([
+      ['text', 'left'],
+      ['friends', 'right'],
+    ]);
+  });
+
+  it('gives the profile song no side, and keeps only the first one', () => {
+    const song = (id: string) => ({ id, type: 'song', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', side: 'right' });
+    expect(sides([song('s1'), song('s2')])).toEqual([['song', undefined]]);
   });
 });

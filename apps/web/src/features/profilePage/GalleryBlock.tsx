@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Lightbox } from '../../components/Lightbox';
+import { Modal } from '../../components/Modal';
 import { useSignedIn } from '../../matrix/hooks/useSignedIn';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { ShareLinkButton } from '../../components/ShareLinkButton';
@@ -64,142 +65,148 @@ function Piece({
   );
 }
 
-function Album({
+const STRIP = 4;
+
+/** One small square of an album's preview strip; a Mature piece stays blurred here. */
+function StripThumb({ piece }: { piece: ArtPiece }) {
+  const src = useMediaUrl(piece.url, { width: 160, height: 160, method: 'crop' });
+  return (
+    <span className={piece.rating === 'mature' ? 'nu-profile-page__strip-thumb nu-profile-page__strip-thumb--blurred' : 'nu-profile-page__strip-thumb'}>
+      {src && <img src={src} alt="" loading="lazy" />}
+    </span>
+  );
+}
+
+/**
+ * An album on the page: its title, how many pieces, and a strip of the first few as small squares.
+ * The whole album opens over the page (AlbumDialog), so a big gallery takes a few lines of a side
+ * column rather than the screen.
+ */
+function AlbumPreview({ album, signedIn, showTitle, onOpen }: { album: ArtAlbum; signedIn: boolean; showTitle: boolean; onOpen: () => void }) {
+  const pieces = visiblePieces(album, signedIn);
+  // Pieces anyone may see go first, so a Mature one doesn't front the strip when there's a choice.
+  const strip = [...pieces.filter((p) => p.rating === 'general'), ...pieces.filter((p) => p.rating !== 'general')].slice(0, STRIP);
+  return (
+    <section className="nu-profile-page__album" data-nu-role="art-album">
+      {showTitle && <h4 className="nu-profile-page__album-title">{album.title}</h4>}
+      <button type="button" className="nu-profile-page__strip" aria-label={`Open ${album.title}`} onClick={onOpen}>
+        {strip.map((piece, index) => (
+          <StripThumb key={`${piece.url}-${index}`} piece={piece} />
+        ))}
+      </button>
+      <button type="button" className="nu-profile-page__view-all" data-nu-role="art-album-open" onClick={onOpen}>
+        View all ({pieces.length})
+      </button>
+    </section>
+  );
+}
+
+/** An album over the page: every piece, its tags to filter by, and a link to it. */
+function AlbumDialog({
   album,
   signedIn,
-  open,
-  single,
-  blockTitle,
   ownerId,
   linkedPiece,
-  onToggle,
+  onClose,
 }: {
   album: ArtAlbum;
   signedIn: boolean;
-  open: boolean;
-  /** The block's only album: always open, with no header to fold it away. */
-  single: boolean;
-  blockTitle?: string;
   ownerId?: string;
-  /** A piece a link pointed at, by its place in the album (from 0). */
+  /** A piece a link pointed at, by its place in the album (from 0): shown large once loaded. */
   linkedPiece?: number;
-  onToggle: () => void;
+  onClose: () => void;
 }) {
   const pieces = visiblePieces(album, signedIn);
   const [tag, setTag] = useState<string>();
   const [lightbox, setLightbox] = useState<{ src: string; alt: string }>();
-  // The cover is a piece anyone may see, so a Mature one never fronts an album for a viewer who can't open it.
-  const cover = pieces.find((piece) => piece.rating === 'general') ?? pieces[0];
-  const coverSrc = useMediaUrl(open ? null : cover?.url, { width: 320, height: 320, method: 'crop' });
   const tags = [...new Set(pieces.flatMap((piece) => piece.tags))];
   const shown = tag ? pieces.filter((piece) => piece.tags.includes(tag)) : pieces;
   const hidden = album.pieces.length - pieces.length;
   const openLightbox = useCallback((src: string, alt: string) => setLightbox({ src, alt }), []);
 
   return (
-    <section className="nu-profile-page__album" data-nu-role="art-album">
-      {single ? (
-        album.title !== blockTitle && <h4 className="nu-profile-page__album-title">{album.title}</h4>
-      ) : (
-      <button type="button" className="nu-profile-page__album-head" aria-expanded={open} onClick={onToggle}>
-        {!open && cover && (
-          <span className={cover.rating === 'mature' ? 'nu-profile-page__album-cover nu-profile-page__album-cover--blurred' : 'nu-profile-page__album-cover'}>
-            {coverSrc && <img src={coverSrc} alt="" loading="lazy" />}
-          </span>
+    <Modal title={album.title} onClose={onClose} wide>
+      <div className="nu-profile-page__album-dialog" data-nu-role="art-album-dialog">
+        {(album.description || ownerId) && (
+          <p className="nu-profile-page__album-description">
+            {album.description}
+            {ownerId && (
+              <ShareLinkButton
+                url={pageLink(ownerId, { kind: 'art', album: album.id })}
+                title={album.title}
+                iconOnly
+                className="nu-profile-page__piece-link"
+                role="art-album-link"
+              />
+            )}
+          </p>
         )}
-        <span className="nu-profile-page__album-text">
-          <strong>{album.title}</strong>
-          <span className="nu-profile-page__album-count">
-            {pieces.length} {pieces.length === 1 ? 'piece' : 'pieces'}
-          </span>
-        </span>
-      </button>
-      )}
-      {(album.description || ownerId) && (
-        <p className="nu-profile-page__album-description">
-          {album.description}
-          {ownerId && (
-            <ShareLinkButton
-              url={pageLink(ownerId, { kind: 'art', album: album.id })}
-              title={album.title}
-              iconOnly
-              className="nu-profile-page__piece-link"
-              role="art-album-link"
-            />
-          )}
-        </p>
-      )}
-      {/* Pieces load only once the album is open: a page of art stays light until someone looks. */}
-      {open && (
-        <>
-          {tags.length > 1 && (
-            <div className="nu-profile-page__tag-filter" role="group" aria-label="Filter by tag">
-              {tags.map((t) => (
-                <button key={t} type="button" aria-pressed={tag === t} onClick={() => setTag(tag === t ? undefined : t)}>
-                  #{t}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="nu-profile-page__pieces">
-            {shown.map((piece, index) => {
-              const place = album.pieces.indexOf(piece);
-              return (
-                <Piece
-                  key={`${piece.url}-${index}`}
-                  piece={piece}
-                  link={ownerId ? pageLink(ownerId, { kind: 'art', album: album.id, piece: place + 1 }) : undefined}
-                  linked={place === linkedPiece}
-                  onOpen={openLightbox}
-                />
-              );
-            })}
+        {tags.length > 1 && (
+          <div className="nu-profile-page__tag-filter" role="group" aria-label="Filter by tag">
+            {tags.map((t) => (
+              <button key={t} type="button" aria-pressed={tag === t} onClick={() => setTag(tag === t ? undefined : t)}>
+                #{t}
+              </button>
+            ))}
           </div>
-          {hidden > 0 && (
-            <p className="nu-field__hint" data-nu-role="art-mature-hidden">
-              {hidden} Mature {hidden === 1 ? 'piece is' : 'pieces are'} hidden unless you’re signed in.
-            </p>
-          )}
-          {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(undefined)} />}
-        </>
-      )}
-    </section>
+        )}
+        <div className="nu-profile-page__pieces">
+          {shown.map((piece, index) => {
+            const place = album.pieces.indexOf(piece);
+            return (
+              <Piece
+                key={`${piece.url}-${index}`}
+                piece={piece}
+                link={ownerId ? pageLink(ownerId, { kind: 'art', album: album.id, piece: place + 1 }) : undefined}
+                linked={place === linkedPiece}
+                onOpen={openLightbox}
+              />
+            );
+          })}
+        </div>
+        {hidden > 0 && (
+          <p className="nu-field__hint" data-nu-role="art-mature-hidden">
+            {hidden} Mature {hidden === 1 ? 'piece is' : 'pieces are'} hidden unless you’re signed in.
+          </p>
+        )}
+        {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(undefined)} />}
+      </div>
+    </Modal>
   );
 }
 
 /**
- * A page's gallery: albums of pieces with captions and tags. Only the open album's pieces load. With
- * ratings on, Mature pieces are hidden when signed out and blurred until clicked when signed in.
+ * A page's gallery: each album as a short strip of thumbnails with "View all", opening the album
+ * over the page. Only the strips' small thumbnails load until then. With ratings on, Mature pieces
+ * are hidden when signed out and blurred until clicked when signed in. A link to an album (or a
+ * piece in it) opens that album.
  */
 export function GalleryBlock({ block }: { block: GalleryBlockType }) {
   const signedIn = useSignedIn();
   const owner = useContext(PageOwnerContext);
   const target = useContext(PageTargetContext);
-  // A link to an album (or a piece in it) opens that album.
   const linked = target?.kind === 'art' ? block.albums.find((album) => album.id === target.album) : undefined;
-  const [open, setOpen] = useState<string | undefined>(linked?.id ?? (block.albums.length === 1 ? block.albums[0].id : undefined));
+  const [open, setOpen] = useState<string | undefined>(linked?.id);
   const linkedPiece = linked && target?.kind === 'art' && target.piece ? target.piece - 1 : undefined;
   const albums = block.albums.filter((album) => visiblePieces(album, signedIn).length > 0);
   if (albums.length === 0) return null;
-  const single = albums.length === 1;
+  const shown = albums.find((album) => album.id === open);
+  // One album named like the module needn't say its name twice.
+  const showTitles = albums.length > 1 || albums[0].title !== (block.title ?? 'Gallery');
   return (
-    <>
-      {block.title && <h3 className="nu-profile-page__block-title">{block.title}</h3>}
-      <div className="nu-profile-page__albums">
-        {albums.map((album) => (
-          <Album
-            key={album.id}
-            album={album}
-            signedIn={signedIn}
-            single={single}
-            blockTitle={block.title}
-            ownerId={owner?.userId}
-            linkedPiece={album.id === linked?.id ? linkedPiece : undefined}
-            open={single || open === album.id}
-            onToggle={() => setOpen(open === album.id ? undefined : album.id)}
-          />
-        ))}
-      </div>
-    </>
+    <div className="nu-profile-page__albums">
+      {albums.map((album) => (
+        <AlbumPreview key={album.id} album={album} signedIn={signedIn} showTitle={showTitles} onOpen={() => setOpen(album.id)} />
+      ))}
+      {shown && (
+        <AlbumDialog
+          album={shown}
+          signedIn={signedIn}
+          ownerId={owner?.userId}
+          linkedPiece={shown.id === linked?.id ? linkedPiece : undefined}
+          onClose={() => setOpen(undefined)}
+        />
+      )}
+    </div>
   );
 }

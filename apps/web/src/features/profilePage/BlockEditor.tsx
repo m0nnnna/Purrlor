@@ -21,6 +21,7 @@ import {
   type MusicTrack,
   type PageBlock,
   type PageLink,
+  type PageSide,
   type PageSpace,
 } from '../../matrix/profilePage';
 import { formatBytes } from '../../matrix/postMedia';
@@ -828,6 +829,7 @@ export function BlockEditor({
   open,
   first,
   last,
+  side,
   emotes,
   imagesLeft,
   tracksLeft,
@@ -835,12 +837,15 @@ export function BlockEditor({
   onToggle,
   onChange,
   onMove,
+  onSide,
   onRemove,
 }: {
   block: PageBlock;
   open: boolean;
   first: boolean;
   last: boolean;
+  /** The column it's in; the profile song has none, and no buttons to move it. */
+  side?: PageSide;
   emotes: Emote[];
   imagesLeft: number;
   tracksLeft: number;
@@ -848,6 +853,7 @@ export function BlockEditor({
   onToggle: () => void;
   onChange: (block: PageBlock) => void;
   onMove: (delta: -1 | 1) => void;
+  onSide?: (side: PageSide) => void;
   onRemove: () => void;
 }) {
   const summary = 'title' in block && block.title ? `${BLOCK_LABELS[block.type]}: ${block.title}` : BLOCK_LABELS[block.type];
@@ -860,12 +866,26 @@ export function BlockEditor({
         <button type="button" className="nu-page-editor__block-name" aria-expanded={open} onClick={onToggle}>
           {open ? '▾' : '▸'} {summary}
         </button>
-        <button type="button" className="nu-page-editor__icon-button" aria-label="Move up" disabled={first} onClick={() => onMove(-1)}>
-          ↑
-        </button>
-        <button type="button" className="nu-page-editor__icon-button" aria-label="Move down" disabled={last} onClick={() => onMove(1)}>
-          ↓
-        </button>
+        {side && (
+          <>
+            <button type="button" className="nu-page-editor__icon-button" aria-label="Move up" disabled={first} onClick={() => onMove(-1)}>
+              ↑
+            </button>
+            <button type="button" className="nu-page-editor__icon-button" aria-label="Move down" disabled={last} onClick={() => onMove(1)}>
+              ↓
+            </button>
+            <button
+              type="button"
+              className="nu-page-editor__icon-button"
+              aria-label={side === 'left' ? 'Move to the right column' : 'Move to the left column'}
+              title={side === 'left' ? 'Move to the right column' : 'Move to the left column'}
+              onClick={() => onSide?.(side === 'left' ? 'right' : 'left')}
+              data-nu-role="page-editor-block-side"
+            >
+              {side === 'left' ? '→' : '←'}
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="nu-page-editor__icon-button"

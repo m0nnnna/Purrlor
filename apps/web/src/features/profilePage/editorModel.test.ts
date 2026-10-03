@@ -3,11 +3,14 @@ import { emptyProfilePage, LIMITS, parseProfilePage, type ProfilePage } from '..
 import {
   addBlock,
   canAddBlock,
+  canAddType,
+  columnBlocks,
   findEmote,
   imageCount,
   moveBlock,
   readabilityProblems,
   removeBlock,
+  setBlockSide,
   STARTER_PAGES,
   withFormattedText,
 } from './editorModel';
@@ -28,6 +31,30 @@ describe('editorModel', () => {
     expect(moveBlock(page, a, -1)).toBe(page);
     expect(moveBlock(page, c, 1)).toBe(page);
     expect(removeBlock(page, b).blocks.map((block) => block.id)).toEqual([a, c]);
+  });
+
+  it('moves a block within its own column, past the other column’s blocks', () => {
+    // text and image go left, friends and guestbook right, by their kind.
+    const page = withBlocks('text', 'friends', 'image', 'guestbook');
+    const [text, friends, image, guestbook] = page.blocks.map((block) => block.id);
+    expect(moveBlock(page, image, -1).blocks.map((block) => block.id)).toEqual([image, friends, text, guestbook]);
+    expect(moveBlock(page, friends, 1).blocks.map((block) => block.id)).toEqual([text, guestbook, image, friends]);
+    expect(moveBlock(page, guestbook, 1)).toBe(page);
+  });
+
+  it('moves a block to the end of the other column', () => {
+    const page = withBlocks('text', 'friends', 'image');
+    const [text, friends, image] = page.blocks.map((block) => block.id);
+    const moved = setBlockSide(page, text, 'right');
+    expect(columnBlocks(moved, 'right').map((block) => block.id)).toEqual([friends, text]);
+    expect(columnBlocks(moved, 'left').map((block) => block.id)).toEqual([image]);
+  });
+
+  it('has room for one profile song, in no column', () => {
+    const page = withBlocks('song');
+    expect(page.blocks[0].side).toBeUndefined();
+    expect(canAddType(page, 'song')).toBe(false);
+    expect(canAddType(page, 'text')).toBe(true);
   });
 
   it('stops offering blocks at the limit', () => {

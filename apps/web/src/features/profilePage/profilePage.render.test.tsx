@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { parseProfilePage, type ProfilePage } from '../../matrix/profilePage';
 import { PageBlocks } from './PageBlocks';
+import { ProfilePageLayout } from './ProfilePageLayout';
 import { ProfilePageFrame } from './ProfilePageFrame';
 
 const mx = vi.hoisted(() => ({ getUserId: () => '@me:purr.example.org', getRoom: () => null, joinRoom: () => undefined }));
@@ -26,7 +27,7 @@ const pageOf = (raw: Record<string, unknown>) => parseProfilePage({ version: 1, 
 describe('profile page rendering', () => {
   it('opens link buttons in a new tab with no way back into Purrlor, and shows where they go', () => {
     const page = pageOf({ blocks: [{ id: 'l', type: 'links', items: [{ label: 'My art', url: 'https://www.example.art/gallery' }] }] });
-    const { container } = render(<PageBlocks blocks={page.blocks} />);
+    const { container } = render(<PageBlocks blocks={page.blocks} openIds={page.blocks.map((b) => b.id)} />);
     const link = q(container, 'profile-page-link') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('https://www.example.art/gallery');
     expect(link.target).toBe('_blank');
@@ -35,19 +36,37 @@ describe('profile page rendering', () => {
     expect(link.textContent).toContain('example.art');
   });
 
-  it('loads nothing for the profile song until play is pressed', () => {
+  it('plays the profile song in a floating window, loading nothing until play is pressed', () => {
     const page = pageOf({ blocks: [{ id: 's', type: 'song', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }] });
-    const { container } = render(<PageBlocks blocks={page.blocks} />);
-    expect(container.querySelector('iframe')).toBeNull();
-    fireEvent.click(q(container, 'profile-page-play') as Element);
-    expect(container.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1');
+    render(<ProfilePageLayout page={page} header={null} posts={null} />);
+    const song = q(document.body, 'profile-song') as HTMLElement;
+    expect(song).not.toBeNull();
+    expect(document.querySelector('iframe')).toBeNull();
+    fireEvent.click(q(song, 'profile-page-play') as Element);
+    expect(song.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1');
+  });
+
+  it('puts modules in the column their owner chose, each closed to its title', () => {
+    const page = pageOf({
+      blocks: [
+        { id: 't', type: 'text', title: 'Hello', body: 'hi', side: 'right' },
+        { id: 'l', type: 'links', items: [{ label: 'Site', url: 'https://example.org' }] },
+      ],
+    });
+    const { container } = render(<ProfilePageLayout page={page} header={<p>header</p>} posts={<p>posts</p>} />);
+    const left = q(container, 'profile-page-left') as HTMLElement;
+    expect(left.textContent).toBe('Links');
+    expect(q(container, 'profile-page-right')?.textContent).toBe('Hello');
+    expect(container.querySelector('a')).toBeNull();
+    fireEvent.click(q(left, 'profile-page-module-toggle') as Element);
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://example.org/');
   });
 
   it('draws text blocks as text, never as HTML', () => {
     const page = pageOf({
       blocks: [{ id: 't', type: 'text', body: '<img src=x onerror=alert(1)> hi', formatted: '<script>alert(1)</script>' }],
     });
-    const { container } = render(<PageBlocks blocks={page.blocks} />);
+    const { container } = render(<PageBlocks blocks={page.blocks} openIds={page.blocks.map((b) => b.id)} />);
     expect(container.querySelector('script')).toBeNull();
     expect(container.querySelector('img[onerror]')).toBeNull();
     expect(container.textContent).toContain('<img src=x onerror=alert(1)> hi');
@@ -66,7 +85,6 @@ describe('profile page rendering', () => {
     expect(frame.style.getPropertyValue('--page-bg')).toBe('#112233');
     expect(frame.style.getPropertyValue('--page-text')).toBe('#ffffff');
     expect(frame.style.backgroundImage).toContain('https://purr.example.org/media/abc');
-    expect(frame.className).toContain('nu-profile-page--two-columns');
 
     rerender(
       <ProfilePageFrame page={undefined}>
@@ -88,7 +106,7 @@ describe('profile page rendering', () => {
     });
     const { container } = render(
       <ProfilePageFrame page={page}>
-        <PageBlocks blocks={page.blocks} />
+        <PageBlocks blocks={page.blocks} openIds={page.blocks.map((b) => b.id)} />
       </ProfilePageFrame>
     );
     const frame = q(container, 'profile-page') as HTMLElement;

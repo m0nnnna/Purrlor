@@ -286,20 +286,15 @@ function SignedInCommissions({ owner }: { owner: { userId: string; roomId?: stri
 }
 
 /** The commissions block: status, price sheet, queue and the request form. Signed out it asks you to sign in. */
-export function CommissionsBlock({ title }: { title?: string }) {
+export function CommissionsBlock() {
   const mx = useContext(MatrixClientContext);
   const owner = useContext(PageOwnerContext);
   if (!owner) return null;
-  return (
-    <>
-      <h3 className="nu-profile-page__block-title">{title ?? 'Commissions'}</h3>
-      {mx ? (
-        <SignedInCommissions owner={owner} />
-      ) : (
-        <p className="nu-field__hint" data-nu-role="commissions-signed-out">
-          Sign in to see commission status, prices and the queue.
-        </p>
-      )}
-    </>
+  return mx ? (
+    <SignedInCommissions owner={owner} />
+  ) : (
+    <p className="nu-field__hint" data-nu-role="commissions-signed-out">
+      Sign in to see commission status, prices and the queue.
+    </p>
   );
 }

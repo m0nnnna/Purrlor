@@ -34,7 +34,10 @@ describe('the public web, signed out', () => {
       })
     );
     const { container } = render(<PublicApp route={{ kind: 'page', user: 'luna' }} onSignIn={noop} onRegister={noop} />);
-    await waitFor(() => expect(container.textContent).toContain('welcome to my page'));
+    // Modules start closed to their titles.
+    await waitFor(() => expect(q(container, 'profile-page-module-toggle')?.textContent).toBe('About'));
+    fireEvent.click(q(container, 'profile-page-module-toggle') as Element);
+    expect(container.textContent).toContain('welcome to my page');
     expect(container.textContent).toContain('@luna');
     expect(container.textContent).toContain('hi, I draw cats');
     expect(q(container, 'public-make-page')).not.toBeNull();

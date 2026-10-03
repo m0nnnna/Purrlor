@@ -92,13 +92,23 @@ export type PageStyle = {
   borderColor: string;
   /** How solid the blocks' background is: 0.3 (see-through) to 1. */
   blockOpacity: number;
+  /** Read and kept, but no longer drawn: blocks sit in the side columns now (PageBlockBase.side). */
   columns: 1 | 2;
   effect: PageEffect;
 };
 
 export type PageLink = { label: string; url: string; emote?: string; color?: string };
 
-export type PageBlock =
+/** Which column a block sits in, either side of the posts (one column on a phone). */
+export type PageSide = 'left' | 'right';
+
+/**
+ * What every block has. `side` is always set once a page is parsed (a block saved before there
+ * were sides gets defaultSide's); the profile song has none, since it plays in a floating window.
+ */
+export type PageBlockBase = { side?: PageSide };
+
+export type PageBlock = PageBlockBase & (
   | { id: string; type: 'text'; title?: string; body: string; formatted?: string }
   | { id: string; type: 'links'; title?: string; items: PageLink[] }
   | { id: string; type: 'image'; url: string; caption?: string; link?: string }
@@ -117,7 +127,18 @@ export type PageBlock =
   | { id: string; type: 'commissions'; title?: string }
   /** Albums of audio the owner uploaded, played by the page's own player. Nothing plays until
    *  pressed. The older music block, a flat `tracks` list, reads as a single album. */
-  | { id: string; type: 'music'; title?: string; albums: MusicAlbum[] };
+  | { id: string; type: 'music'; title?: string; albums: MusicAlbum[] }
+);
+
+/**
+ * Where a block without a side goes: things about you on the left, things of yours and from other
+ * people on the right, so a page made before sides comes out balanced rather than all on one side.
+ */
+export function defaultSide(type: PageBlock['type']): PageSide {
+  return type === 'gallery' || type === 'music' || type === 'friends' || type === 'guestbook' || type === 'commissions'
+    ? 'right'
+    : 'left';
+}
 
 /** One uploaded track: an mxc:// file of an allowed audio type, with a one-line title and artist.
  *  `duration` (seconds) and `size` (bytes) are what the uploader measured, for the track list only. */
@@ -581,6 +602,13 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
     while (seen.has(id)) id = `${id}_`;
     let block = readBlock(item, id);
     if (!block) continue;
+    // One profile song: it's a single floating player, not something to stack.
+    if (block.type === 'song') {
+      if (blocks.some((b) => b.type === 'song')) continue;
+    } else {
+      const side = isRecord(item) ? item.side : undefined;
+      block = { ...block, side: side === 'left' || side === 'right' ? side : defaultSide(block.type) };
+    }
     const room = LIMITS.images - images;
     if (block.type === 'image' && room < 1) continue;
     if (block.type === 'gallery') {
