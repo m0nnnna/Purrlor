@@ -121,6 +121,12 @@ describe('profileSourceFromState', () => {
     expect(result?.follows).toEqual(['@bo:example.org']);
   });
 
+  it('leaves out a profile whose owner has left it (a deleted account)', () => {
+    const marker = { type: 'xyz.nekous.feed', state_key: '', content: { owner: '@ana:example.org', profile: true } };
+    expect(profileSourceFromState('!p:x', [create, { ...member, content: { membership: 'leave' } }, marker])).toBeUndefined();
+    expect(profileSourceFromState('!p:x', [create, marker])).toBeUndefined();
+  });
+
   it('rejects a marker that names someone other than the room’s creator', () => {
     expect(
       profileSourceFromState('!p:x', [create, { type: 'xyz.nekous.feed', state_key: '', content: { owner: '@mallory:example.org' } }])
@@ -230,6 +236,7 @@ describe('loadUserProfileSource', () => {
   const profileState = (owner: string) => [
     { type: 'm.room.create', state_key: '', sender: owner, content: {} },
     { type: 'xyz.nekous.feed', state_key: '', content: { owner, profile: true } },
+    { type: 'm.room.member', state_key: owner, content: { membership: 'join' } },
   ];
 
   it('finds a person’s profile feed from their user ID', async () => {

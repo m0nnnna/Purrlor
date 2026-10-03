@@ -1,0 +1,66 @@
+.nu-your-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+}
+
+.nu-your-data__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-your-data__section--danger {
+  padding-top: var(--nu-space-4);
+  border-top: 1px solid var(--nu-color-border);
+}
+
+.nu-your-data__heading {
+  margin: 0;
+  font-size: var(--nu-font-size-md);
+}
+
+.nu-your-data__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nu-space-2);
+}
+
+.nu-your-data__status {
+  margin: 0;
+  margin-right: auto;
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-your-data__link {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nu-color-text-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nu-your-data__dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  max-width: 34rem;
+}
+
+.nu-your-data__dialog p {
+  margin: 0;
+}
+
+.nu-your-data__list {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  color: var(--nu-color-text-secondary);
+}

@@ -89,7 +89,25 @@ export function TermsOfService() {
           moderators who review the report.
         </li>
         <li>
+          When the app hits an error, it sends the error to our server so we can fix it: what went
+          wrong and on what kind of page, not who you are or what you were reading. You can turn
+          this off under Account Settings, Privacy.
+        </li>
+        <li>
           We may disclose data we can read to law enforcement when legally required to.
+        </li>
+      </ul>
+      <h4>Your copy, and leaving</h4>
+      <ul>
+        <li>
+          Account Settings, Your data, downloads a copy of everything you've put here: your
+          profile, page, posts, comments, the messages you sent (decrypted) and the files you
+          uploaded.
+        </li>
+        <li>
+          The same place deletes your account. You're signed out everywhere and can't sign in
+          again, your page is taken down and, if you choose, your posts are deleted. Messages
+          you sent stay with the people who received them.
         </li>
       </ul>
 

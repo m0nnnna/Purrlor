@@ -128,6 +128,7 @@ describe('loadUserProfileSource for a peer’s person', () => {
     const state = [
       { type: 'm.room.create', state_key: '', sender: owner, content: {} },
       { type: 'xyz.nekous.feed', state_key: '', content: { owner, profile: true } },
+      { type: 'm.room.member', state_key: owner, content: { membership: 'join' } },
     ];
     const joined = { value: false };
     respond({ '/api/public/peers': { body: PEERS } });

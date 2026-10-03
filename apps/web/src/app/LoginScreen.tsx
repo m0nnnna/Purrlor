@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { ACCOUNT_DELETED_FLAG } from './YourDataSettings';
 import { loginWithPassword } from '../matrix/login';
 import { enterDemoMode } from '../demo/demoMode';
 import { getRuntimeConfig, homeserverDisplayName } from './runtimeConfig';
@@ -17,6 +18,16 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  // Just deleted an account (YourDataSettings): say so once, then forget it.
+  const [accountDeleted] = useState(() => {
+    try {
+      const deleted = sessionStorage.getItem(ACCOUNT_DELETED_FLAG) === '1';
+      sessionStorage.removeItem(ACCOUNT_DELETED_FLAG);
+      return deleted;
+    } catch {
+      return false;
+    }
+  });
 
   const handleSubmit = async (evt: FormEvent) => {
     evt.preventDefault();
@@ -37,6 +48,11 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
       <form className="nu-login__form" onSubmit={handleSubmit}>
         <img className="nu-login__mascot" src="/icon-192.png" alt="" />
         <h1 className="nu-login__title">Purrlor</h1>
+        {accountDeleted && (
+          <p className="nu-login__notice" role="status" data-nu-role="login-account-deleted">
+            Your account has been deleted. Thanks for being here.
+          </p>
+        )}
         {lockedHomeserver ? (
           <p className="nu-login__server" data-nu-role="login-locked-homeserver">
             Signing in to <strong>{homeserverDisplayName(lockedHomeserver)}</strong>

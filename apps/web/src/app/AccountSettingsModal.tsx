@@ -7,10 +7,11 @@ import { PrivacySettings } from './PrivacySettings';
 import { RemindersSettings } from './RemindersSettings';
 import { SessionsSettings } from './SessionsSettings';
 import { VoiceSettings } from './VoiceSettings';
+import { YourDataSettings } from './YourDataSettings';
 import { isDesktopApp } from '../desktop/desktopBridge';
 import './AccountSettingsModal.css';
 
-type AccountSettingsTab = 'account' | 'sessions' | 'voice' | 'appearance' | 'reminders' | 'privacy' | 'desktop';
+type AccountSettingsTab = 'account' | 'sessions' | 'voice' | 'appearance' | 'reminders' | 'privacy' | 'data' | 'desktop';
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<AccountSettingsTab>('account');
@@ -63,6 +64,14 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
         >
           Privacy
         </button>
+        <button
+          type="button"
+          className={tab === 'data' ? 'nu-modal-tab nu-modal-tab--active' : 'nu-modal-tab'}
+          data-nu-role="account-settings-data-tab"
+          onClick={() => setTab('data')}
+        >
+          Your data
+        </button>
         {isDesktopApp() && (
           <button
             type="button"
@@ -80,6 +89,7 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
       {tab === 'appearance' && <AppearanceSettings />}
       {tab === 'reminders' && <RemindersSettings onClose={onClose} />}
       {tab === 'privacy' && <PrivacySettings />}
+      {tab === 'data' && <YourDataSettings />}
       {tab === 'desktop' && <DesktopSettings />}
     </Modal>
   );

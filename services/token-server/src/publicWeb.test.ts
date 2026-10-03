@@ -22,6 +22,7 @@ import {
   readEmotes,
   readPageContent,
   readProfileOwner,
+  ownerStillThere,
   readPublicWeb,
   type PublicPost,
   type RawEvent,
@@ -58,6 +59,13 @@ describe('who and what is public', () => {
     // A room that isn't a profile room isn't read as one, whatever its marker says.
     const notProfile = [{ ...ROOM_STATE[0], content: { creator: OWNER } }, ROOM_STATE[1]];
     assert.equal(readProfileOwner(notProfile), undefined);
+  });
+
+  it("shows nothing of an owner who has left their profile room (a deleted account)", () => {
+    const member = (membership: string) => ({ type: 'm.room.member', state_key: OWNER, sender: OWNER, content: { membership } });
+    assert.equal(ownerStillThere([...ROOM_STATE, member('join')], OWNER), true);
+    assert.equal(ownerStillThere([...ROOM_STATE, member('leave')], OWNER), false);
+    assert.equal(ownerStillThere(ROOM_STATE, OWNER), false);
   });
 
   it('shows a page only when its owner opted in, and only a page that is one', () => {

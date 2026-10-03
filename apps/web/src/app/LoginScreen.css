@@ -152,3 +152,12 @@
     padding: var(--nu-space-5);
   }
 }
+
+.nu-login__notice {
+  margin: 0;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-secondary);
+  text-align: center;
+}

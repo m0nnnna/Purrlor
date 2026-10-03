@@ -91,6 +91,16 @@ export function readProfileOwner(state: RawEvent[]): string | undefined {
   return creator && creator !== owner ? undefined : owner;
 }
 
+/**
+ * Whether the owner is still in their own profile room. Deleting an account (deactivating it)
+ * leaves every room, and the homeserver keeps the posts; nothing of someone who has gone is shown,
+ * whatever their client managed to clean up first.
+ */
+export function ownerStillThere(state: RawEvent[], owner: string): boolean {
+  const member = state.find((event) => event.type === 'm.room.member' && event.state_key === owner);
+  return member?.content?.membership === 'join';
+}
+
 /** Whether the owner opted in to showing their page to people who aren't signed in. */
 export function readPublicWeb(state: RawEvent[]): boolean {
   const event = state.find((e) => e.type === PUBLIC_WEB_EVENT && e.state_key === '');

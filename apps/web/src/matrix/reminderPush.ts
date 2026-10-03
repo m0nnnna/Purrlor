@@ -87,3 +87,16 @@ export async function syncRemindersToGateway(mx: MatrixClient, now = Date.now())
   });
   if (!res.ok) throw new Error(`Push gateway refused reminders (${res.status})`);
 }
+
+/** Takes every reminder of this account off its push gateway (deleting the account, deleteAccount.ts). */
+export async function clearGatewayReminders(mx: MatrixClient): Promise<void> {
+  const gatewayUrl = readPushGatewayUrl(mx);
+  if (!gatewayUrl) return;
+  const openIdToken = await getOpenIdTokenCached(mx);
+  const res = await fetch(`${gatewayUrl}/reminders`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ openid_token: openIdToken, reminders: [] }),
+  });
+  if (!res.ok) throw new Error(`Push gateway refused reminders (${res.status})`);
+}

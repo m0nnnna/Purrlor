@@ -25,6 +25,7 @@ the same server.
 | `post-links.spec.ts` | A Global post's "Copy link", opened signed in (the post's page) and signed out (the public post and its preview), after it's been buried past the public web's window |
 | `encryption.spec.ts` | An encrypted room between two browsers: each reads the other, the server sees only ciphertext |
 | `security.spec.ts` | The security headers are sent, signing in, a channel and the feed run with no Content-Security-Policy violation, an injected inline script is refused, and a theme's rules that read attribute values are left out while the rest applies |
+| `your-data.spec.ts` | Download my data: your messages (an encrypted one as text), posts and uploaded file in the ZIP, nobody else's messages; Delete my account: a wrong password changes nothing, then posts and the public page go and the account can't sign in |
 | `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
 
 ## Running locally

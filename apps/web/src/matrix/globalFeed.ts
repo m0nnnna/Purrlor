@@ -136,11 +136,16 @@ export function feedSourcesFromState(
   return sources;
 }
 
-/** A profile feed's source from its raw `/state`, or undefined if its ownership doesn't check out. */
+/**
+ * A profile feed's source from its raw `/state`, or undefined if its ownership doesn't check out
+ * or its owner has left it: a deleted account leaves every room, and its posts stay on the
+ * homeserver (the token server's public web hides them the same way).
+ */
 export function profileSourceFromState(roomId: string, events: RawStateEvent[]): FeedSource | undefined {
   const owner = readProfileOwner(events);
   if (!owner) return undefined;
   const member = events.find((event) => event.type === EventType.RoomMember && event.state_key === owner)?.content ?? {};
+  if (member.membership !== 'join') return undefined;
   return {
     roomId,
     owner,

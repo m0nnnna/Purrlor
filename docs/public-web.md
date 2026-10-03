@@ -16,6 +16,7 @@ HTTP side). The web client's signed-out views (`/@name`, `/feed`) are built on t
 | Likes and comments | Counts only. Who liked and what commenters said stay behind sign-in |
 | Mentions in a post | The post's plain text, as written. The formatted body (whose mention links carry Matrix IDs) isn't sent, only the emotes in it |
 | A **profile page** | Only if its owner opted in. Otherwise the answer is identical to "no such user" |
+| Anything of someone who **left their profile room** | Nothing: that's what deleting an account does (docs/your-data.md), so neither their page nor their posts are shown, whatever was left behind |
 | An approved peer's people (`docs/federation.md`) | Their Global posts and opted-in page, the same as this server's people, while their own instance shows them too, and unless an admin here hid them. Addresses carry their server: `/@name:peer.example` |
 | Anyone on any other homeserver | Never |
 | Anyone an admin hid | Never: their page, and their posts on the public feed |

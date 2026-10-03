@@ -27,6 +27,7 @@ import {
   readFollows,
   readPageContent,
   readProfileOwner,
+  ownerStillThere,
   readPublicWeb,
   serverNameOf,
   splitMxc,
@@ -185,7 +186,7 @@ async function readProfileRoom(mx: MatrixClient, roomId: string, servers: Readon
   try {
     const state = (await mx.roomState(roomId)) as unknown as RawEvent[];
     const owner = readProfileOwner(state);
-    if (!owner || !servers.has(serverNameOf(owner))) return undefined;
+    if (!owner || !servers.has(serverNameOf(owner)) || !ownerStillThere(state, owner)) return undefined;
     // Straight to /messages: the SDK's createMessagesRequest wants a Filter instance, and given a
     // plain filter it throws before asking, which read every room as empty.
     const filter = JSON.stringify({ types: ['xyz.nekous.post', 'xyz.nekous.comment', 'm.reaction'] });

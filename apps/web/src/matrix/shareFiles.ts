@@ -27,7 +27,9 @@ export async function takeSharedFiles(count: number, storage: CacheStorage | und
       } catch {
         // A name that doesn't decode keeps the fallback.
       }
-      files.push(new File([await response.blob()], name, { type }));
+      // The bytes, not response.blob(): a Blob from another realm (a test environment's fetch) isn't
+      // taken as one by File, which would store the text "[object Blob]" instead.
+      files.push(new File([await response.arrayBuffer()], name, { type }));
     }
   } catch {
     // The cache can't be read (private browsing, say): nothing to share.
