@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { NowPlayingCard } from '../voice/NowPlayingCard';
 import { MusicPlayerBar } from '../music/MusicPlayerBar';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -23,7 +23,9 @@ import { useSpaceNews } from '../../matrix/hooks/useSpaceNews';
 import { spaceLanding } from '../../matrix/spaceNews';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { leaveDirectMessage } from '../../matrix/directMessages';
-import { getChannelCategories, reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
+import { CHANNEL_CATEGORIES_EVENT_TYPE, getChannelCategories, reorderCategoryChannels, type ChannelCategory } from '../../matrix/channelCategories';
+import { sameLayout, saveChannelLayout, type ChannelLayout } from '../../matrix/channelLayout';
+import { useChannelDrag } from './useChannelDrag';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
@@ -106,6 +108,15 @@ function VoiceChannelOccupants({ room, voiceServer }: { room: Room; voiceServer:
   );
 }
 
+/** A channel row's place, for dragging it (useChannelDrag.ts). */
+type RowDrag = {
+  categoryId: string | null;
+  index: number;
+  dragging: boolean;
+  clickAllowed: () => boolean;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+};
+
 function ChannelListRow({
   room,
   isDirectMessage,
@@ -122,6 +133,7 @@ function ChannelListRow({
   onOpenWebhooks,
   onOpenSettings,
   onLeave,
+  drag,
 }: {
   room: Room;
   isDirectMessage: boolean;
@@ -142,6 +154,8 @@ function ChannelListRow({
   onOpenSettings?: () => void;
   /** DMs and group chats only: leave it, which takes it off your list (leaveDirectMessage). */
   onLeave?: () => void;
+  /** Where it sits, for dragging (useChannelDrag.ts); absent where channels can't be dragged. */
+  drag?: RowDrag;
 }) {
   const counterpartId = useDmCounterpart(room, isDirectMessage);
   const presence = usePresence(counterpartId ?? '');
@@ -166,6 +180,7 @@ function ChannelListRow({
     (canSendStateEvent(room, myUserId, 'm.room.power_levels') || canSendStateEvent(room, myUserId, CHANNEL_SETTINGS_EVENT));
 
   const handleSelect = () => {
+    if (drag && !drag.clickAllowed()) return;
     onSelect();
     // Clicking a voice channel joins it immediately — Discord's model, no separate "Join
     // voice" click required when you're getting there via the channel list.
@@ -173,7 +188,18 @@ function ChannelListRow({
   };
 
   return (
-    <div className="nu-channel-list__row" data-nu-role="channel-list-row">
+    <div
+      className={['nu-channel-list__row', drag && 'nu-channel-list__row--draggable', drag?.dragging && 'nu-channel-list__row--dragging']
+        .filter(Boolean)
+        .join(' ')}
+      data-nu-role="channel-list-row"
+      {...(drag && {
+        'data-nu-drag-channel': room.roomId,
+        'data-nu-drag-category': drag.categoryId ?? '',
+        'data-nu-drag-index': drag.index,
+        onPointerDown: drag.onPointerDown,
+      })}
+    >
       <button
         type="button"
         className={[
@@ -223,7 +249,7 @@ function ChannelListRow({
           <UnreadBadge total={unread.total} highlight={unread.highlight} />
         )}
       </button>
-      <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions">
+      <div className="nu-channel-list__row-actions" data-nu-role="channel-list-row-actions" data-nu-drag-ignore="">
         <RoomNotificationMenu roomId={room.roomId} triggerClassName="nu-channel-list__row-action" />
         {/* One "⋯" for everything else, so a hovered row keeps most of its name clickable. */}
         {(canEditSettings || canEditPermissions || canEditWebhooks || (!isDirectMessage && canManageSpace) || !!onLeave) && (
@@ -406,24 +432,40 @@ function ActiveCallBar() {
 /** A category's collapsible header. Collapsed, it still owes you a signal: an unread dot if any
  *  channel inside has something new, and how many channels it's hiding. */
 function CategoryHeader({
+  categoryId,
   name,
   rooms,
   collapsed,
   onToggle,
+  drag,
 }: {
+  categoryId: string;
   name: string;
   rooms: Room[];
   collapsed: boolean;
   onToggle: () => void;
+  /** Dragging the header moves the category (useChannelDrag.ts); absent where it can't be dragged. */
+  drag?: { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void; clickAllowed: () => boolean };
 }) {
   const unread = useUnreadSummary(rooms);
   return (
     <button
       type="button"
-      className={collapsed ? 'nu-channel-list__category-header nu-channel-list__category-header--collapsed' : 'nu-channel-list__category-header'}
+      className={[
+        'nu-channel-list__category-header',
+        collapsed && 'nu-channel-list__category-header--collapsed',
+        drag && 'nu-channel-list__category-header--draggable',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       data-nu-role="channel-list-category-header"
+      data-nu-drag-header={categoryId}
+      data-nu-drag-count={rooms.length}
       aria-expanded={!collapsed}
-      onClick={onToggle}
+      onPointerDown={drag?.onPointerDown}
+      onClick={() => {
+        if (!drag || drag.clickAllowed()) onToggle();
+      }}
     >
       <Icon name="chevronDown" size={12} className="nu-channel-list__category-arrow" />
       <span className="nu-channel-list__category-name">{name}</span>
@@ -588,6 +630,61 @@ export function ChannelList() {
     rooms: category.channelIds.map((id) => roomById.get(id)).filter((r): r is Room => !!r),
   }));
 
+  // Dragging (useChannelDrag.ts): the order as stored, and the one just dropped, shown at once while
+  // it's saved (a move to the top rewrites several channel links one by one).
+  const storedLayout: ChannelLayout = {
+    uncategorized: uncategorizedRooms.map((r) => r.roomId),
+    categories: categoryRooms.map(({ category, rooms }) => ({ id: category.id, channelIds: rooms.map((r) => r.roomId) })),
+  };
+  const [pendingLayout, setPendingLayout] = useState<{ spaceId: string; layout: ChannelLayout } | null>(null);
+  const [dragError, setDragError] = useState<string>();
+  const shownLayout = pendingLayout && pendingLayout.spaceId === selectedSpaceId ? pendingLayout.layout : storedLayout;
+  // Once the stored order catches up with the drop, there's nothing pending; if it never does
+  // (someone else moved things meanwhile), the stored one wins after a while.
+  const storedKey = JSON.stringify(storedLayout);
+  useEffect(() => {
+    if (!pendingLayout) return undefined;
+    if (sameLayout(pendingLayout.layout, JSON.parse(storedKey) as ChannelLayout)) {
+      setPendingLayout(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setPendingLayout(null), 20_000);
+    return () => clearTimeout(timer);
+  }, [pendingLayout, storedKey]);
+  const canArrange = !!space && canLinkChannels && canSendStateEvent(space, mx.getUserId() ?? '', CHANNEL_CATEGORIES_EVENT_TYPE);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const drag = useChannelDrag({
+    containerRef: bodyRef,
+    enabled: canArrange,
+    layout: shownLayout,
+    onDrop: (next) => {
+      if (!space) return;
+      const before = shownLayout;
+      setDragError(undefined);
+      setPendingLayout({ spaceId: space.roomId, layout: next });
+      saveChannelLayout(mx, space, before, next).catch((err: unknown) => {
+        console.error('Moving a channel failed', err);
+        setPendingLayout(null);
+        setDragError('Couldn’t move that. Check your connection and try again.');
+      });
+    },
+  });
+  const shownUncategorized = shownLayout.uncategorized.map((id) => roomById.get(id)).filter((r): r is Room => !!r);
+  const shownCategories = shownLayout.categories.flatMap(({ id, channelIds }) => {
+    const found = categoryRooms.find((entry) => entry.category.id === id);
+    return found ? [{ category: found.category, rooms: channelIds.map((roomId) => roomById.get(roomId)).filter((r): r is Room => !!r) }] : [];
+  });
+  const rowDrag = (room: Room, categoryId: string | null, index: number): RowDrag | undefined =>
+    canArrange
+      ? {
+          categoryId,
+          index,
+          dragging: drag.dragging?.kind === 'channel' && drag.dragging.id === room.roomId,
+          clickAllowed: drag.clickAllowed,
+          onPointerDown: (event) => drag.start({ kind: 'channel', id: room.roomId, label: room.name }, event),
+        }
+      : undefined;
+
   const handleMoveInUncategorized = (index: number, direction: -1 | 1) => {
     if (!space) return;
     const targetIndex = index + direction;
@@ -667,7 +764,17 @@ export function ChannelList() {
           )}
         </div>
       )}
-      <div className="nu-channel-list__body" data-nu-role="channel-list-body">
+      <div
+        className={drag.dragging ? 'nu-channel-list__body nu-channel-list__body--dragging' : 'nu-channel-list__body'}
+        data-nu-role="channel-list-body"
+        ref={bodyRef}
+      >
+        {drag.lineTop !== null && <div className="nu-channel-list__drop-line" style={{ top: drag.lineTop }} aria-hidden="true" />}
+        {dragError && (
+          <p className="nu-channel-list__drag-error" role="alert" data-nu-role="channel-list-drag-error">
+            {dragError}
+          </p>
+        )}
         {isDirectMessagesView
           ? directMessages.map((room) => (
               <ChannelListRow
@@ -757,9 +864,10 @@ export function ChannelList() {
                     <span className="nu-channel-list__item-name">Events</span>
                   </button>
                 </div>
-                {uncategorizedRooms.map((room, index) => (
+                {shownUncategorized.map((room, index) => (
                   <ChannelListRow
                     key={room.roomId}
+                    drag={rowDrag(room, null, index)}
                     room={room}
                     isDirectMessage={false}
                     active={selectedRoomId === room.roomId}
@@ -767,7 +875,7 @@ export function ChannelList() {
                     onSelect={() => selectChannel(room.roomId)}
                     canManageSpace={canManageSpace}
                     canMoveUp={index > 0}
-                    canMoveDown={index < uncategorizedRooms.length - 1}
+                    canMoveDown={index < shownUncategorized.length - 1}
                     onMoveUp={() => handleMoveInUncategorized(index, -1)}
                     onMoveDown={() => handleMoveInUncategorized(index, 1)}
                     onRemoveFromSpace={() => handleRemoveFromSpace(room.roomId)}
@@ -776,9 +884,27 @@ export function ChannelList() {
                     onOpenSettings={() => setSettingsRoom(room)}
                   />
                 ))}
-                {categoryRooms.map(({ category, rooms }) => (
-                  <div key={category.id} className="nu-channel-list__category">
+                {shownCategories.map(({ category, rooms }, categoryIndex) => (
+                  <div
+                    key={category.id}
+                    className={
+                      drag.dragging?.kind === 'category' && drag.dragging.id === category.id
+                        ? 'nu-channel-list__category nu-channel-list__category--dragging'
+                        : 'nu-channel-list__category'
+                    }
+                    data-nu-drag-block={category.id}
+                    data-nu-drag-index={categoryIndex}
+                  >
                     <CategoryHeader
+                      categoryId={category.id}
+                      drag={
+                        canArrange
+                          ? {
+                              clickAllowed: drag.clickAllowed,
+                              onPointerDown: (event) => drag.start({ kind: 'category', id: category.id, label: category.name }, event),
+                            }
+                          : undefined
+                      }
                       name={category.name}
                       rooms={rooms}
                       collapsed={collapsedCategories.has(category.id)}
@@ -788,6 +914,7 @@ export function ChannelList() {
                       rooms.map((room, index) => (
                         <ChannelListRow
                           key={room.roomId}
+                          drag={rowDrag(room, category.id, index)}
                           room={room}
                           isDirectMessage={false}
                           active={selectedRoomId === room.roomId}
@@ -834,6 +961,11 @@ export function ChannelList() {
           </div>
         )}
       </div>
+      {drag.dragging && drag.pointer && (
+        <div className="nu-channel-list__drag-label" style={{ left: drag.pointer.x + 12, top: drag.pointer.y + 12 }} aria-hidden="true">
+          {drag.dragging.kind === 'category' ? drag.dragging.label.toUpperCase() : `# ${drag.dragging.label}`}
+        </div>
+      )}
       <NowPlayingCard />
       <MusicPlayerBar variant="card" />
       <ActiveCallBar />

@@ -186,10 +186,10 @@ function CategoryRow({
 }
 
 /**
- * Discord-style category management — see channelCategories.ts for the data model. A channel
- * moves between categories one at a time here rather than drag-and-drop; the up/down reorder
- * buttons already used for plain channel ordering (ChannelList.tsx) set the precedent for this
- * app's "no drag-and-drop yet" posture.
+ * Discord-style category management — see channelCategories.ts for the data model. Creating,
+ * renaming and deleting categories happen here; arranging them is quicker by dragging in the
+ * channel list itself (features/channels/useChannelDrag.ts), and the up/down buttons here remain
+ * for doing it without a pointer.
  */
 export function SpaceCategoriesSettings({ space }: { space: Room }) {
   const mx = useMatrixClient();

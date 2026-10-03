@@ -174,7 +174,8 @@ opens a new post with it.
   library). The installer sets it up; on an older install, run `sudo purrlor emotes setup` once.
 - Rich link/URL previews (server-side OpenGraph unfurling, no client-side scraping).
 - Drag-and-drop and paste-to-upload for attachments.
-- Discord-style channel categories (collapsible, reorderable) inside a Space.
+- Discord-style channel categories (collapsible) inside a Space; channels and categories are
+  arranged by dragging them in the channel list (a long press on a touch screen).
 
 ### Voice & Video
 - Voice channels as a distinct channel type — join instantly from the channel list, with a live

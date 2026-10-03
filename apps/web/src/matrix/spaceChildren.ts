@@ -104,6 +104,8 @@ export async function reorderSpaceChildren(mx: MatrixClient, space: Room, ordere
   for (const [index, roomId] of orderedRoomIds.entries()) {
     const existing = space.currentState.getStateEvents(EventType.SpaceChild, roomId)?.getContent() ?? {};
     const order = String(index).padStart(width, '0');
+    // Only the links whose place changed: dragging one channel shouldn't rewrite every one.
+    if (existing.order === order) continue;
     await mx.sendStateEvent(space.roomId, EventType.SpaceChild, { ...existing, order }, roomId);
   }
 }

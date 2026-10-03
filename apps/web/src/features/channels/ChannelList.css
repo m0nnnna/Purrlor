@@ -187,6 +187,7 @@
 /* ---- Channel rows ---- */
 
 .nu-channel-list__body {
+  position: relative; /* for the drop line while dragging */
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -612,4 +613,64 @@
 .nu-channel-list__active-call-leave:hover {
   background: var(--nu-color-danger);
   color: var(--nu-color-on-accent);
+}
+
+/* Dragging channels and categories (useChannelDrag.ts). */
+.nu-channel-list__row--draggable,
+.nu-channel-list__category-header--draggable {
+  /* A long press starts a drag on a touch screen: no text selection or callout menu in its way. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.nu-channel-list__body--dragging {
+  cursor: grabbing;
+}
+
+.nu-channel-list__body--dragging .nu-channel-list__item,
+.nu-channel-list__body--dragging .nu-channel-list__category-header {
+  pointer-events: none;
+}
+
+.nu-channel-list__row--dragging,
+.nu-channel-list__category--dragging {
+  opacity: 0.35;
+}
+
+.nu-channel-list__drop-line {
+  position: absolute;
+  left: var(--nu-space-2);
+  right: var(--nu-space-2);
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--nu-color-accent);
+  box-shadow: 0 0 6px var(--nu-color-accent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.nu-channel-list__drag-label {
+  position: fixed;
+  z-index: 1000;
+  max-width: 14rem;
+  padding: var(--nu-space-1) var(--nu-space-2);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  font-size: var(--nu-font-size-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.nu-channel-list__drag-error {
+  margin: 0 0 var(--nu-space-2);
+  padding: var(--nu-space-1) var(--nu-space-2);
+  color: var(--nu-color-danger);
+  font-size: var(--nu-font-size-sm);
 }

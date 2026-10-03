@@ -12,7 +12,7 @@ import type { MatrixClient, Room } from 'matrix-js-sdk';
  * existed. Within a category, position in `channelIds` is the display order; existing per-child
  * `m.space.child` `order` (spaceChildren.ts) still governs the uncategorized bucket, unchanged.
  */
-const CHANNEL_CATEGORIES_EVENT_TYPE = 'xyz.nekous.channel_categories';
+export const CHANNEL_CATEGORIES_EVENT_TYPE = 'xyz.nekous.channel_categories';
 
 export type ChannelCategory = {
   id: string;
@@ -27,7 +27,7 @@ export function getChannelCategories(space: Room): ChannelCategory[] {
   return content?.categories ?? [];
 }
 
-async function setChannelCategories(mx: MatrixClient, spaceId: string, categories: ChannelCategory[]): Promise<void> {
+export async function setChannelCategories(mx: MatrixClient, spaceId: string, categories: ChannelCategory[]): Promise<void> {
   await mx.sendStateEvent(spaceId, CHANNEL_CATEGORIES_EVENT_TYPE as any, { categories } as any, '');
 }
 
