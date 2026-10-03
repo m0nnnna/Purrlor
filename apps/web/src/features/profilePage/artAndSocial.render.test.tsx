@@ -100,12 +100,32 @@ describe('the gallery on the page', () => {
     },
   ]);
 
-  it('loads nothing while its module is closed', () => {
+  it('shows only its newest piece while its module is closed, and opens on it', () => {
     const { container } = render(<PageBlocks blocks={big.blocks} />);
     expect(q(container, 'profile-page-module-toggle')?.getAttribute('aria-expanded')).toBe('false');
-    expect(container.querySelector('img')).toBeNull();
-    fireEvent.click(q(container, 'profile-page-module-toggle') as Element);
+    expect(qa(container, 'art-album')).toHaveLength(0);
+    expect(Array.from(container.querySelectorAll('img')).map((img) => img.getAttribute('src'))).toEqual(['https://media.example/q1']);
+    fireEvent.click(q(container, 'profile-page-module-preview') as Element);
     expect(qa(container, 'art-album')).toHaveLength(2);
+  });
+
+  it('never previews a Mature piece to someone signed out, and blurs one for someone signed in', () => {
+    // Its own block ID: modules opened in the test before stay open for the rest of the visit.
+    const page = pageOf([
+      {
+        id: 'mature-preview',
+        type: 'gallery',
+        ratings: true,
+        albums: [{ id: 'x', title: 'One', pieces: [{ url: MXC('old'), rating: 'general' }, { url: MXC('new'), rating: 'mature' }] }],
+      },
+    ]);
+    const signedOut = render(<PageBlocks blocks={page.blocks} />);
+    expect(signedOut.container.querySelector('img')?.getAttribute('src')).toBe('https://media.example/old');
+    cleanup();
+    viewer.signedIn = true;
+    const signedIn = render(<PageBlocks blocks={page.blocks} />);
+    expect(signedIn.container.querySelector('img')?.getAttribute('src')).toBe('https://media.example/new');
+    expect(signedIn.container.querySelector('.nu-profile-page__preview-image--blurred')).not.toBeNull();
   });
 
   it('shows each album as a strip of at most four thumbnails and how many there are, the pieces only once opened', () => {

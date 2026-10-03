@@ -11,6 +11,7 @@ import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
 import { GalleryBlock } from './GalleryBlock';
 import { MusicBlock } from './MusicBlock';
 import { CommissionsBlock } from './CommissionsBlock';
+import { ModulePreview } from './ModulePreview';
 import { PageOwnerContext } from './PageOwnerContext';
 import { PageTargetContext } from './PageTargetContext';
 import type { PageTarget } from '../../matrix/publicWeb';
@@ -223,8 +224,9 @@ function targetBlockId(blocks: PageBlock[], target: PageTarget | undefined): str
 const openedModules = new Set<string>();
 
 /**
- * One block as a module: a header with its title that opens and closes it. Closed, only the header
- * shows and nothing inside loads (a gallery's pictures, a guestbook's entries).
+ * One block as a module: a header with its title that opens and closes it. Closed, it's the header
+ * and, for a gallery or music, a preview of the newest thing in it (ModulePreview); nothing else
+ * inside loads (a gallery's other pictures, a guestbook's entries).
  */
 function Module({ block, ownerId, forceOpen }: { block: PageBlock; ownerId?: string; forceOpen: boolean }) {
   const key = `${ownerId ?? ''}/${block.id}`;
@@ -252,10 +254,12 @@ function Module({ block, ownerId, forceOpen }: { block: PageBlock; ownerId?: str
           <span className="nu-profile-page__module-chevron" aria-hidden="true" />
         </button>
       </h3>
-      {open && (
+      {open ? (
         <div className="nu-profile-page__module-body" id={bodyId}>
           <BlockBody block={block} />
         </div>
+      ) : (
+        <ModulePreview block={block} onOpen={toggle} />
       )}
     </section>
   );

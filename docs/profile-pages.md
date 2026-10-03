@@ -29,8 +29,11 @@ controls on the left, the page as visitors see it on the right (one at a time on
   the left blocks, then the right ones, then the posts.
 - **Every block is a module that starts closed** to its title (its own, or the kind's: About,
   Links, Gallery, Top 8…), so a page is the header and two short lists of titles beside the posts.
-  A visitor opens what they want, and what they opened stays open while they're in the app. Nothing
-  inside a closed module loads. A link to something in one (an album, a piece, a commission type)
+  A visitor opens what they want, and what they opened stays open while they're in the app. A closed
+  gallery or music module also shows its newest thing (`ModulePreview.tsx`): the gallery's latest
+  piece (the last added to the last album; never a Mature one signed out, blurred signed in), or the
+  latest release's cover, title and year (the latest year, else the last added). That one thumbnail
+  is all a closed module loads. A link to something in one (an album, a piece, a commission type)
   opens that module. Dividers stay plain lines between modules.
 - **The profile song** isn't a block in a column: it plays in a small floating window in the corner
   of the profile (`FloatingSong.tsx`), once the visitor presses play. A page has one.
