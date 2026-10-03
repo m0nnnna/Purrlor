@@ -64,7 +64,10 @@ async function readParentSpace(mx: MatrixClient, roomId: string): Promise<{ room
  * Direct Messages. Resolves with whether the Space invite went out too.
  */
 export async function inviteToChannel(mx: MatrixClient, room: Room, userId: string): Promise<{ space: boolean }> {
-  await mx.invite(room.roomId, userId);
+  // Someone already in the channel (invited here before this also covered the Space) can be
+  // invited again just to bring them into the Space; the channel invite itself would be refused.
+  const inChannel = room.getMember?.(userId)?.membership;
+  if (inChannel !== 'join' && inChannel !== 'invite') await mx.invite(room.roomId, userId);
   const space = getParentSpace(mx, room);
   if (!space) return { space: false };
   const membership = space.getMember(userId)?.membership;

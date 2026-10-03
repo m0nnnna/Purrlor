@@ -125,6 +125,13 @@ describe('inviteToChannel', () => {
     ]);
   });
 
+  it('brings someone already in the channel into the Space', async () => {
+    const { mx, channel, invite } = setup();
+    (channel as unknown as { getMember: () => unknown }).getMember = () => ({ membership: 'join' });
+    expect(await inviteToChannel(mx, channel, '@mochi:cats.example')).toEqual({ space: true });
+    expect(invite.mock.calls).toEqual([['!space:purr.example', '@mochi:cats.example']]);
+  });
+
   it('only invites to the channel when they are already in the Space', async () => {
     const { mx, channel, invite } = setup({ spaceMembership: 'join' });
     expect(await inviteToChannel(mx, channel, '@mochi:cats.example')).toEqual({ space: false });
