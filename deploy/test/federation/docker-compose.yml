@@ -24,6 +24,8 @@ x-homeserver-env: &homeserver-env
   CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ''
   # Peers read each other's directory over federation (docs/federation.md); off by default.
   CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION: 'true'
+  # Each other's people's presence in member lists; Continuwuity doesn't send it by default.
+  CONTINUWUITY_ALLOW_OUTGOING_PRESENCE: 'true'
   # Docker's addresses are private, which a homeserver refuses to federate with by default.
   CONTINUWUITY_IP_RANGE_DENYLIST: '[]'
   # Caddy's internal CA, which nothing else trusts.

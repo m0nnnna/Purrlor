@@ -159,6 +159,11 @@ Checked with Continuwuity, two instances federating (`deploy/test/federation`, b
   (`CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION`, `MATRIX_DIRECTORY_OVER_FEDERATION=false`
   in `.env` turns it back off). The directory lists only what's public already. A deployment with its
   own homeserver needs the same: Synapse's `allow_public_rooms_over_federation: true`.
+- **Send presence over federation.** Continuwuity keeps its people's presence to itself by default
+  (`allow_outgoing_presence = false`), so everyone from one instance showed as offline in the other's
+  member lists. `deploy/docker-compose.yml` turns it on (`CONTINUWUITY_ALLOW_OUTGOING_PRESENCE`;
+  `MATRIX_OUTGOING_PRESENCE=false` in `.env` turns it back off). Both sides need it, each for its own
+  people. Synapse sends presence by default (`presence.enabled`).
 - **Extended profiles over federation**, room types in remote directories, authenticated media over
   federation, and reading a world-readable room as a non-member once someone on the server has
   joined: all work as they are.

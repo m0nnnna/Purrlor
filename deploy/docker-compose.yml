@@ -250,6 +250,11 @@ services:
       # directory (docs/federation.md). It lists only what's public already; Continuwuity's own
       # default is off.
       CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION: ${MATRIX_DIRECTORY_OVER_FEDERATION:-true}
+      # Send this server's people's presence (online, idle, offline, and status text) to the servers
+      # they share rooms with. Continuwuity's default is off, so on a federated instance everyone
+      # from here showed as offline in member lists there. Incoming presence is on by default.
+      # MATRIX_OUTGOING_PRESENCE=false in .env keeps presence on this server only.
+      CONTINUWUITY_ALLOW_OUTGOING_PRESENCE: ${MATRIX_OUTGOING_PRESENCE:-true}
       # Continuwuity appends a suffix (a flag emoji, by default) to the display name of every new
       # account. Off here, so names come out exactly as people type them; set
       # MATRIX_NEW_USER_DISPLAYNAME_SUFFIX in .env to bring one back.
