@@ -127,6 +127,18 @@ async function makeProfile(who, name, postBody) {
   return { roomId, postId: post.json?.event_id };
 }
 
+/** A published page and profile extras, as the page builder and Account Settings write them. */
+async function customise(who, roomId, { accent, bio, text }) {
+  const page = {
+    version: 1,
+    style: { colors: { bg: '#101018', text: '#ffffff', accent, link: accent, block: '#202030' }, fonts: { heading: 'display', body: 'figtree' } },
+    blocks: [{ id: 'intro', type: 'text', text }],
+  };
+  await as(who)('PUT', `/_matrix/client/v3/rooms/${enc(roomId)}/state/xyz.nekous.profile_page/`, page);
+  const set = await as(who)('PUT', `/_matrix/client/v3/profile/${enc(who.userId)}/xyz.nekous.bio`, { 'xyz.nekous.bio': bio });
+  if (!set.ok) await as(who)('PUT', `/_matrix/client/unstable/uk.tcpip.msc4133/profile/${enc(who.userId)}/xyz.nekous.bio`, { 'xyz.nekous.bio': bio });
+}
+
 /** A public Space, and its owner's feed room in it with a post (feed.ts). */
 async function makeSpaceWithFeed(who) {
   const space = await as(who)('POST', '/_matrix/client/v3/createRoom', {
@@ -195,6 +207,7 @@ async function main() {
   const bobProfile = await makeProfile(bob, 'Bob', 'hello from bob on B');
   const carolProfile = await makeProfile(carol, 'Carol', 'hello from carol on B');
   const cafe = await makeSpaceWithFeed(bob);
+  await customise(bob, bobProfile.roomId, { accent: '#ff3366', bio: 'bob’s bio on B', text: 'Welcome to my page' });
 
   // The two homeservers must reach each other before anything else means anything.
   const dir = await until('A to read B’s directory over federation', async () => {
@@ -254,6 +267,21 @@ async function main() {
   check('and never a Space post', !(feed?.json?.posts ?? []).some((post) => post.body === 'posted in the Cat Cafe'));
   const page = await call(A.app, undefined, 'GET', `/api/public/pages/bob:${B.server}`);
   check('A shows bob’s page at /@bob:hsb.test', page.status === 200 && page.json?.userId === bob.userId, page.text.slice(0, 200));
+  console.log('Custom pages and profiles');
+  const pageOnA = async () => (await as(alice)('GET', `/_matrix/client/v3/rooms/${enc(bobProfile.roomId)}/state/xyz.nekous.profile_page/`)).json;
+  const bioOnA = async () => (await as(alice)('GET', `/_matrix/client/v3/profile/${enc(bob.userId)}`)).json?.['xyz.nekous.bio'];
+  check('alice sees bob’s page as he built it (its colours and blocks)', (await pageOnA())?.style?.colors?.accent === '#ff3366', JSON.stringify(await pageOnA()).slice(0, 120));
+  check('and his bio', (await bioOnA()) === 'bob’s bio on B', String(await bioOnA()));
+  const custom = await until('A’s public web to show bob’s page', async () => {
+    const res = await call(A.app, undefined, 'GET', `/api/public/pages/bob:${B.server}`);
+    return res.json?.page?.style?.colors?.accent === '#ff3366' ? res : undefined;
+  });
+  check('A’s public web shows bob’s page and bio, signed out', !!custom && custom.json.bio === 'bob’s bio on B', custom?.text.slice(0, 160));
+  await customise(bob, bobProfile.roomId, { accent: '#33cc99', bio: 'bob changed his bio', text: 'A new look' });
+  const changed = await until('bob’s page change to reach A', async () => ((await pageOnA())?.style?.colors?.accent === '#33cc99' ? true : undefined), { timeout: 30_000, every: 2000 });
+  check('a change to bob’s page reaches A within seconds', !!changed);
+  const bioChanged = await until('bob’s bio change to reach A', async () => ((await bioOnA()) === 'bob changed his bio' ? true : undefined), { timeout: 60_000, every: 3000 });
+  check('a change to his bio reaches A', !!bioChanged, String(await bioOnA()));
   const card = await call(A.app, undefined, 'GET', `/api/public/card/bob:${B.server}`);
   check('its link preview points at /@bob:hsb.test', card.text.includes(`/@bob:${B.server}`));
 
