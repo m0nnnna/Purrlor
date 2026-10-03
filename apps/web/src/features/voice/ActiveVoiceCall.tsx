@@ -9,6 +9,7 @@ import { playConnectedSound, playDisconnectedSound, warmUpAudioContext } from '.
 import { validateScreenShareCodecSupport, voiceChannelRoomOptions } from './voiceChannelRoomOptions';
 import { WatchTogetherProvider } from './WatchTogetherProvider';
 import { ApplyAudioSettings } from './ApplyAudioSettings';
+import { CallHotkeys } from './CallHotkeys';
 import { audioCaptureOptions, deviceIdOrDefault, readAudioSettings } from './audioSettings';
 
 // Split out of VoiceCallSession.tsx so @livekit/components-react (and livekit-client underneath
@@ -98,6 +99,7 @@ export default function ActiveVoiceCall({ room, children }: { room: MatrixRoom; 
       <RoomAudioRenderer muted={deafened} />
       <ApplyAudioSettings />
       <VoiceCallContext.Provider value={ctxValue}>
+        <CallHotkeys />
         <WatchTogetherProvider>{children}</WatchTogetherProvider>
       </VoiceCallContext.Provider>
     </LiveKitRoom>

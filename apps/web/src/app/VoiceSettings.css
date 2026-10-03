@@ -25,3 +25,26 @@
   background: var(--nu-color-success);
   transition: width 60ms linear;
 }
+
+.nu-voice-settings__keybind {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  flex-wrap: wrap;
+}
+
+.nu-voice-settings__keybind-label {
+  min-width: 9rem;
+  color: var(--nu-color-text-primary);
+}
+
+.nu-voice-settings__key {
+  min-width: 7rem;
+  padding: var(--nu-space-1) var(--nu-space-2);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-sm);
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+  font-family: inherit;
+  text-align: center;
+}

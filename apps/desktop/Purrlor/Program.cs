@@ -203,6 +203,7 @@ public sealed class MainForm : Form
     private bool pageLoaded;
     private CoreWebView2Notification? lastNotification;
     private ToolStripMenuItem? startWithWindowsItem;
+    private readonly GlobalHotkeys hotkeys;
 
     internal MainForm(AppSettings settings, bool startInTray)
     {
@@ -220,6 +221,8 @@ public sealed class MainForm : Form
         if (startHidden) Opacity = 0;
         ApplySavedBounds();
 
+        // Reported from inside the hook, which has to return quickly: posted to the page afterwards.
+        hotkeys = new GlobalHotkeys((id, down) => BeginInvoke(() => PostBridgeEvent("hotkey", new { Id = id, Down = down })));
         trayIcon = new NotifyIcon { Icon = Icon ?? SystemIcons.Application, Text = "Purrlor", Visible = true, ContextMenuStrip = trayMenu };
         trayIcon.DoubleClick += (_, _) => RestoreFromTray();
         trayIcon.BalloonTipClicked += (_, _) => OnBalloonClicked();
@@ -574,7 +577,7 @@ public sealed class MainForm : Form
 
     private void DisposeResources()
     {
-        SaveSettings(); showWait.Unregister(null); showSignal.Dispose();
+        SaveSettings(); showWait.Unregister(null); showSignal.Dispose(); hotkeys.Dispose();
         trayIcon.Visible = false; trayIcon.Dispose(); trayMenu.Dispose(); webView.Dispose();
     }
 
@@ -620,7 +623,12 @@ public sealed class MainForm : Form
 
     private void Core_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
-        if (ServerAddress.IsSameOrigin(e.Uri, server) || e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
+        if (ServerAddress.IsSameOrigin(e.Uri, server) || e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+        {
+            // A new page (a reload, another server) sets its own keybinds when it joins a call.
+            hotkeys.Clear();
+            return;
+        }
         e.Cancel = true; OpenExternal(e.Uri);
     }
 
@@ -755,6 +763,21 @@ public sealed class MainForm : Form
                     default: throw new BridgeError($"There's no desktop setting called {name}.");
                 }
                 return BridgeSettings();
+            }
+            case "setHotkeys":
+            {
+                if (parameters.ValueKind != JsonValueKind.Object || !parameters.TryGetProperty("bindings", out var list) || list.ValueKind != JsonValueKind.Array)
+                    throw new BridgeError("setHotkeys takes a list of bindings.");
+                var wanted = new List<(string, string, bool, bool, bool)>();
+                foreach (var b in list.EnumerateArray())
+                {
+                    string? Text(string name) => b.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+                    bool Flag(string name) => b.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.True;
+                    var bindingId = Text("id"); var code = Text("code");
+                    if (string.IsNullOrEmpty(bindingId) || string.IsNullOrEmpty(code)) throw new BridgeError("Each binding needs an id and a code.");
+                    wanted.Add((bindingId, code, Flag("ctrl"), Flag("alt"), Flag("shift")));
+                }
+                return new { Unknown = hotkeys.Set(wanted) };
             }
             case "changeServer":
                 BeginInvoke(ChangeServer);

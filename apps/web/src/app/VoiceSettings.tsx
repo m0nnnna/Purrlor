@@ -5,6 +5,17 @@ import {
   useAudioSettings,
   type AudioSettings,
 } from '../features/voice/audioSettings';
+import { useKeyCapture } from '../features/voice/usePushToTalk';
+import {
+  keyLabel,
+  saveKeybinds,
+  setRebinding,
+  useKeybinds,
+  useRebinding,
+  type Keybinds,
+  type KeybindAction,
+} from '../features/voice/voiceKeybinds';
+import { isDesktopApp } from '../desktop/desktopBridge';
 import './VoiceSettings.css';
 
 type Devices = { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; labelled: boolean };
@@ -130,6 +141,72 @@ async function playTestSound(outputDeviceId: string): Promise<void> {
     osc.stop(start + 0.32);
   });
   setTimeout(() => void ctx.close(), 800);
+}
+
+const BINDING_FIELD: Record<KeybindAction, keyof Keybinds> = {
+  pushToTalk: 'pushToTalkKey',
+  mute: 'muteKey',
+  deafen: 'deafenKey',
+};
+
+/** One keybind: its key, and buttons to choose another or clear it. */
+function KeybindRow({ action, label, clearable }: { action: KeybindAction; label: string; clearable: boolean }) {
+  const binds = useKeybinds();
+  const choosing = useRebinding() === action;
+  const field = BINDING_FIELD[action];
+  const bind = useCallback((binding: string) => saveKeybinds({ [field]: binding }), [field]);
+  // Push-to-talk is one key you hold; the toggles can be combinations, so they don't fire while typing.
+  useKeyCapture(choosing, bind, { allowCombos: action !== 'pushToTalk' });
+  const binding = binds[field] as string;
+
+  return (
+    <div className="nu-voice-settings__keybind" data-nu-role={`voice-keybind-${action}`}>
+      <span className="nu-voice-settings__keybind-label">{label}</span>
+      <kbd className="nu-voice-settings__key">{choosing ? 'Press a key…' : keyLabel(binding)}</kbd>
+      <button
+        type="button"
+        className="nu-button nu-button--secondary"
+        onClick={() => setRebinding(choosing ? null : action)}
+      >
+        {choosing ? 'Cancel' : 'Change'}
+      </button>
+      {clearable && binding && !choosing && (
+        <button type="button" className="nu-button nu-button--secondary" onClick={() => saveKeybinds({ [field]: '' })}>
+          Clear
+        </button>
+      )}
+    </div>
+  );
+}
+
+function KeybindSettings() {
+  const binds = useKeybinds();
+  // Leaving the tab mid-choice mustn't leave every keybind paused.
+  useEffect(() => () => setRebinding(null), []);
+
+  return (
+    <div className="nu-field" data-nu-role="voice-keybinds">
+      Keybinds
+      <label className="nu-field__checkbox-row">
+        <input
+          type="checkbox"
+          data-nu-role="voice-settings-ptt"
+          checked={binds.pushToTalk}
+          onChange={(e) => saveKeybinds({ pushToTalk: e.target.checked })}
+        />
+        Push to talk: my mic is only on while I hold a key
+      </label>
+      {binds.pushToTalk && <KeybindRow action="pushToTalk" label="Hold to talk" clearable={false} />}
+      <KeybindRow action="mute" label="Mute / unmute" clearable />
+      <KeybindRow action="deafen" label="Deafen / undeafen" clearable />
+      <span className="nu-field__hint">
+        {isDesktopApp()
+          ? 'These work while you’re in a call, even when Purrlor isn’t the window in front, like in a game. Purrlor only notices the keys set here.'
+          : 'In a browser these work while Purrlor’s tab is in front. In the desktop app they work everywhere, in games too.'}{' '}
+        A mouse’s side buttons work as well.
+      </span>
+    </div>
+  );
 }
 
 function deviceName(d: MediaDeviceInfo, i: number, fallback: string): string {
@@ -263,6 +340,8 @@ export function VoiceSettings() {
         />
         <span className="nu-field__hint">Each person’s own slider in a call adjusts them on top of this.</span>
       </label>
+
+      <KeybindSettings />
 
       <div className="nu-field">
         <button type="button" className="nu-button nu-button--secondary" onClick={() => void playTestSound(settings.outputDeviceId)}>

@@ -19,6 +19,7 @@ import { useVoiceCall } from './voiceCallContext';
 import { useParticipantSounds } from './useParticipantSounds';
 import { usePushToTalk } from './usePushToTalk';
 import { personVolume, setPersonVolume } from './callVolume';
+import { toggleDeafen, toggleMute } from './callActions';
 import { readAppAudioOnly, saveAppAudioOnly, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
 import { useScreenSharePopout } from './useScreenSharePopout';
 import { useSharedWatchTogether } from './watchTogetherContext';
@@ -189,7 +190,7 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const speaking = useSpeakingParticipants();
   const speakingIds = new Set(speaking.map((p) => p.identity));
   const { localParticipant, isMicrophoneEnabled, isScreenShareEnabled, isCameraEnabled } = useLocalParticipant();
-  const pushToTalk = usePushToTalk(localParticipant);
+  const pushToTalk = usePushToTalk();
   const screenShareTracks = useTracks([Track.Source.ScreenShare]);
   const activeScreenShare = screenShareTracks[0];
   const cameraTracks = useTracks([Track.Source.Camera]).filter(isTrackReference);
@@ -224,21 +225,8 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
     });
   }, [activeScreenShare, livekitRoom]);
 
-  const toggleDeafen = () => {
-    const next = !deafened;
-    setDeafened(next);
-    // LiveKit has no built-in "deafened" concept — broadcast it ourselves via participant
-    // attributes so other participants (and the channel-list occupancy view) can show it too.
-    localParticipant.setAttributes({ deafened: String(next) });
-    if (next && isMicrophoneEnabled) {
-      localParticipant.setMicrophoneEnabled(false);
-    }
-  };
-
-  const toggleMic = () => {
-    if (deafened) setDeafened(false);
-    localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
-  };
+  const onToggleDeafen = () => toggleDeafen(localParticipant, deafened, setDeafened);
+  const onToggleMic = () => toggleMute(localParticipant, deafened, setDeafened);
 
   const micIcon = pushToTalk.enabled || isMicrophoneEnabled ? 'mic' : 'micOff';
   const micLabel = pushToTalk.rebinding
@@ -307,7 +295,7 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
             role="voice-mic-toggle"
             disabled={pushToTalk.enabled && !pushToTalk.rebinding}
             title={micTitle}
-            onClick={pushToTalk.rebinding ? pushToTalk.cancelRebind : toggleMic}
+            onClick={pushToTalk.rebinding ? pushToTalk.cancelRebind : onToggleMic}
           />
           <Menu
             label="Microphone options"
@@ -332,7 +320,7 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
           state={deafened ? 'off' : 'normal'}
           role="voice-deafen-toggle"
           title={deafened ? 'Hear everyone again' : 'Stop hearing everyone (also mutes you)'}
-          onClick={toggleDeafen}
+          onClick={onToggleDeafen}
         />
         <CallControl
           icon={isCameraEnabled ? 'camera' : 'cameraOff'}

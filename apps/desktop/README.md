@@ -26,6 +26,8 @@ left off.
 - Close-to-tray, so notifications keep arriving; clicking one opens the room (Settings → Desktop can make
   the close button quit instead)
 - Start with Windows (starts in the tray)
+- Voice keybinds (push-to-talk, mute, deafen; set in Settings → Voice & Audio) that work while
+  another window is in front, a game included. See "Keybinds and privacy" below.
 - Links to other sites open in the default browser
 - Downloads go to the Windows Downloads folder
 - Only one copy runs; launching it again brings the window back
@@ -51,14 +53,29 @@ server's own page and ignores anything else. Every message is JSON tagged `"purr
 |---|---|---|
 | `getInfo` | | `{ version, settings: { startWithWindows, closeToTray } }` |
 | `setSetting` | `{ name, value }` (`startWithWindows` or `closeToTray`, true/false) | the settings |
+| `setHotkeys` | `{ bindings: [{ id, code, ctrl, alt, shift }] }` (`code` is a `KeyboardEvent.code`, or `Mouse4`/`Mouse5`; `[]` stops watching) | `{ unknown: [ids whose key it doesn't know] }` |
 | `changeServer` | | nothing; the app opens its server dialog |
 
 A request is `{ purrlor: 1, id, method, params }` and its answer `{ purrlor: 1, id, result }` or
 `{ purrlor: 1, id, error }`. The app also sends events unasked, `{ purrlor: 1, event, data }`:
-`settings` when the tray menu changes one. Desktop 1.0.0 has no bridge, so the page treats
+`settings` when the tray menu changes one, and `hotkey` (`{ id, down }`) when a bound key goes down or
+up. Desktop 1.0.0 has no bridge, so the page treats
 silence as "update the app".
 
-## Build
+## Keybinds and privacy
+The keybinds work outside Purrlor because the app installs Windows' low-level keyboard hook
+(`GlobalHotkeys.cs`), plus the mouse hook when a side button is bound. That hook sees every key
+pressed anywhere, so the app keeps its use narrow:
+
+- It's installed only while the page has keys bound, which it does when you join a call, and it's
+  removed when you leave, sign out or the page reloads. Outside a call Purrlor watches nothing.
+- Each press is compared with the bound keys and forgotten. Only a bound key going down or up is
+  reported to the page, as `pushToTalk`, `mute` or `deafen`; no other key is stored, logged or sent.
+- Keys are never swallowed: the game still gets them.
+
+Windows doesn't pass a hook the input of a program running as administrator unless the hook's
+program is too, so keybinds don't fire while such a game is in front.
+
 Needs the .NET 8 SDK and [NSIS](https://nsis.sourceforge.io). Run `Build-Purrlor.bat` (or
 `Build-Purrlor.ps1`); the installer lands at `dist\Purrlor-Setup.exe`.
 
