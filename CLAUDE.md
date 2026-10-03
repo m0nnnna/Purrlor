@@ -5,7 +5,7 @@
 The current plan is the Claude Docs doc "Purrlor: federated social features":
 https://claude.ai/code/artifact/9f3b850d-5c06-452f-b318-70d72b63b9c4
 
-Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's service tasks write `docs/federation.md`, the contract the Sonnet client tasks build on: read it (and `docs/public-web.md`, `docs/posts.md`) first. Since 2026-10-03 the Opus service tasks (3 to 5) are on `opus-federation` (pushed, not merged): Sonnet's client tasks branch off it, since they build on its `docs/federation.md` and `/api/public/peers`. The plan's "Verify first" checks still need the test server; `node deploy/federation-check.mjs` runs them.
+Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's service tasks write `docs/federation.md`, the contract the Sonnet client tasks build on: read it (and `docs/public-web.md`, `docs/posts.md`) first. Tasks 2 to 9 are done and merged into `master` (2026-10-03): the service and client sides, and the two-instance test (`deploy/test/federation`, CI's `federation` job). What's left is task 10, a run between purr.meowops.net and a real second server.
 
 "Purrlor: gaps and missing features" (2026-10-03) is paused; its operations gaps are done:
 https://claude.ai/code/artifact/3ec0d888-2a76-4969-86fc-58e87fe84b26
@@ -16,8 +16,7 @@ Earlier plans, done apart from their open questions: "Purrlor: profile pages and
 the record of everything built before them (https://claude.ai/code/artifact/8f290dcd-d140-46e7-9ab5-994d822de800).
 
 Branches as of 2026-10-03:
-- `master`: everything. The profile pages plan's branches (`profile-pages`, `sonnet-work-2`, `opus-work-2`, `sonnet-work-3`) and the later feature branches are fully merged into it. The live server is small and treated as a beta, so `master` deploys straight to it.
-- `opus-federation`: the federation plan's service side (peers, the bot's joins, peers on the public web, `purrlor peers`, `deploy/federation-check.mjs`), off `master`, 2026-10-03. Pushed, not merged.
+- `master`: everything. The profile pages plan's branches (`profile-pages`, `sonnet-work-2`, `opus-work-2`, `sonnet-work-3`), the later feature branches and `opus-federation` (federation, 2026-10-03) are fully merged into it. The live server is small and treated as a beta, so `master` deploys straight to it.
 - `sonnet/gif`: GIF search via Klipy. On hold, do not merge. Klipy's terms forbid the server proxy, re-hosting and caching this branch does unless Klipy approves it in writing.
 
 ## Checks
