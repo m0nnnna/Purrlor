@@ -19,6 +19,7 @@ import { canEnableEncryption, enableEncryption, isEncryptedRoom } from '../../ma
 import { listWebhooks } from '../../matrix/webhooks';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import './ChannelPermissionsModal.css';
+import { fallbackName } from '../../matrix/displayName';
 
 const SLOWMODE_CHOICES: { seconds: number; label: string }[] = [
   { seconds: 0, label: 'Off' },
@@ -51,7 +52,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const candidates = spaceMembers
     .filter((m) => (spaceLevels[m.userId] ?? 0) < MODERATOR_LEVEL && !channelModerators.includes(m.userId))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const nameOf = (userId: string) => spaceMembers.find((m) => m.userId === userId)?.name ?? userId;
+  const nameOf = (userId: string) => spaceMembers.find((m) => m.userId === userId)?.name ?? fallbackName(userId);
   const alreadyEncrypted = isEncryptedRoom(channel);
   const [encrypt, setEncrypt] = useState(false);
   const webhookCount = listWebhooks(channel).length;

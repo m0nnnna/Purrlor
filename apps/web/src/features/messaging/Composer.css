@@ -251,7 +251,7 @@
   padding: 7px var(--nu-space-2);
   color: var(--nu-color-text-primary);
   font-family: inherit;
-  font-size: var(--nu-font-size-md);
+  font-size: var(--nu-font-size-message);
   line-height: 1.4;
   max-height: 160px;
 }

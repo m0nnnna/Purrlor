@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MatrixClient, RoomMember } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { fallbackName, nameOrFallback } from '../displayName';
 
 export type BasicProfile = { name: string; avatarUrl: string | null };
 
@@ -13,8 +14,8 @@ export function lookupProfile(mx: MatrixClient, userId: string): Promise<BasicPr
   if (!cached) {
     cached = mx
       .getProfileInfo(userId)
-      .then((p) => ({ name: p.displayname || userId, avatarUrl: p.avatar_url ?? null }))
-      .catch(() => ({ name: userId, avatarUrl: null }));
+      .then((p) => ({ name: nameOrFallback(p.displayname, userId), avatarUrl: p.avatar_url ?? null }))
+      .catch(() => ({ name: fallbackName(userId), avatarUrl: null }));
     profileCache.set(userId, cached);
   }
   return cached;
@@ -22,7 +23,7 @@ export function lookupProfile(mx: MatrixClient, userId: string): Promise<BasicPr
 
 /**
  * Someone's name and avatar: from `members` when they're one (already synced, and their
- * per-room name), otherwise from the profile API. Shows the user ID until that answers.
+ * per-room name), otherwise from the profile API. Shows their handle until that answers.
  */
 export function useUserProfile(userId: string, members: RoomMember[] = []): BasicProfile {
   const mx = useMatrixClient();
@@ -41,5 +42,5 @@ export function useUserProfile(userId: string, members: RoomMember[] = []): Basi
     // `known` is derived from members; re-running on its identity would refetch every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mx, userId, !!known]);
-  return known ?? fetched ?? { name: userId, avatarUrl: null };
+  return known ?? fetched ?? { name: fallbackName(userId), avatarUrl: null };
 }

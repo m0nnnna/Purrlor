@@ -64,12 +64,14 @@ at. The one thing it can't show you is the inside of a connected call.
 | `--nu-font-body` | Base font stack — body copy, message text |
 | `--nu-font-display` | Only where a name is the headline: the space name, channel titles, a channel's welcome header (Dela Gothic One by default) |
 | `--nu-font-mono` | Code |
-| `--nu-font-size-xs` / `-sm` / `-md` / `-lg` / `-xl` | Font sizes (11/12.5/14/16/24px) |
+| `--nu-font-size-xs` / `-sm` / `-md` / `-lg` / `-xl` | Font sizes (11.5/13.5/15/17/24px) |
+| `--nu-font-size-message` | Message text, the sender's name above it, and the composer (16px) |
 | `--nu-width-server-rail` / `-channel-list` / `-member-list` | Shell column widths |
 | `--nu-height-header` | Shared height of the three column headers, so their bottom borders line up |
 
-The default theme also names six reusable animation keyframes in `tokens.css` — `nu-spin`,
-`nu-pulse-glow`, `nu-bounce-dot`, `nu-pop-in`, `nu-twinkle`, `nu-rise-in` (a card arriving) — a custom theme's own CSS can
+The default theme also names eight reusable animation keyframes in `tokens.css` — `nu-spin`,
+`nu-pulse-glow`, `nu-bounce-dot`, `nu-pop-in`, `nu-twinkle`, `nu-rise-in` (a card arriving),
+`nu-fade-in` (a menu or backdrop), `nu-dialog-in` (a modal's panel) — a custom theme's own CSS can
 reference any of them by name (`animation: nu-pop-in .4s ...`) instead of redefining them. `nu-ears-up` is the
 selected server tile's cat-ear entrance.
 

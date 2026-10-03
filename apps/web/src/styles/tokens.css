@@ -87,11 +87,15 @@
      buttons, labels) stays on --nu-font-body at a heavier weight. */
   --nu-font-display: 'Dela Gothic One', var(--nu-font-body);
   --nu-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --nu-font-size-xs: 11px;
-  --nu-font-size-sm: 12.5px;
-  --nu-font-size-md: 14px;
-  --nu-font-size-lg: 16px;
+  /* One step up from the original 11/12.5/14/16: at the old sizes most of the interface (labels,
+     channel and member names, hints) sat at 12.5px and read as cramped next to meowops.net. */
+  --nu-font-size-xs: 11.5px;
+  --nu-font-size-sm: 13.5px;
+  --nu-font-size-md: 15px;
+  --nu-font-size-lg: 17px;
   --nu-font-size-xl: 24px;
+  /* What people actually read: message text, the sender's name above it, and the composer. */
+  --nu-font-size-message: 16px;
 
   /* Layout */
   --nu-width-server-rail: 72px;
@@ -243,6 +247,28 @@ body {
   }
   100% {
     transform: translateY(0);
+  }
+}
+
+/* Something appearing in place: a menu, a modal's backdrop. */
+@keyframes nu-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A dialog arriving: rises and settles from just under full size. */
+@keyframes nu-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

@@ -8,6 +8,7 @@ import { editsFromRaw } from '../../matrix/globalFeed';
 import { isListedInDirectory } from '../../matrix/spaceDirectory';
 import { getExtendedProfile } from '../../matrix/extendedProfile';
 import { useOpenFeedRoom } from './useOpenFeedRoom';
+import { fallbackName } from '../../matrix/displayName';
 
 /**
  * Everything a post's page needs, from just where the post is — for anything that holds a post's
@@ -37,7 +38,7 @@ export async function loadOpenPost(mx: MatrixClient, roomId: string, postId: str
     canInteract: marker.profile || inSpace,
     ...(!marker.profile && !inSpace && { cannotInteractReason: 'Join the Space to like or comment' }),
     content,
-    author: { userId: sender, name: member?.name ?? sender, avatarUrl: member?.getMxcAvatarUrl() ?? null },
+    author: { userId: sender, name: member?.name ?? fallbackName(sender), avatarUrl: member?.getMxcAvatarUrl() ?? null },
     ts: event.getTs(),
     edited: !!event.replacingEventId(),
     sourceOrigin:

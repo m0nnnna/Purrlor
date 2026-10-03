@@ -37,6 +37,8 @@ import { HeaderCommissionBadge } from '../profilePage/CommissionsBlock';
 import { ProfilePageEditor } from '../profilePage/ProfilePageEditor';
 import './FeedView.css';
 import './ProfileView.css';
+import { nameOrFallback } from '../../matrix/displayName';
+import { PostSkeletons } from '../../components/Skeleton';
 
 type ProfileTab = 'posts' | 'media' | 'likes';
 
@@ -99,7 +101,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
     let cancelled = false;
     mx.getProfileInfo(userId)
       .then((info) => {
-        if (!cancelled) setBasic({ name: info.displayname || userId, avatarUrl: info.avatar_url });
+        if (!cancelled) setBasic({ name: nameOrFallback(info.displayname, userId), avatarUrl: info.avatar_url });
       })
       .catch(() => undefined);
     return () => {
@@ -390,6 +392,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       </>
                     )}
 
+                    {tab !== 'likes' && feed.loading && <PostSkeletons count={2} />}
                     {tab !== 'likes' && (feed.loading || feed.loadingMore) && (
                       <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
                     )}

@@ -1,0 +1,64 @@
+/* Loading placeholders: shapes of what's coming, with a slow sheen passing over them. */
+.nu-skeleton {
+  display: block;
+  border-radius: var(--nu-radius-sm);
+  background: linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in srgb, var(--nu-color-text-primary) 6%, transparent) 50%,
+      transparent 70%
+    )
+    var(--nu-color-bg-tertiary);
+  background-size: 200% 100%;
+  animation: nu-skeleton-sheen 1.6s ease-in-out infinite;
+}
+
+.nu-skeleton--avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nu-radius-full);
+}
+
+.nu-skeleton--line {
+  height: 12px;
+}
+
+.nu-skeleton--media {
+  height: 180px;
+  border-radius: var(--nu-radius-md);
+}
+
+.nu-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+}
+
+/* Drawn to match a feed post card (.nu-post in FeedView.css). */
+.nu-skeleton-post {
+  display: flex;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-4);
+  background: var(--nu-color-bg-primary);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg);
+}
+
+.nu-skeleton-post__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  padding-top: var(--nu-space-1);
+}
+
+@keyframes nu-skeleton-sheen {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from '../../matrix/emoteLibrary';
 import { canSendStateEvent, defaultUserPowerLevel, roomAdmins, userPowerLevel } from '../../matrix/permissions';
 import { EmoteImage } from './EmoteImage';
+import { fallbackName } from '../../matrix/displayName';
 
 const MODERATOR_LEVEL = 50;
 
@@ -38,7 +39,7 @@ export function EmoteLibraryModeration({ room }: { room: Room }) {
   const [newModerator, setNewModerator] = useState('');
 
   const packs = readLibraryPacks(room).sort((a, b) => a.owner.localeCompare(b.owner));
-  const nameOf = (userId: string) => room.getMember(userId)?.name ?? userId;
+  const nameOf = (userId: string) => room.getMember(userId)?.name ?? fallbackName(userId);
   const canAppoint = canSendStateEvent(room, myUserId, EventType.RoomPowerLevels);
   const powerUsers = Object.keys(
     room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent<{ users?: Record<string, number> }>().users ?? {}

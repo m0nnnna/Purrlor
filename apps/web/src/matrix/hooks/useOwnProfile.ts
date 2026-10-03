@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { UserEvent } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { fallbackName, nameOrFallback } from '../displayName';
 
 type OwnProfile = {
   userId: string;
@@ -21,7 +22,7 @@ async function fetchProfile(mx: ReturnType<typeof useMatrixClient>): Promise<Own
   const profile = await mx.getProfileInfo(userId).catch(() => undefined);
   return {
     userId,
-    displayName: profile?.displayname || userId,
+    displayName: nameOrFallback(profile?.displayname, userId),
     avatarUrl: profile?.avatar_url ?? null,
   };
 }
@@ -33,7 +34,7 @@ async function fetchProfile(mx: ReturnType<typeof useMatrixClient>): Promise<Own
 export function useOwnProfile(): OwnProfile {
   const mx = useMatrixClient();
   const userId = mx.getUserId() ?? '';
-  const [profile, setProfile] = useState<OwnProfile>({ userId, displayName: userId, avatarUrl: null });
+  const [profile, setProfile] = useState<OwnProfile>({ userId, displayName: fallbackName(userId), avatarUrl: null });
 
   useEffect(() => {
     let cancelled = false;

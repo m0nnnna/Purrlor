@@ -1,6 +1,8 @@
 import { createClient, IndexedDBStore, IndexedDBCryptoStore, type MatrixClient } from 'matrix-js-sdk';
 import type { Session } from './session';
 import { secretStorageCallbacks } from './secretStorageCallbacks';
+import { setHomeServer } from './homeServer';
+import { installMemberNameFallback } from './displayName';
 
 // All four databases below (this app's two, plus the Rust crypto engine's own two — see
 // RUST_CRYPTO_DB_NAMES) are shared/global per browser, not scoped per account or device —
@@ -163,6 +165,10 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   // back, matrix-js-sdk doesn't infer it from the homeserver) — without it, Room.eventShouldLiveIn
   // treats every event as living only in the main timeline, so thread-relation messages send
   // fine but never get aggregated into a Thread object at all (see ThreadPanel.tsx/useThreads.ts).
+  // Before the first sync builds any RoomMember: names without a display name fall back to a
+  // handle, which depends on knowing this server (matrix/displayName.ts).
+  setHomeServer(mx.getDomain());
+  installMemberNameFallback();
   await mx.startClient({ lazyLoadMembers: true, threadSupport: true });
 }
 

@@ -50,6 +50,7 @@ import { ThreadPanel } from './ThreadPanel';
 import { VoiceMessage } from './VoiceMessage';
 import { INITIAL_RENDER_WINDOW, sliceRenderWindow, windowReaching } from './timelineWindow';
 import './MessageTimeline.css';
+import { fallbackName } from '../../matrix/displayName';
 
 const HISTORY_PAGE_SIZE = 30;
 const LOAD_MORE_THRESHOLD_PX = 150;
@@ -153,7 +154,7 @@ function ReplyPreview({ room, replyEventId }: { room: Room; replyEventId: string
       </div>
     );
   }
-  const senderName = original.sender?.name ?? original.getSender() ?? '?';
+  const senderName = original.sender?.name ?? fallbackName(original.getSender() ?? '?');
   return (
     <div className="nu-timeline__reply-preview" data-nu-role="timeline-reply-preview">
       ↩ <strong>{senderName}</strong>: {previewTextFor(original)}
@@ -205,7 +206,7 @@ function MessageRow({
 }) {
   const sender = event.sender;
   const webhook = webhookProfile(event, webhookBotId);
-  const senderName = webhook?.name ?? sender?.name ?? event.getSender() ?? '?';
+  const senderName = webhook?.name ?? sender?.name ?? fallbackName(event.getSender() ?? '?');
   const role = roleFor(webhook ? 0 : (sender?.powerLevel ?? 0), roles);
   const senderRole = role.custom ? 'custom' : role.id;
   // event.getContent() already returns the latest m.replace edit's content automatically —

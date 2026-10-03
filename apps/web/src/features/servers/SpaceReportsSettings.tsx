@@ -17,6 +17,7 @@ import {
 } from '../../matrix/reports';
 import { redactMessage } from '../../matrix/redaction';
 import { useOpenPost } from '../feed/useOpenPost';
+import { fallbackName } from '../../matrix/displayName';
 
 const RESOLUTION_LABELS: Record<Resolution, string> = {
   deleted: 'Message deleted',
@@ -63,7 +64,7 @@ function ReportCard({ report, space, reviewRoomId }: { report: Report; space: Ro
   const [error, setError] = useState<string>();
 
   const channel = mx.getRoom(report.room_id);
-  const nameOf = (userId: string) => space.getMember(userId)?.name ?? userId;
+  const nameOf = (userId: string) => space.getMember(userId)?.name ?? fallbackName(userId);
 
   const act = async (action: Resolution) => {
     setBusy(true);

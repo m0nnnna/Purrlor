@@ -15,6 +15,7 @@
   border: 1px solid var(--nu-color-border);
   border-radius: var(--nu-radius-md);
   box-shadow: 0 8px 24px color-mix(in srgb, #000 22%, transparent);
+  animation: nu-fade-in 0.12s ease-out both;
 }
 
 .nu-menu__list--start {

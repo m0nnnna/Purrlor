@@ -33,6 +33,7 @@ import { repostTargetsFor, useComposerTargets } from './useComposerTargets';
 import { useInfiniteScroll } from './useInfiniteScroll';
 import { useKeptScroll } from './useKeptScroll';
 import './FeedView.css';
+import { fallbackName } from '../../matrix/displayName';
 
 type Tab = 'hub' | 'mine';
 
@@ -90,7 +91,7 @@ export function FeedView({ space, hidden = false, onBack }: { space: Room; hidde
     [space, spaceIsPublic]
   );
 
-  const nameOf = (userId: string) => members.find((member) => member.userId === userId)?.name ?? userId;
+  const nameOf = (userId: string) => members.find((member) => member.userId === userId)?.name ?? fallbackName(userId);
   const avatarOf = (userId: string) => members.find((member) => member.userId === userId)?.getMxcAvatarUrl() ?? null;
 
   const run = async (action: () => Promise<unknown>, failure: string) => {

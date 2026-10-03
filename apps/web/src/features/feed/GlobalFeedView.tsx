@@ -21,6 +21,8 @@ import { useKeptScroll } from './useKeptScroll';
 import { useOpenSocial } from './useOpenSocial';
 import './FeedView.css';
 import './GlobalFeedView.css';
+import { nameOrFallback } from '../../matrix/displayName';
+import { PostSkeletons } from '../../components/Skeleton';
 
 /** What the header says for each page: where you are, since the sidebar is off screen on a phone. */
 const TITLES: Record<SocialView, { title: string; icon: IconName }> = {
@@ -127,7 +129,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
   };
 
   const nameOfUser = (userId: string) =>
-    feed.posts.find((post) => post.source.owner === userId)?.source.ownerName ?? mx.getUser(userId)?.displayName ?? userId;
+    feed.posts.find((post) => post.source.owner === userId)?.source.ownerName ?? nameOrFallback(mx.getUser(userId)?.displayName, userId);
 
   const showManager = tab === 'following' && !searching && (managing || followsNothing);
 
@@ -328,6 +330,7 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
 
             <GlobalPostList posts={shown} targets={targets} onReposted={feed.addSource} />
 
+            {feed.loading && shown.length === 0 && <PostSkeletons />}
             {(feed.loading || feed.loadingMore) && (
               <p className="nu-feed__status" data-nu-role="global-feed-loading">
                 {feed.loading ? 'Gathering posts…' : 'Loading older posts…'}
