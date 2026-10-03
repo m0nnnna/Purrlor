@@ -1,5 +1,6 @@
 import type { MatrixClient, Room } from 'matrix-js-sdk';
 import { SPACE_NEWS_EVENT } from './spaceNews';
+import { isRemoteUser } from './homeServer';
 
 /**
  * Named roles over Matrix's raw power levels. Matrix has no role objects of its own, only an
@@ -142,6 +143,8 @@ export function withCapability<T extends Thresholds>(levels: T, capability: Capa
 /** A member's handle for display under their name — the localpart of their Matrix ID
  *  (`@neko:example.org` → `@neko`), the part people actually recognize and type in mentions. */
 export function handleFor(userId: string): string {
+  // A federated instance's people keep their server (homeServer.ts): `@mochi:cats.example`.
+  if (isRemoteUser(userId)) return userId;
   const colon = userId.indexOf(':');
   return colon > 0 ? userId.slice(0, colon) : userId;
 }

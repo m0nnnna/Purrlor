@@ -1,4 +1,5 @@
 import { isDemoMode } from '../demo/demoMode';
+import { isRemoteUser } from './homeServer';
 
 /**
  * The public web's answers (services/token-server/src/publicWebRoutes.ts, docs/public-web.md),
@@ -74,6 +75,23 @@ async function getPublic<T>(path: string): Promise<PublicResult<T>> {
     return { status: 'ok', value: (await response.json()) as T };
   } catch {
     return { status: 'error' };
+  }
+}
+
+/** This deployment's own description (`GET /api/public/instance`, docs/federation.md). */
+export type InstanceAnswer = { serverName: string; name: string; url: string };
+
+export async function fetchInstance(): Promise<InstanceAnswer | undefined> {
+  if (isDemoMode()) return undefined;
+  try {
+    const response = await fetch(`${PUBLIC_API}/instance`);
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as Record<string, unknown>;
+    return typeof body.serverName === 'string' && body.serverName
+      ? { serverName: body.serverName, name: typeof body.name === 'string' ? body.name : body.serverName, url: typeof body.url === 'string' ? body.url : '' }
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -153,7 +171,13 @@ export function parsePublicRoute(pathname: string, search = ''): PublicRoute | u
   return undefined;
 }
 
-export const publicPagePath = (user: string) => `/@${encodeURIComponent(user.replace(/^@/, '').replace(/:.*$/, ''))}`;
+/** `/@name` for this server's people, `/@name:server` for a federated instance's (homeServer.ts). */
+export function publicPagePath(user: string): string {
+  const id = user.startsWith('@') ? user : `@${user}`;
+  const name = isRemoteUser(id) ? id.slice(1) : id.slice(1).replace(/:.*$/, '');
+  // A colon is fine in a path, and reads better than %3A.
+  return `/@${encodeURIComponent(name).replace(/%3A/gi, ':')}`;
+}
 
 /** The path of a thing on someone's page, as `parsePublicRoute` reads it. */
 export function pageTargetPath(user: string, target: PageTarget): string {

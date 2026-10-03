@@ -124,23 +124,30 @@ rules:
 Their media comes through this instance's media route, fetched over federation by the homeserver,
 under the same rules as local media.
 
-## The web client (Sonnet's tasks)
+## The web client
 
-What the client does with the above. Each item is a task in the plan's Work split.
+- **Peers** (`matrix/peers.ts`): `fetchPeers()` reads `GET /api/public/peers`, reused for ten
+  minutes; none (an older token server, no public web) means federation is off.
+- **Everyone** (`useGlobalFeed`): reads this server's directory and every peer's
+  (`listPeerDirectories`, `publicRooms` with `server`, each peer under the same caps as this
+  server's, reused for five minutes). A peer's room the bot hasn't joined yet doesn't load this
+  time and isn't counted as unreadable; it will be there within ten minutes.
+- **Following and opening a peer's person** (`loadUserProfileSource`, `useProfilePage`): their
+  profile room comes from their extended profile as for anyone; if this homeserver can't read it yet,
+  `ensurePeerRoomReadable` asks `POST /api/public/peers/join` and reads it once the bot is in. A
+  followed peer's Space counts as public when the peer's directory lists it.
+- **Discover**: with peers, a row of tabs picks whose Spaces ("This server", then each peer by
+  name); a peer's Space is joined through that peer (`viaServers`).
+- **Handles and addresses** (`matrix/homeServer.ts`): once the app knows its own server (from the
+  client, or signed out from `GET /api/public/instance`), a peer's person shows as
+  `@name:server` (`handleFor`) and their address is `/@name:server` (`publicPagePath`), here and in
+  copied links. This server's people stay `@name`.
+- **Signed out**: `/@name:server` and `/@name:server/post/<id>` work like `/@name`; the API takes
+  `name:server` with or without its `@`.
 
-- **Peers.** Read `GET /api/public/peers` once a session (and on reconnect).
-- **Everyone and Discover** (`globalFeed.ts` `listDirectory`, `directory.ts`): also read each peer's
-  directory, `publicRooms({ server: peer.serverName, filter: { room_types: [...] } })`, each peer
-  under the same caps as this server's directory, its entries labelled with the peer's `name`. A
-  peer's room is read only once the bot has joined it (a `/state` that fails means not yet: skip it,
-  it will be there within ten minutes). Discover joins a peer's Space with `viaServers: [serverName]`.
-- **Following a peer's person** (`follows.ts`, `useFollows`): find their profile room (their extended
-  profile's `xyz.nekous.profile_room`, as for anyone; failing that, their instance's directory), then
-  `POST /api/public/peers/join`, then read it as usual. Opening their profile does the same.
-- **Handles**: a peer's person shows as `@name:server` wherever this server's people show as `@name`,
-  and search and mentions take full IDs.
-- **Signed out**: `/@name:server` and `/@name:server/post/<id>` work like `/@name` (the API takes
-  full IDs). The instance's name shows beside theirs.
+Not done yet: finding a peer's person by name in search (a full `@name:server` ID works wherever a
+user ID is typed), and a peer's person whose extended profile doesn't come through federation and
+who isn't in the first pages of their instance's directory.
 
 ## Verify first
 

@@ -4,6 +4,7 @@ import { Modal } from '../../components/Modal';
 import { Avatar } from '../../components/Avatar';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { browsePublicSpaces, joinPublicRoom } from '../../matrix/directory';
+import { fetchPeers, type Peer } from '../../matrix/peers';
 import './DiscoverModal.css';
 
 function DirectoryRow({
@@ -44,9 +45,11 @@ function DirectoryRow({
 
 /**
  * Browses this account's own homeserver's public Spaces (Discord "servers") from its room
- * directory (`GET /publicRooms`). Only Spaces: their channels are in the directory too, but you
- * find those inside a Space once you've joined it. Joining selects the Space in the server rail,
- * the same way every other "create/join something" flow in this app does (CreateSpaceModal).
+ * directory (`GET /publicRooms`), or a federated instance's (docs/federation.md): when this
+ * deployment has peers, a picker chooses whose. Only Spaces: their channels are in the directory
+ * too, but you find those inside a Space once you've joined it. Joining selects the Space in the
+ * server rail, the same way every other "create/join something" flow in this app does
+ * (CreateSpaceModal).
  */
 export function DiscoverModal({
   onClose,
@@ -63,12 +66,25 @@ export function DiscoverModal({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string>();
   const [joiningRoomId, setJoiningRoomId] = useState<string>();
+  const [peers, setPeers] = useState<Peer[]>([]);
+  // Whose directory: undefined is this server's, otherwise a peer's server name.
+  const [server, setServer] = useState<string>();
 
-  const runSearch = async (searchTerm: string) => {
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPeers().then((list) => {
+      if (!cancelled) setPeers(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const runSearch = async (searchTerm: string, where = server) => {
     setLoading(true);
     setError(undefined);
     try {
-      const response = await browsePublicSpaces(mx, { searchTerm });
+      const response = await browsePublicSpaces(mx, { searchTerm, server: where });
       setEntries(response.chunk);
       setNextBatch(response.next_batch);
     } catch (err) {
@@ -92,7 +108,7 @@ export function DiscoverModal({
     if (!nextBatch || loadingMore) return;
     setLoadingMore(true);
     try {
-      const response = await browsePublicSpaces(mx, { searchTerm: term, since: nextBatch });
+      const response = await browsePublicSpaces(mx, { searchTerm: term, since: nextBatch, server });
       setEntries((prev) => [...prev, ...response.chunk]);
       setNextBatch(response.next_batch);
     } catch (err) {
@@ -106,7 +122,7 @@ export function DiscoverModal({
     setJoiningRoomId(entry.room_id);
     setError(undefined);
     try {
-      const roomId = await joinPublicRoom(mx, entry.canonical_alias || entry.room_id);
+      const roomId = await joinPublicRoom(mx, entry.canonical_alias || entry.room_id, server);
       onClose();
       onJoinedSpace(roomId);
     } catch (err) {
@@ -117,6 +133,29 @@ export function DiscoverModal({
 
   return (
     <Modal title="Discover Spaces" onClose={onClose} wide>
+      {peers.length > 0 && (
+        <div className="nu-discover__servers" role="tablist" aria-label="Whose Spaces" data-nu-role="discover-servers">
+          {[{ serverName: undefined, name: 'This server' }, ...peers].map((peer) => (
+            <button
+              key={peer.serverName ?? 'home'}
+              type="button"
+              role="tab"
+              aria-selected={server === peer.serverName}
+              className={server === peer.serverName ? 'nu-discover__server nu-discover__server--active' : 'nu-discover__server'}
+              data-nu-role="discover-server"
+              title={peer.serverName ?? undefined}
+              onClick={() => {
+                setServer(peer.serverName);
+                setEntries([]);
+                setNextBatch(undefined);
+                void runSearch(term, peer.serverName);
+              }}
+            >
+              {peer.name}
+            </button>
+          ))}
+        </div>
+      )}
       <form className="nu-discover__search" onSubmit={handleSearchSubmit}>
         <input
           className="nu-field__input"
@@ -138,7 +177,7 @@ export function DiscoverModal({
       {loading ? (
         <p className="nu-discover__status">Loading…</p>
       ) : entries.length === 0 ? (
-        <p className="nu-discover__status">No public Spaces found on this homeserver.</p>
+        <p className="nu-discover__status">No public Spaces found {server ? `on ${peers.find((peer) => peer.serverName === server)?.name ?? server}` : 'on this homeserver'}.</p>
       ) : (
         <div className="nu-discover__list" data-nu-role="discover-list">
           {entries.map((entry) => (

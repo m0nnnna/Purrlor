@@ -107,13 +107,15 @@ export function parsePeers(text: string): Peer[] {
 
 /**
  * A user ID from what a visitor or an admin typed, on this server or an approved peer:
- * `nibbles` and `@nibbles` are this server's, `@nibbles:server` is whichever server it names, if
+ * `nibbles` and `@nibbles` are this server's, `@nibbles:server` (or `nibbles:server`) is whichever server it names, if
  * that's this one or a peer. Anything else is undefined.
  */
 export function knownUserId(input: string, localServer: string, peerServers: ReadonlySet<string>): string | undefined {
   const raw = input.trim();
-  const full = USER_ID.exec(raw);
-  if (full) return full[2] === localServer || peerServers.has(full[2]) ? raw : undefined;
+  // `mochi:cats.example` (an address's `/@mochi:cats.example`) is the full ID without its `@`.
+  const withAt = raw.startsWith('@') ? raw : `@${raw}`;
+  const full = USER_ID.exec(withAt);
+  if (full) return full[2] === localServer || peerServers.has(full[2]) ? withAt : undefined;
   const localpart = raw.replace(/^@/, '').toLowerCase();
   return LOCALPART.test(localpart) ? `@${localpart}:${localServer}` : undefined;
 }

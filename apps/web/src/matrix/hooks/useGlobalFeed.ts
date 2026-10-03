@@ -8,6 +8,7 @@ import {
   fetchNewestPosts,
   GLOBAL_FEED_CONCURRENCY,
   listDirectory,
+  listPeerDirectories,
   loadProfileSource,
   loadListedSpaceSources,
   loadPublicSpaceSources,
@@ -22,6 +23,7 @@ import {
   type FeedSource,
   type GlobalPost,
 } from '../globalFeed';
+import { fetchPeers } from '../peers';
 
 export type GlobalFeed = {
   /** Every post from every readable source. Views narrow it with `filterPosts`. */
@@ -128,8 +130,19 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
 
     void (async () => {
       try {
-        const directory = await listDirectory(mx);
+        // This server's directory, and each federated instance's (docs/federation.md): a peer's
+        // rooms read like this server's once the token server's bot has joined them, and one it
+        // hasn't joined yet just doesn't load this time.
+        const [ownDirectory, peerDirectory] = await Promise.all([
+          listDirectory(mx),
+          fetchPeers().then((peers) => listPeerDirectories(mx, peers)),
+        ]);
         if (cancelled) return;
+        const directory = {
+          ...ownDirectory,
+          spaces: [...ownDirectory.spaces, ...peerDirectory.spaces],
+          profiles: [...ownDirectory.profiles, ...peerDirectory.profiles],
+        };
         setPublicSpaces(directory.spaces.map(({ roomId, name }) => ({ roomId, name })));
         setDirectoryLoaded(true);
         const publicIds = new Set(directory.spaces.map((space) => space.roomId));
@@ -148,7 +161,8 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
         ]);
         if (cancelled) return;
         // `null` = won't show its state to non-members; `undefined` = the request failed.
-        setUnreadableSpaces(spaceResults.filter((sources) => !sources).length);
+        // Only this server's: a peer's Space the bot hasn't joined yet isn't something to report.
+        setUnreadableSpaces(spaceResults.slice(0, ownDirectory.spaces.length).filter((sources) => !sources).length);
         setDirectoryTruncated(directory.truncated);
 
         // People and Spaces asked for by name (followed, or the profile being viewed) that the

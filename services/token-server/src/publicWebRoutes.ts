@@ -477,10 +477,13 @@ export function publicWebRouter(): Router {
     }
   });
 
+  // Whether this site keeps someone off its public web: the signed-in app doesn't draw a hidden
+  // page either. A peer's person counts as hidden here when their own instance hides them too.
   router.get('/status/:user', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
-    const userId = localUserId(req.params.user, await serverName().catch(() => ''));
-    const lists = await adminStore.lists();
+    const userId = await resolveUser(req.params.user).catch(() => undefined);
+    const local = userId && serverOfUser(userId) === (await serverName().catch(() => ''));
+    const lists = local || !userId ? await adminStore.lists() : await effectiveLists(await getFeed());
     res
       .set('Cache-Control', 'no-store')
       .json({ hidden: !!userId && lists.hidden.has(userId), publicOff: !!userId && lists.publicOff.has(userId) });

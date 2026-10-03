@@ -12,19 +12,20 @@ export type PublicRoomsPage = {
 };
 
 /**
- * The public Spaces in the local homeserver's room directory (no `server` option — scoped to this
- * account's own server, not cross-federation search, matching the narrower reach every other
- * "find something" flow in this app uses, e.g. AddExistingChannelModal), for Discover. Only
+ * The public Spaces in the local homeserver's room directory, or with `server`, an approved
+ * federated instance's (docs/federation.md; Discover offers only those, never arbitrary servers),
+ * for Discover. Only
  * Spaces: a public Space's channels are listed in the directory too, but they're found inside the
  * Space once you've joined it, not one by one. The directory is asked for Spaces (`room_types`),
  * and the page is filtered here as well in case a server ignores that.
  */
 export async function browsePublicSpaces(
   mx: MatrixClient,
-  { searchTerm, since }: { searchTerm?: string; since?: string } = {}
+  { searchTerm, since, server }: { searchTerm?: string; since?: string; server?: string } = {}
 ): Promise<PublicRoomsPage> {
   const trimmed = searchTerm?.trim();
   const page = await mx.publicRooms({
+    ...(server && { server }),
     limit: PAGE_SIZE,
     since,
     filter: { room_types: [RoomType.Space], ...(trimmed && { generic_search_term: trimmed }) },
@@ -37,8 +38,9 @@ export function isSpaceEntry(entry: IPublicRoomsChunkRoom): boolean {
 }
 
 /** Joins a public directory entry by room ID (aliases resolve the same way — matrix-js-sdk's
- *  joinRoom accepts either) and hands back the joined room's actual ID, for navigating there. */
-export async function joinPublicRoom(mx: MatrixClient, roomIdOrAlias: string): Promise<string> {
-  const room = await mx.joinRoom(roomIdOrAlias);
+ *  joinRoom accepts either) and hands back the joined room's actual ID, for navigating there.
+ *  `server`: the instance whose directory listed it, to join through. */
+export async function joinPublicRoom(mx: MatrixClient, roomIdOrAlias: string, server?: string): Promise<string> {
+  const room = server ? await mx.joinRoom(roomIdOrAlias, { viaServers: [server] }) : await mx.joinRoom(roomIdOrAlias);
   return room.roomId;
 }

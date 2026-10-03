@@ -64,3 +64,33 @@
   font-size: var(--nu-font-size-xs);
   color: var(--nu-color-text-muted);
 }
+
+/* Whose Spaces: this server's, or a federated instance's (docs/federation.md). */
+.nu-discover__servers {
+  display: flex;
+  overflow-x: auto;
+  margin-bottom: var(--nu-space-3);
+  border-bottom: 1px solid var(--nu-color-border);
+}
+
+.nu-discover__server {
+  appearance: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  color: var(--nu-color-text-muted);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nu-discover__server:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-discover__server--active {
+  color: var(--nu-color-text-primary);
+  border-bottom-color: var(--nu-color-accent);
+}

@@ -10,6 +10,7 @@ import { RecoveryKeySetupScreen } from './RecoveryKeySetupScreen';
 import { AppShell } from './AppShell';
 import { PublicApp } from '../features/publicWeb/PublicApp';
 import { parsePublicRoute } from '../matrix/publicWeb';
+import { setHomeServer } from '../matrix/homeServer';
 
 type BootState =
   | { phase: 'checking-session' }
@@ -145,6 +146,8 @@ export function App() {
     return <RecoveryKeySetupScreen recoveryKey={recoveryKey} onContinue={() => setBoot({ phase: 'ready', mx })} />;
   }
 
+  // Who counts as one of this server's people, for handles and addresses (matrix/homeServer.ts).
+  setHomeServer(boot.mx.getDomain());
   return (
     <MatrixClientContext.Provider value={boot.mx}>
       <AppShell />

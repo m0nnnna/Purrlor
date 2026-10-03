@@ -13,6 +13,7 @@ import { editTargetOf, FEED_ROOM_MEMBER_KEY, isPostEvent, listSpaceFeeds, POST_E
 import { getExtendedProfile } from './extendedProfile';
 import { getOwnProfileRoomId, PROFILE_ROOM_TYPE, readProfileFollows, readProfileOwner } from './profileFeed';
 import { isListedInDirectory } from './spaceDirectory';
+import { ensurePeerRoomReadable, fetchPeers, peerOf, type Peer } from './peers';
 
 /**
  * The global feed's reading side: every place a post can come from, gathered without joining
@@ -59,9 +60,11 @@ export type PublicSpace = {
   avatarUrl?: string;
   /** From the directory entry — whether a non-member may read the Space's state. */
   worldReadable: boolean;
+  /** A federated instance's Space (docs/federation.md): that instance's server name. */
+  server?: string;
 };
 
-export type DirectoryProfile = { roomId: string; name: string; avatarUrl?: string };
+export type DirectoryProfile = { roomId: string; name: string; avatarUrl?: string; server?: string };
 
 export type FeedSource = {
   roomId: string;
@@ -256,14 +259,69 @@ export async function listDirectory(
   };
 }
 
+/** How long a peer's directory is reused before it's read again. */
+const PEER_DIRECTORY_TTL_MS = 5 * 60_000;
+const peerDirectories = new Map<string, { at: number; promise: Promise<{ spaces: PublicSpace[]; profiles: DirectoryProfile[] }> }>();
+
+/**
+ * One federated instance's public Spaces and profile feeds, from its room directory read over
+ * federation (docs/federation.md), under the same caps as this server's own. Each is tagged with
+ * the peer's server name. Reused for five minutes; a peer that doesn't answer has none.
+ */
+export function listPeerDirectory(mx: MatrixClient, server: string): Promise<{ spaces: PublicSpace[]; profiles: DirectoryProfile[] }> {
+  const known = peerDirectories.get(server);
+  if (known && Date.now() - known.at < PEER_DIRECTORY_TTL_MS) return known.promise;
+  const promise = (async () => {
+    const spaces: PublicSpace[] = [];
+    const profiles: DirectoryProfile[] = [];
+    let since: string | undefined;
+    for (let page = 0; page < MAX_DIRECTORY_PAGES; page += 1) {
+      const response = await mx.publicRooms({
+        server,
+        limit: DIRECTORY_PAGE_SIZE,
+        since,
+        filter: { room_types: [RoomType.Space, PROFILE_ROOM_TYPE as RoomType] },
+      });
+      response.chunk.forEach((entry) => {
+        const space = toPublicSpace(entry);
+        if (space) spaces.push({ ...space, server });
+        const profile = toDirectoryProfile(entry);
+        if (profile) profiles.push({ ...profile, server });
+      });
+      since = response.next_batch;
+      if (!since || (spaces.length >= MAX_PUBLIC_SPACES && profiles.length >= MAX_PROFILES)) break;
+    }
+    return { spaces: spaces.slice(0, MAX_PUBLIC_SPACES), profiles: profiles.slice(0, MAX_PROFILES) };
+  })().catch(() => ({ spaces: [], profiles: [] }));
+  peerDirectories.set(server, { at: Date.now(), promise });
+  return promise;
+}
+
+/** Every approved peer's directory, side by side. */
+export async function listPeerDirectories(mx: MatrixClient, peers: Peer[]): Promise<{ spaces: PublicSpace[]; profiles: DirectoryProfile[] }> {
+  const all = await Promise.all(peers.map((peer) => listPeerDirectory(mx, peer.serverName)));
+  return { spaces: all.flatMap((dir) => dir.spaces), profiles: all.flatMap((dir) => dir.profiles) };
+}
+
+/** Whether a Space is listed in an approved peer's directory (so it's public there). */
+async function isListedOnPeer(mx: MatrixClient, spaceId: string): Promise<boolean> {
+  const { spaces } = await listPeerDirectories(mx, await fetchPeers());
+  return spaces.some((space) => space.roomId === spaceId);
+}
+
 /**
  * A followed (or viewed) person's profile feed, found from their user ID rather than the directory
  * — so they're never lost past the directory caps. Only if the room's owner checks out as them.
+ * A federated instance's person's room this homeserver isn't in yet is joined by the token
+ * server's bot first (ensurePeerRoomReadable), when their instance is an approved peer.
  */
 export async function loadUserProfileSource(mx: MatrixClient, userId: string): Promise<FeedSource | undefined> {
   const { profileRoom } = await getExtendedProfile(mx, userId);
   if (!profileRoom) return undefined;
-  const source = await loadProfileSource(mx, profileRoom);
+  let source = await loadProfileSource(mx, profileRoom).catch(() => undefined);
+  if (!source && peerOf(userId, await fetchPeers()) && (await ensurePeerRoomReadable(mx, userId, profileRoom))) {
+    source = await loadProfileSource(mx, profileRoom);
+  }
   return source?.owner === userId ? source : undefined;
 }
 
@@ -273,7 +331,9 @@ export async function loadUserProfileSource(mx: MatrixClient, userId: string): P
  * and one you aren't in can't be.
  */
 export async function loadListedSpaceSources(mx: MatrixClient, spaceId: string): Promise<FeedSource[] | undefined> {
-  if (!(await isListedInDirectory(mx, spaceId))) return undefined;
+  // Another server's Space isn't in this server's directory, and asking about it may fail outright.
+  const listedHere = await isListedInDirectory(mx, spaceId).catch(() => false);
+  if (!listedHere && !(await isListedOnPeer(mx, spaceId))) return undefined;
   const joined = mx.getRoom(spaceId);
   if (joined?.getMyMembership() === 'join') return sourcesFromJoinedSpace(joined, true);
   const state = (await mx.roomState(spaceId)) as RawStateEvent[];

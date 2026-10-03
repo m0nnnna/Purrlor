@@ -82,6 +82,7 @@ describe('knownUserId and profilePath', () => {
     assert.equal(knownUserId('luna', LOCAL, peers), `@luna:${LOCAL}`);
     assert.equal(knownUserId('@Luna', LOCAL, peers), `@luna:${LOCAL}`);
     assert.equal(knownUserId(`@mochi:${PEER}`, LOCAL, peers), `@mochi:${PEER}`);
+    assert.equal(knownUserId(`mochi:${PEER}`, LOCAL, peers), `@mochi:${PEER}`);
   });
 
   it('refuses anyone on a server that isn’t a peer', () => {

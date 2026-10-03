@@ -133,7 +133,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
     ? getOwnProfileRoomId(mx)
     : (extended.profileRoom ??
       feed.sources.find((source) => source.origin.kind === 'global' && source.owner === userId)?.roomId);
-  const { page: publishedPage } = useProfilePage(profileRoomId);
+  const { page: publishedPage } = useProfilePage(profileRoomId, userId);
   // An admin can hide a reported page (docs/public-web.md). Nobody else sees it then; its owner is told.
   const pageHidden = usePageHidden(publishedPage ? userId : undefined);
   const page = pageHidden && !isMe ? undefined : publishedPage;
