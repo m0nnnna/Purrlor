@@ -11,6 +11,22 @@ import { controlDeps, publicWebRouter } from './publicWebRoutes.js';
 import { adminStore } from './adminStore.js';
 import { controlApp, listenOnControlSocket } from './controlServer.js';
 import { startPeering } from './peering.js';
+import { ErrorLog, captureProcessErrors } from './errorLog.js';
+import { standardMetrics } from './metrics.js';
+import { finalErrorHandler, opsRouter } from './ops.js';
+import { clientErrorHandler } from './clientErrors.js';
+import { onlineCounter } from './online.js';
+
+// The build this is (a commit, set by the image build), for `purrlor metrics` and error reports.
+const VERSION = process.env.PURRLOR_VERSION || undefined;
+
+// Errors and metrics for the operator (ops.ts, docs/deployment.md "Errors and metrics"). First, so
+// a failure anywhere below is recorded too.
+const ops = standardMetrics('purrlor_token_server');
+const errorLog = new ErrorLog(process.env.ERRORS_FILE || undefined, (report) => ops.errors.inc({ source: report.source }));
+captureProcessErrors(errorLog, VERSION);
+const voiceTokens = ops.metrics.counter('voice_tokens_total', 'Voice tokens given out');
+ops.metrics.gauge('online_accounts', 'Accounts with the app open now', () => onlineCounter.count());
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -42,6 +58,7 @@ function corsOriginAllowed(origin: string | undefined, callback: (err: Error | n
 }
 
 const app = express();
+app.use(ops.measure);
 // Behind nginx (and Docker's network): the visitor's address is in X-Forwarded-For, which the
 // public web's per-address rate limits need. Only proxies on private and loopback addresses are
 // believed, so a visitor can't pick their own address by sending the header.
@@ -53,6 +70,7 @@ app.use((req, _res, next) => {
 });
 app.use(cors({ origin: corsOriginAllowed }));
 app.use(express.json());
+app.use(opsRouter({ token: process.env.METRICS_TOKEN ?? '', service: 'token server', version: VERSION, metrics: ops, errors: errorLog }));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'purrlor-token-server' });
@@ -82,8 +100,18 @@ app.post('/api/livekit/token', async (req, res) => {
     return;
   }
 
+  let userId: string;
   try {
-    const userId = await validateOpenIdToken(openIdToken);
+    userId = await validateOpenIdToken(openIdToken);
+  } catch (err) {
+    // An expired or unconfirmed login is the caller's, not a fault here: a warning, so it isn't
+    // counted in `purrlor errors` or the alerts.
+    console.warn(`Voice token refused: the OpenID token didn't check out (${(err as Error).message})`);
+    res.status(401).json({ error: 'Authentication failed' });
+    return;
+  }
+
+  try {
     const membership = await checkMembership(userId, roomId);
 
     // Two very different failures that used to collapse into the same "Not a member of this
@@ -124,6 +152,7 @@ app.post('/api/livekit/token', async (req, res) => {
     at.addGrant({ room: roomName, roomJoin: true, ...grantsForPowerLevel(membership.powerLevel) });
 
     const token = await at.toJwt();
+    voiceTokens.inc();
     res.json({ token, roomName });
   } catch (err) {
     console.error('Failed to mint token', err);
@@ -218,7 +247,11 @@ app.post('/api/webhooks/:roomId/:webhookId/:token', (req, res) => {
  * The public web (publicWeb.ts): Global posts, opted-in profile pages, and their link previews,
  * for people who aren't signed in. Read-only.
  */
+/** Errors the web app hit in someone's browser (clientErrors.ts). Before the router, which limits per page. */
+app.post('/api/public/client-errors', clientErrorHandler(errorLog));
 app.use('/api/public', publicWebRouter());
+
+app.use(finalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`purrlor-token-server listening on :${PORT}`);

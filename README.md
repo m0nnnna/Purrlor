@@ -379,6 +379,8 @@ The installer adds a `purrlor` command:
 | `purrlor backup` | Saves your settings and all data to a file (`backup schedule daily` for nightly ones, `backup copy-to` to copy them to another server) |
 | `purrlor restore <file>` | Puts a backup back, saving how things are first |
 | `purrlor alerts <url>` | Messages you (ntfy, Discord, Slack) when something's down, a disk is filling up, or a backup failed |
+| `purrlor errors` | What went wrong in the services and in people's browsers, grouped, newest first |
+| `purrlor metrics` | Requests, response times, errors and memory for each service (`metrics prometheus` to collect them) |
 | `purrlor peers add <address>` | Federates with another Purrlor instance: its people and public Spaces show here (each side adds the other) |
 | `purrlor new-invite-code` | Replaces the sign-up code |
 | `purrlor open-signups` / `close-signups` | Allows or stops new sign-ups |

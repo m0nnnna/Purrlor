@@ -113,6 +113,13 @@ a minute while it's showing, and gets the same answer back; only accounts on thi
 The service keeps a keyed hash of each account and when it last pinged, in memory, for 2½ minutes,
 under a key made fresh each start (`online.ts`): enough to count, never who. Rate limited like pages.
 
+### `POST /api/public/client-errors`
+
+An error the app hit in someone's browser, for `purrlor errors` (`clientErrors.ts`; docs/deployment.md,
+"Errors and metrics"). `{ message, stack?, where?, version? }`; anything else is ignored, and each
+field is cut short and scrubbed of tokens. Always `204`. Limited per address (10, then 10 a minute)
+and for everyone together (120 a minute).
+
 ### `GET /api/public/status/:user`
 
 `{ "hidden": true | false, "publicOff": true | false }`: whether an admin hid this person's page, or

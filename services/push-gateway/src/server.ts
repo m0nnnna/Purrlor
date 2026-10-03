@@ -3,8 +3,30 @@ import cors from 'cors';
 import webpush from 'web-push';
 import { validateOpenIdToken } from './openid.js';
 import { describePostActivity } from './postActivity.js';
-import { loadReminders, parseReminders, setReminders, takeDue } from './reminders.js';
-import { claimSubscription, deleteSubscription, getSubscription, releaseSubscription, subscriptionsOf } from './subscriptions.js';
+import { loadReminders, parseReminders, reminderCount, setReminders, takeDue } from './reminders.js';
+import {
+  claimSubscription,
+  deleteSubscription,
+  getSubscription,
+  releaseSubscription,
+  subscriptionCount,
+  subscriptionsOf,
+} from './subscriptions.js';
+import { ErrorLog, captureProcessErrors } from './errorLog.js';
+import { standardMetrics } from './metrics.js';
+import { finalErrorHandler, opsRouter } from './ops.js';
+
+// The build this is (a commit, set by the image build), for `purrlor metrics` and error reports.
+const VERSION = process.env.PURRLOR_VERSION || undefined;
+
+// Errors and metrics for the operator (ops.ts, docs/deployment.md "Errors and metrics"). First, so
+// a failure anywhere below is recorded too.
+const ops = standardMetrics('purrlor_push_gateway');
+const errorLog = new ErrorLog(process.env.ERRORS_FILE || undefined, (report) => ops.errors.inc({ source: report.source }));
+captureProcessErrors(errorLog, VERSION);
+const pushes = ops.metrics.counter('pushes_total', 'Push messages, by how they went');
+ops.metrics.gauge('subscriptions', 'Browsers registered for notifications', subscriptionCount);
+ops.metrics.gauge('reminders_waiting', 'Reminders waiting to fire', reminderCount);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -41,8 +63,10 @@ function corsOriginAllowed(origin: string | undefined, callback: (err: Error | n
 }
 
 const app = express();
+app.use(ops.measure);
 app.use(cors({ origin: corsOriginAllowed }));
 app.use(express.json());
+app.use(opsRouter({ token: process.env.METRICS_TOKEN ?? '', service: 'push gateway', version: VERSION, metrics: ops, errors: errorLog }));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'purrlor-push-gateway' });
@@ -123,6 +147,12 @@ app.put('/reminders', async (req, res) => {
  * else (a transient network or 5xx error) is logged and left for the next message.
  */
 async function deliver(pushkey: string, subscription: webpush.PushSubscription, payload: string): Promise<'sent' | 'gone' | 'failed'> {
+  const result = await send(pushkey, subscription, payload);
+  pushes.inc({ result });
+  return result;
+}
+
+async function send(pushkey: string, subscription: webpush.PushSubscription, payload: string): Promise<'sent' | 'gone' | 'failed'> {
   try {
     await webpush.sendNotification(subscription, payload);
     return 'sent';
@@ -233,6 +263,8 @@ app.post('/_matrix/push/v1/notify', async (req, res) => {
 
   res.json({ rejected });
 });
+
+app.use(finalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`purrlor-push-gateway listening on :${PORT}`);

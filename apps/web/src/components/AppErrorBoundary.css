@@ -1,0 +1,23 @@
+.nu-app-error {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--nu-color-bg-app);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-app-error__title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.nu-app-error__text {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--nu-color-text-secondary);
+}

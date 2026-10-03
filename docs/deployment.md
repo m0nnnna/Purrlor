@@ -652,6 +652,8 @@ when something goes wrong, and again when it's fine:
 - a disk over 90% full: Docker's, the media folder's, or the backups'
 - the HTTPS certificate running out within 14 days (where nginx runs on this server)
 - a nightly backup that failed, didn't happen for a day and a half, or couldn't be copied off
+- errors (below): a service that crashed, one logging 5 or more in 15 minutes, or 30 or more from
+  people's browsers in 15 minutes
 
 Each problem is reported once, not every 5 minutes. A service stopped on purpose by a backup or
 restore isn't reported as down. The URL can be:
@@ -666,3 +668,32 @@ restore isn't reported as down. The URL can be:
 It sends a first message before turning on, so a wrong URL is caught straight away.
 `purrlor alerts` shows the setting and what was wrong at the last check, `... alerts test` sends a
 test, and `... alerts off` stops it.
+
+### Errors and metrics
+
+**`sudo purrlor errors`** lists what's gone wrong, newest first: in the token server and push gateway
+(everything they log as an error, and a crash), and in people's browsers. Repeats are grouped, so each
+kind is listed once, with how often it happened, when it was first and last seen, the kind of page,
+the build, and the start of its stack. `... errors web` lists only the browsers' errors, `... errors
+server` only the services' own, and `... errors clear` forgets them all once what caused them is
+fixed. They're kept in each service's data volume (`errors.json`, at most 200 kinds), so they survive
+restarts and are in backups.
+
+The app reports an error it hits to this server's token server (`POST /api/public/client-errors`,
+`apps/web/src/app/errorReporting.ts`): the message, the stack, the kind of page (`/:user/post/:id`,
+never the names or IDs in it) and the build. Not who it happened to, and nothing goes to anyone else.
+Network trouble, cancelled requests and browser extensions are left out, each error is sent once per
+page load, at most 10, and the server limits reports per address and overall. People can turn it off
+under Account Settings → Privacy. An error while drawing the app shows a "Something went wrong" page
+with a Reload button instead of a blank one.
+
+**`sudo purrlor metrics`** shows how each service is doing since it last started: uptime, memory, how
+late its timers run (a busy or stuck service shows here first), requests by status, the busiest
+routes with how fast they answered, voice tokens given out, accounts online, and push messages sent,
+gone and failed.
+
+For history and graphs, Prometheus can collect the same numbers from `GET /metrics` on ports 3001
+and 3002; `sudo purrlor metrics prometheus` prints the scrape config. Those routes (and the ones
+`purrlor errors` and `purrlor metrics` use) need `PURRLOR_METRICS_TOKEN` from `.env` as a bearer
+token, since the push gateway is reachable from outside under `/api/push/`. The installer makes it, as
+does `purrlor update` on an install from before it; `... metrics new-token` replaces it.

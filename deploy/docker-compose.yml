@@ -134,6 +134,10 @@ services:
       # The admin control socket `purrlor` talks to (docs/admin-control.md). Root-only, never on
       # the network: it's a file in PURRLOR_CONTROL_DIR on the host.
       - CONTROL_SOCKET=/control/purrlor.sock
+      # Errors and metrics (docs/deployment.md, "Errors and metrics"): what `purrlor errors` reads,
+      # kept in the data volume, and the token `purrlor metrics` and a Prometheus scrape present.
+      - ERRORS_FILE=/data/errors.json
+      - METRICS_TOKEN=${PURRLOR_METRICS_TOKEN:-}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - NO_PROXY=${OUTBOUND_NO_PROXY:-}
@@ -170,6 +174,9 @@ services:
       - PORT=3002
       # Reminders it fires as Web Push (services/push-gateway/src/reminders.ts), kept across restarts.
       - REMINDERS_FILE=/data/reminders.json
+      # Errors and metrics, the same as the token server's above.
+      - ERRORS_FILE=/data/errors.json
+      - METRICS_TOKEN=${PURRLOR_METRICS_TOKEN:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}

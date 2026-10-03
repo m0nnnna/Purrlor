@@ -55,9 +55,13 @@ jobs:
           labels: |
             org.opencontainers.image.title=${{ matrix.name }}
             org.opencontainers.image.description=Purrlor — ${{ matrix.name }}
+      - id: version
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
+          # The commit, built into each image for `purrlor metrics` and error reports.
+          build-args: PURRLOR_VERSION=${{ steps.version.outputs.short }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true

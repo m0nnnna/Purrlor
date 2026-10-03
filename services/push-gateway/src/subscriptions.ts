@@ -49,6 +49,11 @@ export function deleteSubscription(pushkey: string): void {
   subscriptionsByPushKey.delete(pushkey);
 }
 
+/** How many browsers are registered, for the metrics. */
+export function subscriptionCount(): number {
+  return subscriptionsByPushKey.size;
+}
+
 /** Test seam. */
 export function clearSubscriptions(): void {
   subscriptionsByPushKey.clear();

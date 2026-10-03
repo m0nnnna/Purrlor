@@ -18,6 +18,10 @@ COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
 COPY apps/web ./
+# The commit this was built from (.github/workflows/images.yml): error reports say which build
+# they came from (src/app/errorReporting.ts).
+ARG PURRLOR_VERSION=
+ENV VITE_PURRLOR_VERSION=$PURRLOR_VERSION
 ENV NODE_OPTIONS=--max_old_space_size=4096
 RUN npm run build
 

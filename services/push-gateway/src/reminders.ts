@@ -90,6 +90,13 @@ export function remindersOf(owner: string): Reminder[] {
   return byOwner.get(owner) ?? [];
 }
 
+/** How many reminders are waiting to fire, for the metrics. */
+export function reminderCount(): number {
+  let n = 0;
+  for (const list of byOwner.values()) n += list.length;
+  return n;
+}
+
 /** Takes every reminder that's due out of the store, with whose it is. */
 export function takeDue(now = Date.now()): { owner: string; reminder: Reminder }[] {
   const due: { owner: string; reminder: Reminder }[] = [];

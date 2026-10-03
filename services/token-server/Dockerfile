@@ -20,5 +20,10 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /src/dist ./dist
 
+# The commit this was built from (.github/workflows/images.yml), for `purrlor metrics` and errors. Last,
+# since it changes every build.
+ARG PURRLOR_VERSION=
+ENV PURRLOR_VERSION=$PURRLOR_VERSION
+
 EXPOSE 3001
 CMD ["node", "dist/server.js"]

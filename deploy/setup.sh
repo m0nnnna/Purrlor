@@ -1108,6 +1108,13 @@ EXISTING_ENV_EOF
   echo "  ok   wrote .env (mode 600)"
 fi
 
+# What `purrlor stats`, `purrlor errors` and a Prometheus scrape present to the token server and push
+# gateway (docs/deployment.md, "Errors and metrics"). Made once, on a new install or a re-run.
+if [ -z "$(env_get PURRLOR_METRICS_TOKEN)" ]; then
+  env_set PURRLOR_METRICS_TOKEN "$(openssl rand -hex 32)"
+  echo "  ok   metrics token"
+fi
+
 # ---------------------------------------------------------------------------
 # Admin control directory
 # ---------------------------------------------------------------------------

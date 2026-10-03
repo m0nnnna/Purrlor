@@ -101,6 +101,10 @@ purrlor — manage this Purrlor install
   purrlor doctor             check everything from the outside, the way a browser would
   purrlor alerts [url|test|off]  get a message when something's down, a disk is filling up,
                              or a nightly backup failed (an ntfy, Discord or Slack webhook URL)
+  purrlor errors [web|server]  the errors the services and people's browsers hit, newest first
+  purrlor errors clear       forget them (once what caused them is fixed)
+  purrlor metrics            how the services are doing: requests, how fast, errors, memory
+  purrlor metrics prometheus how to have Prometheus collect those ('metrics new-token' replaces its token)
 
 Backups (docs/deployment.md, "Backups"):
   purrlor backup [dir]                 save settings and all data now (default dir: ./backups)
@@ -339,6 +343,8 @@ cmd_update() {
 
 cmd_update_apply() {
   need_root update
+  # An install from before errors and metrics: the services read the token when they're recreated below.
+  [ -n "$(env_get PURRLOR_METRICS_TOKEN)" ] || env_set PURRLOR_METRICS_TOKEN "$(openssl rand -hex 32)"
   say "Downloading the new images and restarting onto them"
   if compose pull; then
     compose up -d
@@ -761,7 +767,7 @@ alert_send() {
 # alert_problems -> one line for each thing wrong right now; nothing when all is well. A service
 # gets three tries 10s apart, so one restarting (an update) isn't reported as down.
 alert_problems() {
-  local a d use mount seen=" " newest ref app cert
+  local a d use mount seen=" " newest ref app cert svc counts
   a="$(env_get BIND_ADDR)"; a="${a:-127.0.0.1}"
   answers_soon() {
     local i
@@ -777,6 +783,18 @@ alert_problems() {
     answers_soon "http://$a:3002/health" || echo "the push gateway isn't answering (no notifications)"
     answers_soon "http://$a:7880/" || echo "LiveKit isn't answering (voice and video are down)"
     if has_matrix; then answers_soon "http://$a:8008/_matrix/client/versions" || echo "the homeserver isn't answering (chat is down)"; fi
+  fi
+
+  # Errors (purrlor errors) over the last 15 minutes: a crash, a service logging them steadily, and
+  # the app failing in browsers. Browsers' only past a level, since some come from extensions and
+  # tabs left open on an old version, not from anything wrong here.
+  if ! in_maintenance && [ -n "$(env_get PURRLOR_METRICS_TOKEN)" ]; then
+    for svc in "3001 token server" "3002 push gateway"; do
+      counts="$(ops_call "${svc%% *}" '/errors/recent?minutes=15' 2>/dev/null)" || continue
+      [ "$(count_of fatal "$counts")" -eq 0 ] || echo "the ${svc#* } crashed and restarted (sudo purrlor errors)"
+      [ "$(count_of server "$counts")" -lt 5 ] || echo "the ${svc#* } is logging errors (sudo purrlor errors)"
+      [ "${svc%% *}" != 3001 ] || [ "$(count_of web "$counts")" -lt 30 ] || echo "the web app is failing in people's browsers (sudo purrlor errors web)"
+    done
   fi
 
   # The disks Docker, the media folder and the backups are on — each disk once.
@@ -881,6 +899,116 @@ cmd_alerts() {
       echo "   Checked every few minutes: each service answering, disks under 90% full, the HTTPS"
       echo "   certificate, and nightly backups (sudo purrlor backup schedule daily). You hear when"
       echo "   something goes wrong and when it's fine again."
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Errors and metrics (docs/deployment.md, "Errors and metrics")
+# ---------------------------------------------------------------------------
+
+OPS_SERVICES="3001 token server
+3002 push gateway"
+
+# ops_call PORT PATH [curl args...] -> a service's operator route (ops.ts), with the metrics token.
+# The token goes to curl on its standard input, not its command line, where `ps` would show it.
+# Prints the answer; says what to do and fails when it isn't 200 or 204.
+ops_call() {
+  local port="$1" path="$2" a out code
+  shift 2
+  a="$(env_get BIND_ADDR)"; a="${a:-127.0.0.1}"
+  out="$(printf 'header = "Authorization: Bearer %s"\n' "$(env_get PURRLOR_METRICS_TOKEN)" |
+    curl -sS -m 10 --noproxy '*' -K - -w '\n%{http_code}' "$@" "http://$a:$port$path" 2>&1)" \
+    || { warn "It isn't answering: ${out%%$'\n'*}"; return 1; }
+  code="${out##*$'\n'}"; out="${out%$'\n'*}"
+  case "$code" in
+    200|204) printf '%s' "$out" ;;
+    404) warn "It's older than errors and metrics. Update it: sudo purrlor update"; return 1 ;;
+    401) warn "It doesn't have this install's metrics token. Restart it so it reads .env again: sudo purrlor restart"; return 1 ;;
+    *) warn "It answered $code: $out"; return 1 ;;
+  esac
+}
+
+# count_of NAME TEXT -> the number after NAME in /errors/recent's answer ("server 3"), 0 if none.
+count_of() { printf '%s\n' "$2" | awk -v k="$1" '$1 == k && $2 ~ /^[0-9]+$/ { n = $2 } END { print n + 0 }'; }
+
+# ensure_metrics_token: an install from before errors and metrics has no token; make one, and
+# recreate the two services that check it so they know it.
+ensure_metrics_token() {
+  [ -z "$(env_get PURRLOR_METRICS_TOKEN)" ] || return 0
+  env_set PURRLOR_METRICS_TOKEN "$(openssl rand -hex 32)"
+  say "Made a metrics token (PURRLOR_METRICS_TOKEN in .env); restarting the token server and push gateway to use it"
+  compose up -d token-server push-gateway
+  sleep 3
+}
+
+cmd_errors() {
+  local usage="Usage: purrlor errors [web | server | clear]" query="" port name failed=0
+  need_root errors
+  [ "$#" -le 1 ] || die "$usage"
+  ensure_metrics_token
+  case "${1:-}" in
+    "") ;;
+    server) query="?source=server" ;;
+    web)
+      # Only the token server takes browsers' reports.
+      ops_call 3001 '/errors?source=web' || exit 1
+      return 0
+      ;;
+    clear)
+      while read -r port name; do
+        if ops_call "$port" /errors/clear -X POST; then say "Cleared the $name's errors"; else failed=1; fi
+      done <<< "$OPS_SERVICES"
+      return "$failed"
+      ;;
+    *) die "$usage" ;;
+  esac
+  while read -r port name; do
+    [ "$port" = 3001 ] || echo
+    ops_call "$port" "/errors$query" || failed=1
+  done <<< "$OPS_SERVICES"
+  echo
+  echo "Browsers' errors come from the token server (sudo purrlor errors web). 'purrlor errors clear' forgets them all."
+  return "$failed"
+}
+
+cmd_metrics() {
+  local usage="Usage: purrlor metrics [prometheus | new-token]" port name failed=0 a
+  need_root metrics
+  [ "$#" -le 1 ] || die "$usage"
+  ensure_metrics_token
+  case "${1:-}" in
+    "")
+      while read -r port name; do
+        [ "$port" = 3001 ] || echo
+        ops_call "$port" /stats || failed=1
+      done <<< "$OPS_SERVICES"
+      echo
+      echo "Counted since each service last started. For history, have Prometheus collect them: sudo purrlor metrics prometheus"
+      return "$failed"
+      ;;
+    prometheus)
+      a="$(env_get BIND_ADDR)"; a="${a:-127.0.0.1}"
+      say "The token server and push gateway serve their numbers at /metrics, for the metrics token:"
+      cat <<PROM
+
+  scrape_configs:
+    - job_name: purrlor
+      authorization:
+        credentials_file: /etc/prometheus/purrlor-token   # holding the token below
+      static_configs:
+        - targets: ['$a:3001', '$a:3002']
+
+PROM
+      echo "   The token: $(env_get PURRLOR_METRICS_TOKEN)"
+      echo "   Prometheus has to reach $a; on another server, over a private network (BIND_ADDR in .env)."
+      echo "   A new token: sudo purrlor metrics new-token (the old one stops working)."
+      ;;
+    new-token)
+      env_set PURRLOR_METRICS_TOKEN "$(openssl rand -hex 32)"
+      compose up -d token-server push-gateway
+      say "Made a new metrics token; the old one no longer works. Anything scraping /metrics needs the new one: sudo purrlor metrics prometheus"
       ;;
     *) die "$usage" ;;
   esac
@@ -1938,6 +2066,8 @@ case "${1:-help}" in
   backup) shift; cmd_backup "$@" ;;
   restore) shift; cmd_restore "$@" ;;
   alerts) shift; cmd_alerts "$@" ;;
+  errors) shift; cmd_errors "$@" ;;
+  metrics) shift; cmd_metrics "$@" ;;
   new-invite-code) cmd_new_invite_code ;;
   open-signups) cmd_signups open ;;
   close-signups) cmd_signups close ;;
