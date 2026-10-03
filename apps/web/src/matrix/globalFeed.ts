@@ -13,7 +13,8 @@ import { editTargetOf, FEED_ROOM_MEMBER_KEY, isPostEvent, listSpaceFeeds, POST_E
 import { getExtendedProfile } from './extendedProfile';
 import { getOwnProfileRoomId, PROFILE_ROOM_TYPE, readProfileFollows, readProfileOwner } from './profileFeed';
 import { isListedInDirectory } from './spaceDirectory';
-import { ensurePeerRoomReadable, fetchPeers, peerOf, type Peer } from './peers';
+import { ensurePeerRoomReadable, fetchPeers, type Peer } from './peers';
+import { serverOfUserId } from './homeServer';
 
 /**
  * The global feed's reading side: every place a post can come from, gathered without joining
@@ -318,10 +319,11 @@ async function isListedOnPeer(mx: MatrixClient, spaceId: string): Promise<boolea
 export async function loadUserProfileSource(mx: MatrixClient, userId: string): Promise<FeedSource | undefined> {
   const { profileRoom } = await getExtendedProfile(mx, userId);
   if (!profileRoom) return undefined;
-  let source = await loadProfileSource(mx, profileRoom).catch(() => undefined);
-  if (!source && peerOf(userId, await fetchPeers()) && (await ensurePeerRoomReadable(mx, userId, profileRoom))) {
-    source = await loadProfileSource(mx, profileRoom);
-  }
+  // Someone on another server only through an approved peer, even if this homeserver could read
+  // them anyway (a removed peer's rooms stay readable from what it stored).
+  const remote = !!mx.getDomain?.() && serverOfUserId(userId) !== mx.getDomain();
+  if (remote && !(await ensurePeerRoomReadable(mx, userId, profileRoom))) return undefined;
+  const source = await loadProfileSource(mx, profileRoom);
   return source?.owner === userId ? source : undefined;
 }
 

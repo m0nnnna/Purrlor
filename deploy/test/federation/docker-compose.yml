@@ -1,0 +1,97 @@
+# Two Purrlor instances that federate, on one machine (docs/federation.md): homeservers hsa.test and
+# hsb.test, their token servers at appa.test and appb.test, and one Caddy in front of all four with
+# its own internal certificates, since Matrix federation is HTTPS only. Every database is a tmpfs,
+# so each `up` is two brand-new servers. run.sh brings it up and runs scenario.mjs against it.
+#
+# Test-only settings, never for a real deployment: the homeservers accept the internal CA's
+# certificates and talk to private addresses, and the token servers trust any certificate.
+name: purrlor-federation-test
+
+x-homeserver: &homeserver
+  image: ${E2E_HOMESERVER_IMAGE:-forgejo.ellis.link/continuwuation/continuwuity:latest}
+  tmpfs:
+    - /var/lib/continuwuity
+  depends_on:
+    - proxy
+
+x-homeserver-env: &homeserver-env
+  CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
+  CONTINUWUITY_ADDRESS: 0.0.0.0
+  CONTINUWUITY_PORT: 8008
+  CONTINUWUITY_ALLOW_REGISTRATION: 'true'
+  CONTINUWUITY_REGISTRATION_TOKEN: fed-registration-token
+  CONTINUWUITY_ALLOW_FEDERATION: 'true'
+  CONTINUWUITY_NEW_USER_DISPLAYNAME_SUFFIX: ''
+  # Peers read each other's directory over federation (docs/federation.md); off by default.
+  CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION: 'true'
+  # Docker's addresses are private, which a homeserver refuses to federate with by default.
+  CONTINUWUITY_IP_RANGE_DENYLIST: '[]'
+  # Caddy's internal CA, which nothing else trusts.
+  CONTINUWUITY_ALLOW_INVALID_TLS_CERTIFICATES_YES_I_KNOW_WHAT_THE_FUCK_I_AM_DOING_WITH_THIS_AND_I_KNOW_THIS_IS_INSECURE: 'true'
+  # Keys straight from each other, never from matrix.org.
+  CONTINUWUITY_TRUSTED_SERVERS: '[]'
+
+x-token-server: &token-server
+  build:
+    context: ../../..
+    dockerfile: services/token-server/Dockerfile
+  tmpfs:
+    - /data
+    - /control
+  depends_on:
+    - proxy
+
+x-token-server-env: &token-server-env
+  PORT: 3001
+  LIVEKIT_API_KEY: fed-key
+  LIVEKIT_API_SECRET: fed-secret-that-is-long-enough-for-livekit
+  ALLOWED_ORIGINS: '*'
+  MATRIX_BOT_USERNAME: fed-bot
+  MATRIX_BOT_PASSWORD: fed-bot-password
+  CONTROL_SOCKET: /control/purrlor.sock
+  PURRLOR_DATA_DIR: /data
+  # One profile room per peer from its directory, so a follow beyond it exercises the on-demand join.
+  PEER_MAX_PROFILES: '1'
+  # The peer's address is behind Caddy's internal CA.
+  NODE_TLS_REJECT_UNAUTHORIZED: '0'
+
+services:
+  proxy:
+    image: caddy:2-alpine
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases: [hsa.test, hsb.test, appa.test, appb.test]
+
+  matrix-a:
+    <<: *homeserver
+    ports: ['127.0.0.1:6201:8008']
+    environment:
+      <<: *homeserver-env
+      CONTINUWUITY_SERVER_NAME: hsa.test
+
+  matrix-b:
+    <<: *homeserver
+    ports: ['127.0.0.1:6211:8008']
+    environment:
+      <<: *homeserver-env
+      CONTINUWUITY_SERVER_NAME: hsb.test
+
+  token-a:
+    <<: *token-server
+    ports: ['127.0.0.1:6202:3001']
+    environment:
+      <<: *token-server-env
+      MATRIX_HOMESERVER_URL: http://matrix-a:8008
+      PUBLIC_WEB_URL: https://appa.test
+      PURRLOR_INSTANCE_NAME: Instance A
+
+  token-b:
+    <<: *token-server
+    ports: ['127.0.0.1:6212:3001']
+    environment:
+      <<: *token-server-env
+      MATRIX_HOMESERVER_URL: http://matrix-b:8008
+      PUBLIC_WEB_URL: https://appb.test
+      PURRLOR_INSTANCE_NAME: Instance B

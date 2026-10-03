@@ -637,8 +637,11 @@ this server's bot reads there, and `purrlor peers remove <server name>` stops it
 `.env`: `PURRLOR_INSTANCE_NAME` (what peers call this instance), `PEER_MAX_PROFILES`,
 `PEER_MAX_SPACES`, and `PEER_SPACE_FEEDS=off` to read peers' Global posts only.
 
-`node deploy/federation-check.mjs` checks, between two servers, the homeserver behaviour federation
-needs (see the top of the file for how to run it).
+The bundled homeserver serves its room directory over federation so peers can read it
+(`MATRIX_DIRECTORY_OVER_FEDERATION=false` in `.env` turns that off, and federation's Everyone and
+Discover with it). With a homeserver of your own, turn it on there (Synapse:
+`allow_public_rooms_over_federation: true`). `node deploy/federation-check.mjs` checks, between two
+real servers, the homeserver behaviour federation needs (see the top of the file for how to run it).
 
 ### Alerts
 

@@ -27,8 +27,9 @@ export function useProfilePage(roomId: string | undefined, ownerId?: string): { 
     }
     let cancelled = false;
     const load = async () => {
-      if (ownerId && isRemoteUser(ownerId)) await ensurePeerRoomReadable(mx, ownerId, roomId);
-      const page = await readProfilePage(mx, roomId);
+      // Someone on another server: only through an approved peer (peers.ts).
+      const allowed = !ownerId || !isRemoteUser(ownerId) || (await ensurePeerRoomReadable(mx, ownerId, roomId));
+      const page = allowed ? await readProfilePage(mx, roomId) : undefined;
       if (!cancelled) setState({ page, loading: false, roomId });
     };
     setState((current) => (current.roomId === roomId ? current : { loading: true, roomId }));

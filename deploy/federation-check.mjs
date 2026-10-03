@@ -103,7 +103,7 @@ async function main() {
     dir.ok
       ? `${entries.length} entries; B's profile room ${listed ? `listed with room_type ${listed.room_type ?? '(none)'}` : 'not listed'}; filter ${typesOk ? 'applied' : 'ignored (other types came back)'}`
       : `HTTP ${dir.status}: ${dir.text.slice(0, 200)}`,
-    "If entries lack room_type, the bot can't tell profile rooms from others: it would have to read each room's state."
+    "B's homeserver must serve its directory over federation (Continuwuity: allow_public_room_directory_over_federation, which deploy/docker-compose.yml turns on). If entries lack room_type, the bot can't tell profile rooms from others."
   );
 
   // 3. Reading as a non-member, once someone on A has joined.
@@ -112,9 +112,13 @@ async function main() {
   if (!join.ok) {
     record('3. Reading as a non-member after a local join', false, `A2 couldn't join B's profile room: HTTP ${join.status}: ${join.text.slice(0, 200)}`, 'The bot could not join peers either: federation between the two servers is the first thing to fix.');
   } else {
+    // A server that just joined has nothing from before: paging past the join is what fetches it
+    // from B (the token server's bot does the same after each join, peering.ts backfill).
     let after;
     for (let i = 0; i < 10; i += 1) {
-      after = await call(a, 'GET', `/_matrix/client/v3/rooms/${enc(profileRoom)}/messages?dir=b&limit=20`);
+      const first = await call(a, 'GET', `/_matrix/client/v3/rooms/${enc(profileRoom)}/messages?dir=b&limit=20`);
+      if (first.ok && first.json?.end) await call(a, 'GET', `/_matrix/client/v3/rooms/${enc(profileRoom)}/messages?dir=b&limit=100&from=${enc(first.json.end)}`);
+      after = await call(a, 'GET', `/_matrix/client/v3/rooms/${enc(profileRoom)}/messages?dir=b&limit=50`);
       if (after.ok && (after.json?.chunk ?? []).some((event) => event.type === POST)) break;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }

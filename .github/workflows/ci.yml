@@ -103,6 +103,20 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+  # Two Purrlor instances federating on one machine (deploy/test/federation): two homeservers, two
+  # token servers built from this checkout, and Caddy for federation's TLS. They're peered through
+  # their real control sockets, then scenario.mjs checks what each side's people and public web can
+  # read, and deploy/federation-check.mjs the homeserver behaviour it rests on (docs/federation.md).
+  federation:
+    name: federation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bash deploy/test/federation/run.sh
+
   # The `purrlor` admin, backup and alert commands against stand-ins for curl, docker and scp, and
   # a syntax check of the install scripts: no Docker or socket needed (docs/admin.md).
   shell:

@@ -246,6 +246,10 @@ services:
       CONTINUWUITY_ALLOW_REGISTRATION: ${MATRIX_ALLOW_REGISTRATION:-true}
       CONTINUWUITY_REGISTRATION_TOKEN: ${MATRIX_REGISTRATION_TOKEN}
       CONTINUWUITY_ALLOW_FEDERATION: 'true'
+      # Federated Purrlor instances read each other's public Spaces and profile feeds from this
+      # directory (docs/federation.md). It lists only what's public already; Continuwuity's own
+      # default is off.
+      CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION: ${MATRIX_DIRECTORY_OVER_FEDERATION:-true}
       # Continuwuity appends a suffix (a flag emoji, by default) to the display name of every new
       # account. Off here, so names come out exactly as people type them; set
       # MATRIX_NEW_USER_DISPLAYNAME_SUFFIX in .env to bring one back.

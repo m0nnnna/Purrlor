@@ -31,6 +31,9 @@ const MAX_FEEDS_PER_SPACE = 100;
 const HARD_MAX_ROOMS_PER_PEER = 1000;
 const JOIN_PAUSE_MS = 250;
 const FEED_ROOM_MEMBER_KEY = 'xyz.nekous.feed_room';
+/** History read back after a join: pages of events, enough for a person's posts. */
+const BACKFILL_PAGES = 5;
+const BACKFILL_PAGE_SIZE = 100;
 
 const positive = (value: string | undefined, fallback: number) => (Number(value) > 0 ? Math.floor(Number(value)) : fallback);
 export const PEER_CAPS = {
@@ -101,6 +104,27 @@ async function join(mx: MatrixClient, roomId: string, server: string): Promise<v
   return attempt;
 }
 
+/**
+ * Reads a just-joined room's history back, so this homeserver fetches it from the peer now. A
+ * homeserver that joins a room has only what happens from then on: a read stops where it joined,
+ * and only paging past that asks the room's server for what came before (checked with
+ * Continuwuity: after this, one page from the newest event has the old posts too). Without it,
+ * a peer's posts from before the bot joined would show only to someone scrolling far enough.
+ */
+async function backfill(mx: MatrixClient, roomId: string): Promise<void> {
+  let from: string | undefined;
+  for (let page = 0; page < BACKFILL_PAGES; page += 1) {
+    const query = new URLSearchParams({ dir: 'b', limit: String(BACKFILL_PAGE_SIZE), ...(from && { from }) });
+    const res = await fetch(`${mx.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${query}`, {
+      headers: { Authorization: `Bearer ${mx.getAccessToken()}` },
+    });
+    if (!res.ok) return;
+    const body = (await res.json()) as { end?: string; chunk?: unknown[] };
+    if (!body.end || body.end === from) return;
+    from = body.end;
+  }
+}
+
 async function leave(mx: MatrixClient, roomId: string, why: string): Promise<void> {
   console.warn(`Peering: left ${roomId}: ${why}`);
   await mx.leave(roomId).catch(() => undefined);
@@ -122,6 +146,7 @@ async function joinProfileRoom(mx: MatrixClient, roomId: string, server: string,
     if (!already) await leave(mx, roomId, `not a profile room of someone on ${server}`);
     return undefined;
   }
+  if (!already) await backfill(mx, roomId).catch(() => undefined);
   return owner;
 }
 
@@ -187,6 +212,8 @@ export async function syncPeer(mx: MatrixClient, peer: Peer): Promise<PeerStatus
               if (!isFeedOf(await state(mx, feed.roomId), feed.userId, spaceId)) {
                 await leave(mx, feed.roomId, `not ${feed.userId}'s feed in ${spaceId}`);
                 total -= 1;
+              } else {
+                await backfill(mx, feed.roomId).catch(() => undefined);
               }
               await pause(JOIN_PAUSE_MS);
             } catch (err) {

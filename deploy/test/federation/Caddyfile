@@ -1,0 +1,32 @@
+# The two test instances' HTTPS (docker-compose.yml): federation on 8448 for each homeserver, the
+# server delegation answer on 443, and each token server's app address. Certificates from Caddy's
+# own internal CA.
+{
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+}
+
+hsa.test:8448 {
+	reverse_proxy matrix-a:8008
+}
+
+hsb.test:8448 {
+	reverse_proxy matrix-b:8008
+}
+
+hsa.test:443 {
+	respond /.well-known/matrix/server `{"m.server":"hsa.test:8448"}`
+}
+
+hsb.test:443 {
+	respond /.well-known/matrix/server `{"m.server":"hsb.test:8448"}`
+}
+
+appa.test:443 {
+	reverse_proxy token-a:3001
+}
+
+appb.test:443 {
+	reverse_proxy token-b:3001
+}

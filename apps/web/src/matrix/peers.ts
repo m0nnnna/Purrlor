@@ -67,10 +67,11 @@ async function readable(mx: MatrixClient, roomId: string): Promise<boolean> {
 const readableRooms = new Map<string, { at: number; promise: Promise<boolean> }>();
 
 /**
- * Makes a peer's person's profile room readable here: if this homeserver isn't in it yet, asks
- * the token server to have its bot join (POST /api/public/peers/join), which it does only for an
- * approved peer and only if the room is that person's. True once it can be read. Anyone on this
- * server, or on a server that isn't a peer, is answered by whether it's readable already.
+ * Whether a person's profile room may be shown here, made readable first if need be. This
+ * server's people: whether it can be read. Anyone else: only on an approved peer (a removed peer's
+ * rooms stay readable on this homeserver, from what it stored, but their people aren't shown);
+ * if this homeserver isn't in the room yet, the token server's bot is asked to join it
+ * (POST /api/public/peers/join), which it does only if the room is that person's.
  * Remembered per room; a "no" is asked again after a minute.
  */
 export function ensurePeerRoomReadable(mx: MatrixClient, ownerId: string, roomId: string): Promise<boolean> {
@@ -84,8 +85,10 @@ export function ensurePeerRoomReadable(mx: MatrixClient, ownerId: string, roomId
     });
   }
   const promise = (async () => {
-    if (await readable(mx, roomId)) return true;
+    const local = !mx.getDomain?.() || serverOfUserId(ownerId) === mx.getDomain();
+    if (local) return readable(mx, roomId);
     if (isDemoMode() || !peerOf(ownerId, await fetchPeers())) return false;
+    if (await readable(mx, roomId)) return true;
     try {
       const response = await fetch(JOIN_API, {
         method: 'POST',

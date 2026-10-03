@@ -79,6 +79,7 @@ describe('handles and addresses for a federated instance’s people', () => {
 describe('ensurePeerRoomReadable', () => {
   const readableAfter = (joined: { value: boolean }) =>
     ({
+      getDomain: () => 'purr.example',
       getRoom: () => null,
       getStateEvent: vi.fn(async () => {
         if (!joined.value) throw new Error('M_FORBIDDEN');
@@ -103,10 +104,15 @@ describe('ensurePeerRoomReadable', () => {
     expect(join?.body).toMatchObject({ user_id: '@mochi:cats.example', room_id: '!room:cats.example', openid_token: { access_token: 'tok' } });
   });
 
-  it('asks nothing for a room this homeserver can read already', async () => {
+  it('asks for no join for a peer’s room this homeserver can read already', async () => {
     const calls = respond({ '/api/public/peers': { body: PEERS } });
     expect(await ensurePeerRoomReadable(readableAfter({ value: true }), '@mochi:cats.example', '!room:cats.example')).toBe(true);
-    expect(calls).toHaveLength(0);
+    expect(calls.some((call) => call.url === '/api/public/peers/join')).toBe(false);
+  });
+
+  it('doesn’t show a server that isn’t a peer, even when this homeserver can read the room', async () => {
+    respond({ '/api/public/peers': { body: { peers: [] } } });
+    expect(await ensurePeerRoomReadable(readableAfter({ value: true }), '@mochi:cats.example', '!room:cats.example')).toBe(false);
   });
 
   it('never asks for someone on a server that isn’t a peer', async () => {
@@ -137,6 +143,7 @@ describe('loadUserProfileSource for a peer’s person', () => {
       })
     );
     const mx = {
+      getDomain: () => 'purr.example',
       getExtendedProfile: async () => ({ 'xyz.nekous.profile_room': '!profile:cats.example' }),
       getRoom: () => null,
       getStateEvent: async () => {

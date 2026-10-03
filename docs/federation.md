@@ -149,9 +149,36 @@ Not done yet: finding a peer's person by name in search (a full `@name:server` I
 user ID is typed), and a peer's person whose extended profile doesn't come through federation and
 who isn't in the first pages of their instance's directory.
 
-## Verify first
+## What the homeservers must do
 
-The plan's "Verify first" checklist is what this design rests on; its results go in the plan. If
-remote extended profiles don't come through federation, the client finds profile rooms through the
-peer's directory instead. If the remote directory ignores the room type filter, `pickPeerRooms`
-already keeps only the right types.
+Checked with Continuwuity, two instances federating (`deploy/test/federation`, below):
+
+- **Serve the room directory over federation.** Continuwuity refuses by default ("Room directory is
+  not public"). `deploy/docker-compose.yml` turns it on for the bundled homeserver
+  (`CONTINUWUITY_ALLOW_PUBLIC_ROOM_DIRECTORY_OVER_FEDERATION`, `MATRIX_DIRECTORY_OVER_FEDERATION=false`
+  in `.env` turns it back off). The directory lists only what's public already. A deployment with its
+  own homeserver needs the same: Synapse's `allow_public_rooms_over_federation: true`.
+- **Extended profiles over federation**, room types in remote directories, authenticated media over
+  federation, and reading a world-readable room as a non-member once someone on the server has
+  joined: all work as they are.
+- **History from before a join is fetched lazily.** A homeserver that joins a room has nothing from
+  before; reading stops at the join until something pages past it, which fetches the older events
+  from the room's server. The bot pages back right after each join (`peering.ts`, `backfill`), so a
+  peer's earlier posts are there for everyone.
+- **Leaving keeps what was stored.** After `purrlor peers remove`, nothing new arrives from that
+  server, but what this homeserver already stored stays readable to its people. The app shows
+  someone on another server only through an approved peer (`ensurePeerRoomReadable`), so a removed
+  peer's people disappear from it anyway.
+
+## Testing two instances
+
+`bash deploy/test/federation/run.sh` (Docker and Node 18+; CI's `federation` job runs it) starts two
+homeservers (`hsa.test`, `hsb.test`), two token servers built from this checkout (`appa.test`,
+`appb.test`) and Caddy for federation's TLS, all on one machine. `scenario.mjs` creates people and
+rooms on B the way the app does, peers the two through their real control sockets, and checks what A's
+people and A's public web can read, the on-demand join, both sides' hides and removing the peer. Then
+`deploy/federation-check.mjs` checks the homeserver behaviour above. `KEEP=1` leaves the instances
+running (homeservers on 6201 and 6211, token servers on 6202 and 6212).
+
+The test turns on settings no real deployment should: homeservers that accept any certificate and
+talk to private addresses, and token servers that trust any certificate.
