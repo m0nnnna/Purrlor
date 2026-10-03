@@ -103,8 +103,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # The `purrlor` admin commands against a stand-in for curl, and a syntax check of the install
-  # scripts: no Docker or socket needed (docs/admin.md).
+  # The `purrlor` admin, backup and alert commands against stand-ins for curl, docker and scp, and
+  # a syntax check of the install scripts: no Docker or socket needed (docs/admin.md).
   shell:
     name: shell
     runs-on: ubuntu-latest
@@ -113,3 +113,4 @@ jobs:
       - run: bash -n deploy/purrlor && bash -n deploy/setup.sh
       - run: bash deploy/test/purrlor-control.test.sh
       - run: bash deploy/test/purrlor-email.test.sh
+      - run: bash deploy/test/purrlor-backup.test.sh

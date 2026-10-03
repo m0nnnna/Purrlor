@@ -375,7 +375,9 @@ The installer adds a `purrlor` command:
 | `purrlor doctor` | Checks everything from the outside and says what's wrong (DNS, firewall, certificate) |
 | `purrlor update` | Pulls the latest Purrlor and restarts onto it |
 | `purrlor logs [service]` | Follows the logs |
-| `purrlor backup` | Saves your settings and the homeserver's data to a file |
+| `purrlor backup` | Saves your settings and all data to a file (`backup schedule daily` for nightly ones, `backup copy-to` to copy them to another server) |
+| `purrlor restore <file>` | Puts a backup back, saving how things are first |
+| `purrlor alerts <url>` | Messages you (ntfy, Discord, Slack) when something's down, a disk is filling up, or a backup failed |
 | `purrlor new-invite-code` | Replaces the sign-up code |
 | `purrlor open-signups` / `close-signups` | Allows or stops new sign-ups |
 | `purrlor emotes setup` | Creates the global emote library, owned by the admin (once; the installer already does it) |

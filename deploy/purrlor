@@ -99,7 +99,16 @@ purrlor — manage this Purrlor install
   purrlor restart [service]  restart everything, or one service
   purrlor update             get the latest Purrlor and restart onto it
   purrlor doctor             check everything from the outside, the way a browser would
-  purrlor backup [dir]       save .env and the homeserver's data (default dir: ./backups)
+  purrlor alerts [url|test|off]  get a message when something's down, a disk is filling up,
+                             or a nightly backup failed (an ntfy, Discord or Slack webhook URL)
+
+Backups (docs/deployment.md, "Backups"):
+  purrlor backup [dir]                 save settings and all data now (default dir: ./backups)
+  purrlor backup list                  the backups saved here
+  purrlor backup schedule daily [N]    a backup every night, keeping the newest N (default 7)
+  purrlor backup schedule off          stop them
+  purrlor backup copy-to user@host:/path  copy each nightly backup to another server too ('off' to stop)
+  purrlor restore <file>               put a backup back (saves how things are now first)
 
 Sign-ups (bundled homeserver only):
   purrlor new-invite-code    replace the sign-up code (the old one stops working)
@@ -337,31 +346,538 @@ cmd_update_apply() {
   cmd_status 60
 }
 
-cmd_backup() {
-  need_root backup
-  local dir="${1:-$REPO_ROOT/backups}" stamp file
-  stamp="$(date +%Y%m%d-%H%M%S)"
+# ---------------------------------------------------------------------------
+# Backups and restoring (docs/deployment.md, "Backups")
+# ---------------------------------------------------------------------------
+
+BACKUP_DIR="$REPO_ROOT/backups"
+# Where purrlor keeps what it notices between runs (the last alert sent, a failed nightly backup).
+# The overrides are for deploy/test.
+STATE_DIR="${PURRLOR_STATE_DIR:-/var/lib/purrlor}"
+CRON_D="${PURRLOR_CRON_D:-/etc/cron.d}"
+PERIODIC="${PURRLOR_PERIODIC:-/etc/periodic}"
+# What's in a backup, so a restore knows what it's looking at. 1 (no MANIFEST): .env, the
+# homeserver's data and its mail settings. 2: also the token server's moderation records (hidden
+# pages, takedowns, deletions, the audit log), the push gateway's reminders and the install summary.
+BACKUP_FORMAT=2
+
+# Settings that describe this machine rather than the install. A restore keeps this server's own,
+# so a backup from another server can't point this one at that one's address, network, proxy,
+# media disk, alerts or backup copies.
+MACHINE_KEYS=(HOST_IP BIND_ADDR MATRIX_MEDIA_DIR PURRLOR_CONTROL_DIR CONTAINER_PROXY OUTBOUND_PROXY
+  OUTBOUND_NO_PROXY PURRLOR_EDGE REAL_IP_FROM PURRLOR_ALERT_URL PURRLOR_BACKUP_COPY_TO PURRLOR_BACKUP_KEEP)
+
+# While a backup or restore has services stopped on purpose, alerts don't report them as down.
+# A marker older than two hours is ignored, in case whatever wrote it was killed before removing it.
+maintenance_on() { mkdir -p "$STATE_DIR" && touch "$STATE_DIR/maintenance"; }
+maintenance_off() { rm -f "$STATE_DIR/maintenance"; }
+in_maintenance() { [ -f "$STATE_DIR/maintenance" ] && [ -z "$(find "$STATE_DIR/maintenance" -mmin +120 2>/dev/null)" ]; }
+
+# service_cid SERVICE -> its container's id, running or not; empty when there isn't one.
+service_cid() { compose ps -a -q "$1" 2>/dev/null || true; }
+
+# A service's /data out to /backup, run in a throwaway container sharing its volume. Not the token
+# server's media-cache: copies of files the homeserver has, and emptied on every start anyway.
+read -r -d '' DATA_OUT <<'SH' || true
+set -e
+cd /data
+for f in * .[!.]*; do
+  [ -e "$f" ] || continue
+  [ "$f" != media-cache ] || continue
+  cp -a "$f" /backup/
+done
+SH
+
+# And back in from /restore: what's there now goes first, so nothing newer than the backup stays.
+read -r -d '' DATA_IN <<'SH' || true
+set -e
+find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+cp -a /restore/. /data/
+SH
+
+# The homeserver's data back in from /restore/matrix-db.tar.gz. The backup holds media as a real
+# folder wherever it lived; it goes where this install keeps it now: MOVED=1 is the folder
+# 'purrlor media move' set up (mounted at /purrlor-media, linked from the database), 0 is inside
+# the database. It's unpacked beside where it ends up, so putting it in place is a rename rather
+# than a second copy of every upload, and nothing already there is touched until it has unpacked.
+read -r -d '' MATRIX_IN <<'SH' || true
+set -e
+D=/var/lib/continuwuity
+if [ "$MOVED" = 1 ]; then S=/purrlor-media/.purrlor-restore; else S=$D/.purrlor-restore; fi
+trap 'rm -rf "$S"' EXIT
+rm -rf "$S"
+mkdir "$S"
+tar -xzf /restore/matrix-db.tar.gz -C "$S"
+find "$D" -mindepth 1 -maxdepth 1 ! -name .purrlor-restore -exec rm -rf {} +
+if [ "$MOVED" = 1 ]; then
+  find /purrlor-media -mindepth 1 -maxdepth 1 ! -name .purrlor-restore -exec rm -rf {} +
+  if [ -d "$S/media" ]; then
+    chown "$(stat -c %u:%g "$S/media")" /purrlor-media
+    find "$S/media" -mindepth 1 -maxdepth 1 -exec mv {} /purrlor-media/ \;
+    rmdir "$S/media"
+  fi
+  cp -a "$S/." "$D/"
+  ln -s /purrlor-media "$D/media"
+else
+  find "$S" -mindepth 1 -maxdepth 1 -exec mv {} "$D/" \;
+fi
+SH
+
+# backup_make DIR [LABEL] -> BACKUP_FILE: everything a rebuilt server needs that git doesn't have.
+# The homeserver, token server and push gateway stop together for the copy (seconds, or a minute
+# or two with a lot of media), so what they hold agrees; they start again even when it fails.
+backup_make() {
+  local dir="$1" label="${2:-}" work cid svc failed=""
   mkdir -p "$dir"
-  file="$dir/purrlor-$stamp.tar.gz"
-  local work; work="$(mktemp -d)"
+  BACKUP_FILE="$dir/purrlor-${label:+$label-}$(date +%Y%m%d-%H%M%S).tar.gz"
+  # Beside the backup rather than in /tmp, which may be small or in memory: the homeserver's
+  # part holds every upload.
+  work="$(mktemp -d "$dir/.purrlor-backup.XXXXXX")"
   cp .env "$work/env"
+  if [ -f "$EMAIL_FILE" ]; then cp "$EMAIL_FILE" "$work/matrix-email.env"; fi
+  if [ -f .install-summary ]; then cp .install-summary "$work/install-summary"; fi
+  local services=(token-server push-gateway)
+  if has_matrix; then services=(matrix "${services[@]}"); fi
+  say "Stopping ${services[*]} briefly for a consistent copy"
+  maintenance_on
+  compose stop "${services[@]}"
   if has_matrix; then
-    # The homeserver's database is only consistent while it isn't writing — a minute of downtime.
-    say "Stopping the homeserver briefly for a consistent copy"
-    compose stop matrix
-    local cid; cid="$(compose ps -a -q matrix)"
+    cid="$(service_cid matrix)"
     # -h: when media lives elsewhere ('purrlor media move'), its folder here is a symlink to it —
     # save the files, not the link.
     docker run --rm --volumes-from "$cid" -v "$work:/backup" alpine \
-      tar -czhf /backup/matrix-db.tar.gz -C /var/lib/continuwuity .
-    compose start matrix
+      tar -czhf /backup/matrix-db.tar.gz -C /var/lib/continuwuity . || failed="the homeserver's data"
   fi
-  if [ -f "$EMAIL_FILE" ]; then cp "$EMAIL_FILE" "$work/matrix-email.env"; fi
-  tar -czf "$file" -C "$work" .
+  for svc in token-server push-gateway; do
+    cid="$(service_cid "$svc")"
+    if [ -z "$cid" ]; then warn "There's no $svc container, so its data isn't in this backup."; continue; fi
+    mkdir -p "$work/$svc"
+    docker run --rm --volumes-from "$cid" -v "$work/$svc:/backup" alpine sh -c "$DATA_OUT" \
+      || failed="${failed:+$failed and }the $svc's data"
+  done
+  compose start "${services[@]}"
+  maintenance_off
+  if [ -n "$failed" ]; then
+    rm -rf "$work"
+    die "Couldn't copy $failed (the error is above), so no backup was saved."
+  fi
+  {
+    echo "purrlor-backup $BACKUP_FORMAT"
+    echo "created $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "commit $(git -c safe.directory='*' rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  } > "$work/MANIFEST"
+  # Written under another name and renamed once whole, so a half-written file (a full disk) is
+  # never mistaken for a backup — by a restore, or by the nightly clean-up counting what to keep.
+  if ! (umask 077 && tar -czf "$BACKUP_FILE.partial" -C "$work" .); then
+    rm -rf "$work" "$BACKUP_FILE.partial"
+    die "Couldn't write $BACKUP_FILE (is the disk full? 'df -h $dir')."
+  fi
+  mv "$BACKUP_FILE.partial" "$BACKUP_FILE"
   rm -rf "$work"
-  chmod 600 "$file"
-  say "Saved $file"
-  echo "   It contains your secrets (.env) — keep it somewhere safe, and off this server too."
+}
+
+cmd_backup() {
+  case "${1:-}" in
+    schedule) shift; cmd_backup_schedule "$@" ;;
+    copy-to) shift; cmd_backup_copy_to "$@" ;;
+    list) need_root backup; backup_list ;;
+    run-scheduled) need_root backup; backup_scheduled ;;
+    *)
+      need_root backup
+      [ "$#" -le 1 ] || die "Usage: purrlor backup [dir]"
+      backup_make "${1:-$BACKUP_DIR}"
+      say "Saved $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+      echo "   It contains your secrets (.env) — keep it somewhere safe, and off this server too."
+      echo "   To go back to it: sudo purrlor restore $BACKUP_FILE"
+      ;;
+  esac
+}
+
+backup_list() {
+  local found
+  found="$(ls -1t "$BACKUP_DIR"/purrlor-*.tar.gz 2>/dev/null || true)"
+  if [ -z "$found" ]; then say "No backups in $BACKUP_DIR yet. Make one: sudo purrlor backup"; return; fi
+  say "Backups in $BACKUP_DIR, newest first ('auto' ones are nightly, 'before-restore' ones were made by a restore):"
+  # shellcheck disable=SC2086 # one path per line, none with spaces (they're named here)
+  ls -1sht $found | sed 's/^/   /'
+}
+
+# cron_put NAME WHEN COMMAND -> runs COMMAND as root, WHEN being daily (03:30) or often (every 5
+# minutes). Debian and Ubuntu's cron reads /etc/cron.d; Alpine's runs /etc/periodic/<period>
+# instead, where daily is 02:00 and the shortest period is 15 minutes.
+cron_put() {
+  local name="$1" when="$2" cmd="$3 >> /var/log/purrlor.log 2>&1"
+  if [ -d "$CRON_D" ]; then
+    local spec='30 3 * * *'; [ "$when" = often ] && spec='*/5 * * * *'
+    printf '# Written by purrlor — change it with purrlor (purrlor help), not here.\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n%s root %s\n' \
+      "$spec" "$cmd" > "$CRON_D/$name"
+    chmod 644 "$CRON_D/$name"
+  elif [ -d "$PERIODIC" ]; then
+    local period=daily; [ "$when" = often ] && period=15min
+    printf '#!/bin/sh\n# Written by purrlor — change it with purrlor (purrlor help), not here.\n%s\n' "$cmd" > "$PERIODIC/$period/$name"
+    chmod 700 "$PERIODIC/$period/$name"
+  else
+    die "There's no cron on this server to run it. Install it first (Debian/Ubuntu: apt-get install cron; Alpine: rc-update add crond && rc-service crond start)."
+  fi
+  # /etc/cron.d can be there without cron itself (other packages put files in it).
+  if ! command -v cron >/dev/null 2>&1 && ! command -v crond >/dev/null 2>&1; then
+    warn "cron doesn't seem to be installed, so this won't run until it is: apt-get install cron (Alpine: rc-update add crond && rc-service crond start)"
+  fi
+}
+cron_file() { local f; for f in "$CRON_D/$1" "$PERIODIC"/*/"$1"; do [ ! -f "$f" ] || { echo "$f"; return; }; done; }
+cron_has() { [ -n "$(cron_file "$1")" ]; }
+cron_drop() { rm -f "$CRON_D/$1" "$PERIODIC"/*/"$1"; }
+
+backup_keep() { local k; k="$(env_get PURRLOR_BACKUP_KEEP)"; echo "${k:-7}"; }
+
+cmd_backup_schedule() {
+  local usage="Usage: purrlor backup schedule [daily [how many to keep, default 7] | off]"
+  need_root backup
+  case "${1:-}" in
+    "")
+      [ "$#" -eq 0 ] || die "$usage"
+      if cron_has purrlor-backup; then
+        say "Nightly backups are on ($(cron_file purrlor-backup)), keeping the newest $(backup_keep) in $BACKUP_DIR."
+      else
+        say "Nightly backups are off. Turn them on: sudo purrlor backup schedule daily"
+      fi
+      local to; to="$(env_get PURRLOR_BACKUP_COPY_TO)"
+      if [ -n "$to" ]; then echo "   Each one is also copied to $to."
+      else echo "   They stay on this server only. Copy them elsewhere too: sudo purrlor backup copy-to user@host:/path"; fi
+      ;;
+    daily)
+      [ "$#" -le 2 ] || die "$usage"
+      local keep="${2:-7}"
+      printf '%s' "$keep" | grep -Eq '^[0-9]{1,3}$' && [ "$keep" -ge 1 ] || die "$usage"
+      env_set PURRLOR_BACKUP_KEEP "$keep"
+      cron_put purrlor-backup daily "$REPO_ROOT/deploy/purrlor backup run-scheduled"
+      say "Nightly backups are on: one every night into $BACKUP_DIR, keeping the newest $keep."
+      echo "   The homeserver stops for the copy (seconds, or a minute or two with a lot of media)."
+      echo "   'purrlor alerts' can tell you when one fails. Its log: /var/log/purrlor.log"
+      [ -n "$(env_get PURRLOR_BACKUP_COPY_TO)" ] \
+        || echo "   They stay on this server only. Copy them elsewhere too: sudo purrlor backup copy-to user@host:/path"
+      ;;
+    off)
+      [ "$#" -eq 1 ] || die "$usage"
+      cron_drop purrlor-backup
+      rm -f "$STATE_DIR/backup-failed" "$STATE_DIR/backup-copy-failed"
+      say "Nightly backups are off. The ones already saved stay in $BACKUP_DIR."
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
+# backup_scheduled: the nightly run. A failure ends it (die), so the marker that 'purrlor alerts'
+# reports is written first and only removed once the backup is saved.
+backup_scheduled() {
+  local keep old
+  keep="$(backup_keep)"
+  mkdir -p "$STATE_DIR"
+  echo "--- $(date '+%F %T') nightly backup"
+  echo "last night's backup failed ($(date '+%F %R')): see /var/log/purrlor.log" > "$STATE_DIR/backup-failed"
+  backup_make "$BACKUP_DIR" auto
+  rm -f "$STATE_DIR/backup-failed"
+  say "Saved $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
+  # Only the nightly ones are cleared out; a backup made by hand is yours to delete.
+  for old in $(ls -1t "$BACKUP_DIR"/purrlor-auto-*.tar.gz 2>/dev/null | tail -n +$((keep + 1)) || true); do
+    rm -f "$old"
+    echo "   removed $old"
+  done
+  backup_copy_off "$BACKUP_FILE"
+}
+
+# remote_dir DEST -> DEST ending in / (or :, for the home folder), for scp to put a file inside it.
+remote_dir() { case "$1" in *: | */) printf '%s' "$1" ;; *) printf '%s/' "$1" ;; esac; }
+
+backup_copy_off() {
+  local to; to="$(env_get PURRLOR_BACKUP_COPY_TO)"
+  [ -n "$to" ] || return 0
+  say "Copying it to $to"
+  if scp -q -B -o ConnectTimeout=30 "$1" "$(remote_dir "$to")"; then
+    rm -f "$STATE_DIR/backup-copy-failed"
+  else
+    echo "couldn't copy last night's backup to $to ($(date '+%F %R')): see /var/log/purrlor.log" > "$STATE_DIR/backup-copy-failed"
+    warn "Couldn't copy it to $to (the error is above). It's still saved here."
+  fi
+}
+
+cmd_backup_copy_to() {
+  local usage="Usage: purrlor backup copy-to user@host:/path   (or 'off')"
+  need_root backup
+  [ "$#" -eq 1 ] || die "$usage"
+  if [ "$1" = off ]; then
+    env_set PURRLOR_BACKUP_COPY_TO ""
+    rm -f "$STATE_DIR/backup-copy-failed"
+    say "Nightly backups stay on this server only now."
+    return
+  fi
+  printf '%s' "$1" | grep -Eq '^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._/~-]*$' || die "$usage"
+  command -v scp >/dev/null 2>&1 || die "scp isn't installed: apt-get install openssh-client (Alpine: apk add openssh-client)."
+  local probe; probe="$(mktemp)"
+  echo "Written by purrlor on $(hostname) to check it can copy backups here. Safe to delete." > "$probe"
+  say "Checking that root on this server can copy files to $1"
+  # accept-new: the first connection trusts the other server's key and remembers it, so every
+  # later copy is checked against it. BatchMode: a password prompt can't wait for anyone at 03:30.
+  if ! scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 \
+      "$probe" "$(remote_dir "$1")purrlor-copy-test.txt"; then
+    rm -f "$probe"
+    warn "Couldn't copy to $1 (the error is above). Copies run as root with a key, no password:"
+    warn "  sudo ssh-keygen -t ed25519          (if root has no key yet; leave the passphrase empty)"
+    warn "  sudo ssh-copy-id ${1%%:*}           (or add /root/.ssh/id_ed25519.pub to its authorized_keys)"
+    die "Then run this again. Nothing was changed."
+  fi
+  rm -f "$probe"
+  env_set PURRLOR_BACKUP_COPY_TO "$1"
+  say "Each nightly backup will be copied to $1 too (a test file, purrlor-copy-test.txt, is there now)."
+  echo "   Old copies there aren't deleted — clear them out on that side, or let its snapshots do it."
+  cron_has purrlor-backup || echo "   Nightly backups aren't on yet: sudo purrlor backup schedule daily"
+}
+
+# restore_env FROM -> .env from the backup's settings, except this machine's own (MACHINE_KEYS).
+restore_env() {
+  local pattern tmp
+  pattern="^($(IFS='|'; echo "${MACHINE_KEYS[*]}"))="
+  tmp="$(mktemp)"
+  { grep -vE "$pattern" "$1" || true; grep -E "$pattern" .env || true; } > "$tmp"
+  cat "$tmp" > .env
+  rm -f "$tmp"
+  chmod 600 .env
+}
+
+RESTORE_WORK=""
+restore_failed() {
+  warn "Couldn't put back $2 (the error is above). Purrlor is stopped."
+  die "Go back to how things were with: sudo purrlor restore $1"
+}
+
+cmd_restore() {
+  local usage="Usage: purrlor restore <backup file> [--yes]   ('purrlor backup list' shows them)"
+  need_root restore
+  parse_opts "$@"
+  [ "${#POS[@]}" -eq 1 ] || die "$usage"
+  local file="${POS[0]}" format=1 created="" bundled=no media undo svc
+  [ -f "$file" ] || die "There's no file at $file. $usage"
+  file="$(cd "$(dirname "$file")" && pwd)/$(basename "$file")"
+
+  RESTORE_WORK="$(mktemp -d "$(dirname "$file")/.purrlor-restore.XXXXXX")"
+  trap 'rm -rf "$RESTORE_WORK"; maintenance_off' EXIT
+  local work="$RESTORE_WORK"
+  say "Reading $file"
+  tar -xzf "$file" -C "$work" || die "Couldn't unpack $file: it's damaged, or not a purrlor backup."
+  [ -f "$work/env" ] || die "$file isn't a purrlor backup: there are no settings in it."
+  if [ -f "$work/MANIFEST" ]; then
+    format="$(awk '$1 == "purrlor-backup" { print $2 }' "$work/MANIFEST")"
+    created="$(awk '$1 == "created" { print $2 }' "$work/MANIFEST")"
+  fi
+  [ "${format:-x}" -le "$BACKUP_FORMAT" ] 2>/dev/null \
+    || die "This backup was made by a newer Purrlor. Update this one first: sudo purrlor update"
+  [ "$(grep '^COMPOSE_PROFILES=' "$work/env" | tail -n1 | cut -d= -f2-)" != matrix ] || bundled=yes
+  if [ "$bundled" = yes ]; then
+    [ -f "$work/matrix-db.tar.gz" ] || die "$file has the bundled homeserver's settings but none of its data, so it can't be restored."
+    gzip -t "$work/matrix-db.tar.gz" || die "The homeserver's data in $file is damaged, so nothing was changed."
+  fi
+
+  echo "This backup (made ${created:-$(date -r "$file" '+%F %R')}) holds:"
+  echo "   settings (.env), except this server's own address, network, storage and alert settings"
+  [ "$bundled" = no ] || echo "   the homeserver: accounts, rooms, messages and uploads"
+  if [ -d "$work/token-server" ]; then echo "   moderation: hidden and switched-off pages, takedowns, the audit log"
+  else echo "   (no moderation records: it's older than backups that have them, so this server's are kept)"; fi
+  if [ -d "$work/push-gateway" ]; then echo "   scheduled reminders"
+  else echo "   (no scheduled reminders: it's older than backups that have them, so this server's are kept)"; fi
+  echo
+  confirm "Restoring replaces this server's data with the backup's: messages, accounts, uploads and
+moderation since it was made are lost. Purrlor is offline while it runs. How things are now is
+backed up first, so you can come back to it."
+
+  backup_make "$BACKUP_DIR" before-restore
+  undo="$BACKUP_FILE"
+  say "Saved how things were in $undo"
+
+  say "Stopping Purrlor"
+  maintenance_on
+  compose stop
+  say "Putting the settings back"
+  restore_env "$work/env"
+  if [ -f "$work/matrix-email.env" ]; then (umask 077 && cp "$work/matrix-email.env" "$EMAIL_FILE"); else rm -f "$EMAIL_FILE"; fi
+  if [ -f "$work/install-summary" ]; then (umask 077 && cp "$work/install-summary" .install-summary); fi
+  media="$(env_get MATRIX_MEDIA_DIR)"
+  if [ -n "$media" ]; then mkdir -p "$media"; fi
+  # Containers made again from the restored settings (and so with their mounts), not started yet.
+  compose up --no-start || restore_failed "$undo" "the containers"
+
+  if has_matrix; then
+    say "Putting the homeserver's data back (with a lot of media, this takes a while)"
+    docker run --rm --volumes-from "$(service_cid matrix)" -v "$work:/restore:ro" \
+      -e "MOVED=$([ -n "$media" ] && echo 1 || echo 0)" alpine sh -c "$MATRIX_IN" \
+      || restore_failed "$undo" "the homeserver's data"
+  fi
+  for svc in token-server push-gateway; do
+    [ -d "$work/$svc" ] || continue
+    say "Putting the $svc's data back"
+    docker run --rm --volumes-from "$(service_cid "$svc")" -v "$work/$svc:/restore:ro" alpine sh -c "$DATA_IN" \
+      || restore_failed "$undo" "the $svc's data"
+  done
+
+  say "Starting Purrlor"
+  compose up -d
+  echo
+  cmd_status 60
+  echo
+  say "Restored from $file."
+  echo "   If something's wrong, go back to how things were: sudo purrlor restore $undo"
+}
+
+# ---------------------------------------------------------------------------
+# Alerts: something down, a disk filling up, a backup that didn't happen
+# ---------------------------------------------------------------------------
+
+# json_str TEXT -> TEXT as the inside of a JSON string.
+json_str() { printf '%s' "$1" | tr -d '\000-\011\013-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'; }
+
+# alert_send TEXT -> posts TEXT to PURRLOR_ALERT_URL: in Discord's webhook shape for Discord and
+# for Purrlor's own incoming webhooks (docs/webhooks.md), Slack's for Slack, and as plain text for
+# anything else (ntfy, most push and chat services).
+alert_send() {
+  local url proxy noproxy args=(-fsS -m 20 -o /dev/null)
+  url="$(env_get PURRLOR_ALERT_URL)"
+  [ -n "$url" ] || return 0
+  proxy="$(env_get OUTBOUND_PROXY)"; noproxy="$(env_get OUTBOUND_NO_PROXY)"
+  [ -z "$proxy" ] || args+=(--proxy "$proxy")
+  [ -z "$noproxy" ] || args+=(--noproxy "$noproxy")
+  case "$url" in
+    https://hooks.slack.com/*) args+=(-H 'Content-Type: application/json' --data-binary "{\"text\":\"$(json_str "$1")\"}") ;;
+    */api/webhooks/*) args+=(-H 'Content-Type: application/json' --data-binary "{\"content\":\"$(json_str "$1")\",\"username\":\"purrlor\"}") ;;
+    *) args+=(-H 'Content-Type: text/plain; charset=utf-8' --data-binary "$1") ;;
+  esac
+  curl "${args[@]}" "$url"
+}
+
+# alert_problems -> one line for each thing wrong right now; nothing when all is well. A service
+# gets three tries 10s apart, so one restarting (an update) isn't reported as down.
+alert_problems() {
+  local a d use mount seen=" " newest ref app cert
+  a="$(env_get BIND_ADDR)"; a="${a:-127.0.0.1}"
+  answers_soon() {
+    local i
+    for i in 1 2 3; do
+      curl -fsS -m 5 --noproxy '*' "$1" >/dev/null 2>&1 && return 0
+      [ "$i" -eq 3 ] || sleep 10
+    done
+    return 1
+  }
+  if ! in_maintenance; then
+    answers_soon "http://$a:8080/" || echo "the web app isn't answering"
+    answers_soon "http://$a:3001/health" || echo "the token server isn't answering (voice and the public web are down)"
+    answers_soon "http://$a:3002/health" || echo "the push gateway isn't answering (no notifications)"
+    answers_soon "http://$a:7880/" || echo "LiveKit isn't answering (voice and video are down)"
+    if has_matrix; then answers_soon "http://$a:8008/_matrix/client/versions" || echo "the homeserver isn't answering (chat is down)"; fi
+  fi
+
+  # The disks Docker, the media folder and the backups are on — each disk once.
+  for d in "$(docker info -f '{{.DockerRootDir}}' 2>/dev/null || true)" "$(env_get MATRIX_MEDIA_DIR)" "$BACKUP_DIR"; do
+    [ -n "$d" ] && [ -e "$d" ] || continue
+    mount="$(df -P "$d" | awk 'NR == 2 { print $6 }')"
+    case "$seen" in *" $mount "*) continue ;; esac
+    seen="$seen$mount "
+    use="$(df -P "$d" | awk 'NR == 2 { sub("%", "", $5); print $5 }')"
+    [ "${use:-0}" -lt 90 ] || echo "the disk with $d on it is ${use}% full"
+  done
+
+  if cron_has purrlor-backup; then
+    [ ! -f "$STATE_DIR/backup-failed" ] || cat "$STATE_DIR/backup-failed"
+    [ ! -f "$STATE_DIR/backup-copy-failed" ] || cat "$STATE_DIR/backup-copy-failed"
+    # Missed altogether (cron not running, say): measured from the newest nightly backup, or from
+    # when they were turned on if there isn't one yet.
+    newest="$(ls -1t "$BACKUP_DIR"/purrlor-auto-*.tar.gz 2>/dev/null | head -n1 || true)"
+    ref="${newest:-$(cron_file purrlor-backup)}"
+    [ -z "$(find "$ref" -mmin +2160 2>/dev/null)" ] || echo "no nightly backup for over a day and a half (is cron running?)"
+  fi
+
+  # The certificate, where nginx runs on this server (an edge server renews its own).
+  if [ "$(env_get PURRLOR_EDGE)" != true ]; then
+    app="$(host_of "$(env_get ALLOWED_ORIGINS | cut -d, -f1)")"
+    if [ -n "$app" ]; then
+      cert="$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$app" 2>/dev/null | openssl x509 2>/dev/null || true)"
+      if [ -n "$cert" ] && ! printf '%s\n' "$cert" | openssl x509 -noout -checkend 1209600 >/dev/null 2>&1; then
+        echo "the HTTPS certificate for $app runs out within 14 days (check: certbot renew --dry-run)"
+      fi
+    fi
+  fi
+}
+
+# alert_check: the regular run. Says something only when the list of problems changes — what's
+# newly wrong, and what's fine again — so a problem is reported once, not every five minutes.
+# When the message can't be sent, nothing is remembered, so the next run tries again.
+alert_check() {
+  local now before newly fixed site msg=""
+  mkdir -p "$STATE_DIR"
+  now="$(alert_problems | sort -u)"
+  before="$(cat "$STATE_DIR/alert-state" 2>/dev/null || true)"
+  [ "$now" != "$before" ] || return 0
+  newly="$(printf '%s\n' "$now" | grep -vxF -f <(printf '%s\n' "$before") | sed '/^$/d' || true)"
+  fixed="$(printf '%s\n' "$before" | grep -vxF -f <(printf '%s\n' "$now") | sed '/^$/d' || true)"
+  site="$(host_of "$(env_get ALLOWED_ORIGINS | cut -d, -f1)")"; site="${site:-$(hostname)}"
+  [ -z "$newly" ] || msg="Purrlor ($site) needs a look:
+$(printf '%s\n' "$newly" | sed 's/^/- /')"
+  [ -z "$fixed" ] || msg="${msg:+$msg
+
+}Fine again on Purrlor ($site):
+$(printf '%s\n' "$fixed" | sed 's/^/- /')"
+  echo "--- $(date '+%F %T') alert"
+  printf '%s\n' "$msg"
+  if alert_send "$msg"; then printf '%s\n' "$now" > "$STATE_DIR/alert-state"; fi
+}
+
+cmd_alerts() {
+  local usage="Usage: purrlor alerts [<webhook or ntfy URL> | test | off]"
+  need_root alerts
+  local url; url="$(env_get PURRLOR_ALERT_URL)"
+  case "${1:-}" in
+    "")
+      [ "$#" -eq 0 ] || die "$usage"
+      if [ -n "$url" ] && cron_has purrlor-alerts; then
+        say "Alerts are on: checked every few minutes, sent to $url"
+        local now; now="$(cat "$STATE_DIR/alert-state" 2>/dev/null || true)"
+        if [ -n "$now" ]; then echo "   Wrong at the last check:"; printf '%s\n' "$now" | sed 's/^/     - /'
+        else echo "   Nothing was wrong at the last check."; fi
+      else
+        say "Alerts are off. Turn them on with somewhere to send them, e.g.:"
+        echo "   sudo purrlor alerts https://ntfy.sh/<a long random topic name>     (the ntfy app on your phone)"
+        echo "   sudo purrlor alerts https://discord.com/api/webhooks/...           (a Discord or Purrlor channel webhook)"
+      fi
+      ;;
+    off)
+      [ "$#" -eq 1 ] || die "$usage"
+      cron_drop purrlor-alerts
+      env_set PURRLOR_ALERT_URL ""
+      rm -f "$STATE_DIR/alert-state"
+      say "Alerts are off."
+      ;;
+    test)
+      [ "$#" -eq 1 ] || die "$usage"
+      [ -n "$url" ] || die "Alerts are off — turn them on first. $usage"
+      alert_send "A test from purrlor on $(hostname): alerts reach you." || die "Couldn't send it (the error is above)."
+      say "Sent a test to $url"
+      ;;
+    check) alert_check ;;
+    http://*|https://*)
+      [ "$#" -eq 1 ] || die "$usage"
+      printf '%s' "$1" | grep -Eq '^https?://[^[:space:][:cntrl:]]+$' || die "$usage"
+      env_set PURRLOR_ALERT_URL "$1"
+      if ! alert_send "Purrlor on $(hostname) will send alerts here: a service down, a disk filling up, a nightly backup that failed."; then
+        env_set PURRLOR_ALERT_URL "$url"
+        die "Couldn't send to $1 (the error is above), so nothing was changed."
+      fi
+      mkdir -p "$STATE_DIR"
+      rm -f "$STATE_DIR/alert-state"
+      cron_put purrlor-alerts often "$REPO_ROOT/deploy/purrlor alerts check"
+      say "Alerts are on: sent a first message to $1."
+      echo "   Checked every few minutes: each service answering, disks under 90% full, the HTTPS"
+      echo "   certificate, and nightly backups (sudo purrlor backup schedule daily). You hear when"
+      echo "   something goes wrong and when it's fine again."
+      ;;
+    *) die "$usage" ;;
+  esac
 }
 
 matrix_only() { has_matrix || die "This install uses its own homeserver's sign-up settings, not Purrlor's bundled one."; }
@@ -1374,6 +1890,8 @@ case "${1:-help}" in
   update-apply) cmd_update_apply ;;
   doctor) cmd_doctor ;;
   backup) shift; cmd_backup "$@" ;;
+  restore) shift; cmd_restore "$@" ;;
+  alerts) shift; cmd_alerts "$@" ;;
   new-invite-code) cmd_new_invite_code ;;
   open-signups) cmd_signups open ;;
   close-signups) cmd_signups close ;;

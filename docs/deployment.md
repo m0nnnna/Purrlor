@@ -559,8 +559,8 @@ The installer links a `purrlor` command into `/usr/local/bin`:
 - **`purrlor status`** / **`purrlor doctor`** — what's running, from the inside and the outside.
 - **`purrlor logs [service]`** — `livekit`, `token-server`, `push-gateway`, `web`, or — with the
   bundled homeserver — `matrix`.
-- **`purrlor backup [dir]`** — `.env` and the homeserver's database in one file (the homeserver
-  stops for the few seconds the copy takes, so it's consistent). Copy it off the server.
+- **`purrlor backup`**, **`purrlor restore`** — see [Backups](#backups) below.
+- **`purrlor alerts <url>`** — see [Alerts](#alerts) below.
 - **`purrlor new-invite-code`**, **`open-signups`**, **`close-signups`** — who can join the bundled
   homeserver.
 - **`purrlor media`** — where the bundled homeserver keeps uploads (usually most of the disk space
@@ -574,6 +574,79 @@ The installer links a `purrlor` command into `/usr/local/bin`:
 - **Cert renewal** is automatic via certbot's systemd timer (`systemctl list-timers | grep
   certbot`) plus the nginx reload hook — nothing to do unless `certbot renew --dry-run` ever stops
   succeeding.
-- **What to back up:** `.env` and the homeserver's data (`purrlor backup` covers both), and
-  `/etc/letsencrypt` if you'd rather not re-issue certificates after a rebuild. Everything else
-  rebuilds from the repo.
+- **What to back up:** everything `purrlor backup` saves (below), and `/etc/letsencrypt` if you'd
+  rather not re-issue certificates after a rebuild. Everything else rebuilds from the repo.
+
+### Backups
+
+**`sudo purrlor backup [dir]`** saves everything a rebuilt server needs that git doesn't have, in
+one file (default folder: `backups/` in the install). That covers:
+
+- the settings (`.env`), the homeserver's mail settings and the install summary
+- the bundled homeserver's data: accounts, rooms, messages and every upload, wherever `purrlor
+  media move` put them
+- the token server's moderation records: hidden and switched-off pages, takedowns, queued
+  deletions and the audit log
+- the push gateway's scheduled reminders
+
+The homeserver, token server and push gateway stop together while it copies, so what they hold
+agrees. That takes seconds, or a minute or two with a lot of media. The file holds your secrets,
+so it's readable by root only. `purrlor backup list` shows the ones saved here.
+
+**Nightly backups:** `sudo purrlor backup schedule daily [N]` makes one every night (03:30; 02:00 on
+Alpine) and keeps the newest N (default 7). Backups you make by hand are never cleared out.
+`purrlor backup schedule` says whether they're on, and `... schedule off` stops them. They need cron running
+(Debian/Ubuntu: `apt-get install cron` if it's missing; Alpine: `rc-update add crond`). Each night's output
+goes to `/var/log/purrlor.log`.
+
+**A copy somewhere else:** a backup on the server it protects doesn't survive losing that server.
+`sudo purrlor backup copy-to user@host:/path` copies each nightly backup there too, over SSH as root
+with a key, no password. A Hetzner Storage Box, rsync.net or any server you can SSH to works. It
+checks it can copy before saving the setting, and says how to set up the key if it can't. Old
+copies on the other side aren't deleted: clear them there, or let its snapshots do it.
+`... copy-to off` stops copying.
+
+**Restoring:** `sudo purrlor restore <file>` puts a backup back. It shows what the backup holds and
+asks you to confirm (or pass `--yes`). Then it:
+
+1. saves how things are now as a `before-restore` backup, so you can go back
+2. stops Purrlor and puts the settings back
+3. puts the homeserver's, token server's and push gateway's data back, replacing what's there
+4. starts everything and checks it answers
+
+A few settings describe the machine rather than the install, so the server's own values are kept:
+`HOST_IP`, `BIND_ADDR`, `MATRIX_MEDIA_DIR` (media goes wherever this server keeps it),
+`PURRLOR_CONTROL_DIR`, the proxy settings, `PURRLOR_EDGE`, `REAL_IP_FROM`, and the alert and backup
+settings below. A backup from before these were all included (no moderation records or reminders)
+restores what it has and leaves this server's records alone.
+
+**Moving to a new server, or rebuilding one:** clone the repo and run `deploy/setup.sh` on it with
+the same domains, so nginx, certificates and Docker are set up. Then copy a backup over and run
+`sudo purrlor restore <file>`. Point DNS at the new server once it answers (`purrlor doctor`).
+
+**Practise it.** A backup you've never restored is a guess. Restoring the newest backup onto a
+spare server now and then, as above, is the only way to know it works.
+
+### Alerts
+
+**`sudo purrlor alerts <url>`** checks the server every 5 minutes (15 on Alpine) and sends a message
+when something goes wrong, and again when it's fine:
+
+- a service not answering: the web app, token server, push gateway, LiveKit, or the homeserver
+- a disk over 90% full: Docker's, the media folder's, or the backups'
+- the HTTPS certificate running out within 14 days (where nginx runs on this server)
+- a nightly backup that failed, didn't happen for a day and a half, or couldn't be copied off
+
+Each problem is reported once, not every 5 minutes. A service stopped on purpose by a backup or
+restore isn't reported as down. The URL can be:
+
+- **ntfy** (`https://ntfy.sh/<a long random topic>`, or your own ntfy server): alerts on your phone
+  through the ntfy app, with nothing to set up. Anyone who knows the topic name can read it, so
+  make it long and random.
+- **A Discord, Slack or Purrlor channel webhook.** A Purrlor webhook is no help when Purrlor itself
+  is down, so use it for disks and backups, not as the only place alerts go.
+- **Anything that takes a POSTed text body.**
+
+It sends a first message before turning on, so a wrong URL is caught straight away.
+`purrlor alerts` shows the setting and what was wrong at the last check, `... alerts test` sends a
+test, and `... alerts off` stops it.
