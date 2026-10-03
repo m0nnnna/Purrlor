@@ -154,6 +154,12 @@ Moderation (root; docs/admin.md) — every change needs a reason, which goes in 
   purrlor audit [N]                    the last N things done (default 50)
   purrlor stats                        registered accounts, online now, public pages: totals only (admin password)
   purrlor ips [seconds]                watch which addresses reach the token server, and through which hops (default 60)
+
+Federation with other Purrlor instances (root; docs/federation.md):
+  purrlor peers                        the instances this one federates with, and what the bot reads there
+  purrlor peers add <address>          federate with another Purrlor instance (each side adds the other)
+  purrlor peers remove <server name>   stop: the bot leaves its rooms, its people disappear here
+  purrlor peers sync                   read the peers' directories now instead of within ten minutes
   Options: --reason "why" (else asked), --yes (skip the confirmation). A <file> is its mxc:// address
   or the public media link.
 HELP
@@ -1740,6 +1746,46 @@ ctl_admin() {
   printf '%s' "$PURRLOR_ADMIN_PASSWORD" | ctl "$method" "$path" --data-urlencode "adminUser=$PURRLOR_ADMIN_USER" --data-urlencode 'adminPassword@-' "$@"
 }
 
+# cmd_peers: the Purrlor instances this one federates with (docs/federation.md).
+cmd_peers() {
+  local usage="Usage: purrlor peers [list] | add <its address> | remove <its server name> | sync
+  (add and remove take --reason \"why\"; add --yes to skip the confirmation)"
+  need_root peers "$@"
+  local action="${1:-list}"
+  [ "$#" -eq 0 ] || shift
+  parse_opts "$@"
+  case "$action" in
+    list)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      ctl GET /peers
+      ;;
+    add)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      local address="${POS[0]}"
+      printf '%s' "$address" | grep -Eq '^(https://)?[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$'         || die "'$address' isn't an instance's address: give its name (purr.example) or https:// address, nothing after it."
+      need_reason
+      confirm "Federate with $address: its people and public Spaces show here (Everyone, Discover, and the
+public web for people who opted in), and this server's bot joins its public rooms to read them."
+      CTL_TIMEOUT=60 ctl POST /peers/add --data-urlencode "url=$address" --data-urlencode "reason=$REASON"
+      ;;
+    remove)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      local server="${POS[0]}"
+      printf '%s' "$server" | grep -Eq '^[A-Za-z0-9.-]+(:[0-9]{1,5})?$' || die "'$server' isn't a server name ('purrlor peers' lists them)."
+      need_reason
+      confirm "Stop federating with $server: the bot leaves its rooms, and its people and Spaces disappear
+from Everyone, Discover and the public web here."
+      CTL_TIMEOUT=600 ctl POST "/peers/remove/$server" --data-urlencode "reason=$REASON"
+      ;;
+    sync)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      echo "Reading each peer's directory and joining what's new (this can take a few minutes)..."
+      CTL_TIMEOUT=1800 ctl POST /peers/sync
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
 cmd_pages() {
   local usage="Usage: purrlor pages list | show <name> | hide <name> | unhide <name> | off <name> | on <name>
   (hide and off take --reason \"why\"; add --yes to skip the confirmation)"
@@ -1902,6 +1948,7 @@ case "${1:-help}" in
   admin) shift; cmd_admin "$@" ;;
   emotes) shift; cmd_emotes "$@" ;;
   pages) shift; cmd_pages "$@" ;;
+  peers) shift; cmd_peers "$@" ;;
   takedown) shift; cmd_takedown "$@" ;;
   reports) shift; cmd_reports "$@" ;;
   audit) shift; cmd_audit "$@" ;;

@@ -16,7 +16,8 @@ roles and channel-only moderators, [`docs/moderation.md`](docs/moderation.md)
 for report review and automod, [`docs/calendar.md`](docs/calendar.md) for Space calendars and
 reminders, [`docs/webhooks.md`](docs/webhooks.md) for incoming webhooks,
 [`docs/profile-pages.md`](docs/profile-pages.md) for profile pages and the page builder,
-[`docs/public-web.md`](docs/public-web.md) for what signed-out visitors can see, and
+[`docs/public-web.md`](docs/public-web.md) for what signed-out visitors can see,
+[`docs/federation.md`](docs/federation.md) for sharing the social side with other Purrlor instances, and
 [`docs/deployment.md`](docs/deployment.md) for a full self-hosting guide.
 
 Purrlor was called NekoUs until it was renamed. Identifiers that live in stored data keep the old
@@ -378,6 +379,7 @@ The installer adds a `purrlor` command:
 | `purrlor backup` | Saves your settings and all data to a file (`backup schedule daily` for nightly ones, `backup copy-to` to copy them to another server) |
 | `purrlor restore <file>` | Puts a backup back, saving how things are first |
 | `purrlor alerts <url>` | Messages you (ntfy, Discord, Slack) when something's down, a disk is filling up, or a backup failed |
+| `purrlor peers add <address>` | Federates with another Purrlor instance: its people and public Spaces show here (each side adds the other) |
 | `purrlor new-invite-code` | Replaces the sign-up code |
 | `purrlor open-signups` / `close-signups` | Allows or stops new sign-ups |
 | `purrlor emotes setup` | Creates the global emote library, owned by the admin (once; the installer already does it) |

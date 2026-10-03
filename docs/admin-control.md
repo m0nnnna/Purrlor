@@ -138,6 +138,19 @@ the service bot), then adds the token server's own totals: accounts online now (
 with a profile feed, and pages shown to everyone. Totals only; the account list isn't kept or
 returned. Audited as `stats`.
 
+### Peers
+
+The Purrlor instances this one federates with (`docs/federation.md`). `:user` in the page and
+takedown actions above may be an approved peer's person too (`@name:peer.example`): hiding them
+here keeps them off this site's public web, whatever their own instance does.
+
+| Action | What it does |
+| --- | --- |
+| `GET /peers` | Each peer: its name, server name and address, who added it and when, and what the bot reads there (profile rooms, Spaces, feeds) and how its last sync went |
+| `POST /peers/add` (url, reason) | Asks `<url>/api/public/instance`, and saves it as a peer if it's a Purrlor instance that federates and isn't this one. Adding one already there refreshes its address and name. Starts its first sync. `502` if it can't be reached |
+| `POST /peers/remove/:server` (reason) | Takes it off the list and has the bot leave every room created on that server. `404` if it isn't a peer |
+| `POST /peers/sync` | Reads every peer's directory now and joins what's new (otherwise every ten minutes). `207` if any failed |
+
 ### The audit log
 
 `GET /audit?limit=50` shows the last entries.
@@ -152,6 +165,7 @@ In the token server's data volume (`/data`, root-only like the socket):
 | `public-off.txt` | User IDs whose page an admin switched off |
 | `blocked-media.txt` | Blocked `mxc://` URLs |
 | `media-deletions.json` | The deletion queue and how each deletion went |
+| `peers.json` | The approved peers: server name, address, name, who added it and when |
 | `audit.log` | One JSON line per action: `at`, `actor`, `action`, `target`, `reason`, `result` |
 | `media-cache/` | Local copies of public sound and video (emptied when the service starts) |
 

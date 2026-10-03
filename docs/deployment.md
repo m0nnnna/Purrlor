@@ -627,6 +627,19 @@ the same domains, so nginx, certificates and Docker are set up. Then copy a back
 **Practise it.** A backup you've never restored is a guess. Restoring the newest backup onto a
 spare server now and then, as above, is the only way to know it works.
 
+### Federating with other Purrlor instances
+
+`sudo purrlor peers add <its address>` shares the social side with another Purrlor instance: its
+people's Global posts and pages, and its public Spaces, show here in Everyone, Discover and (for
+people who opted in) the public web. Each side adds the other. `purrlor peers` lists them and what
+this server's bot reads there, and `purrlor peers remove <server name>` stops it.
+[`docs/federation.md`](federation.md) has how it works and what it shows. Optional settings in
+`.env`: `PURRLOR_INSTANCE_NAME` (what peers call this instance), `PEER_MAX_PROFILES`,
+`PEER_MAX_SPACES`, and `PEER_SPACE_FEEDS=off` to read peers' Global posts only.
+
+`node deploy/federation-check.mjs` checks, between two servers, the homeserver behaviour federation
+needs (see the top of the file for how to run it).
+
 ### Alerts
 
 **`sudo purrlor alerts <url>`** checks the server every 5 minutes (15 on Alpine) and sends a message

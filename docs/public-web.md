@@ -16,7 +16,8 @@ HTTP side). The web client's signed-out views (`/@name`, `/feed`) are built on t
 | Likes and comments | Counts only. Who liked and what commenters said stay behind sign-in |
 | Mentions in a post | The post's plain text, as written. The formatted body (whose mention links carry Matrix IDs) isn't sent, only the emotes in it |
 | A **profile page** | Only if its owner opted in. Otherwise the answer is identical to "no such user" |
-| Anyone on another homeserver | Never |
+| An approved peer's people (`docs/federation.md`) | Their Global posts and opted-in page, the same as this server's people, while their own instance shows them too, and unless an admin here hid them. Addresses carry their server: `/@name:peer.example` |
+| Anyone on any other homeserver | Never |
 | Anyone an admin hid | Never: their page, and their posts on the public feed |
 | A page an admin switched off | Not the page, whatever its owner's switch says; their Global posts still show |
 | Media | Only files a public post or a public page names now (or an avatar or banner shown in the last six hours), only pictures, video and allowed sound, never a file an admin blocked |
@@ -63,8 +64,9 @@ limited per address (pages: bursts of 60, 120 a minute; media: bursts of 200, 60
 
 ### `GET /api/public/pages/:user`
 
-`:user` is `@name`, `name`, or `@name:server` (this server only). `404 { "code": "not_found" }` for
-every reason it isn't shown: no such person, another server, not opted in, no profile room, hidden.
+`:user` is `@name`, `name`, or `@name:server` (this server or an approved peer). `404 { "code":
+"not_found" }` for every reason it isn't shown: no such person, a server that isn't a peer, not opted
+in, no profile room, hidden here or by their own instance.
 
 ```json
 { "userId": "@luna:purr.example", "displayName": "Luna", "avatarUrl": "mxc://…", "avatarAnimated": false,

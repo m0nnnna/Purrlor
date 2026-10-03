@@ -17,7 +17,8 @@ import {
 } from './control.js';
 import { REAL_IP_FROM } from './clientIp.js';
 import { diagnose, ipWatch, MAX_WATCH_SECONDS, type IpWatch } from './ipWatch.js';
-import { isMxc, localUserId, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
+import { isMxc, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
+import { knownUserId, normalizePeerUrl, parseInstanceInfo, type Peer } from './peers.js';
 
 /**
  * The admin control channel: an HTTP API on a Unix socket, for the `purrlor` command on the host
@@ -59,6 +60,20 @@ export type ControlDeps = {
   realIpFrom?: Set<string>;
   /** Counts for `purrlor stats`: totals only, never who. */
   counts?(): Promise<{ online: number; publicPages: number; profiles: number; serviceAccounts: string[] }>;
+  /** Approved peers' server names: their people can be hidden and taken down here too. */
+  peerServers?(): Promise<Set<string>>;
+  /** Peering (peering.ts): what `purrlor peers` drives. */
+  peering?: PeeringDeps;
+};
+
+export type PeeringDeps = {
+  /** Asks an instance's GET /api/public/instance. */
+  fetchInstance(url: string): Promise<unknown>;
+  /** One sync pass over one peer; resolves with what the bot is in afterwards. */
+  sync(peer: Peer): Promise<{ profiles: number; spaces: number; feeds: number; lastError?: string }>;
+  /** Leaves every room of that server; resolves with how many. */
+  leave(serverName: string): Promise<number>;
+  status(serverName: string): { lastSync?: string; lastError?: string; profiles: number; spaces: number; feeds: number } | undefined;
 };
 
 class ControlError extends Error {
@@ -157,8 +172,8 @@ export function controlApp(deps: ControlDeps): express.Express {
   };
 
   const userOf = async (raw: string): Promise<string> => {
-    const userId = localUserId(raw, await deps.serverName());
-    if (!userId) throw new ControlError(400, `'${raw}' isn't a user name on this server.`);
+    const userId = knownUserId(raw, await deps.serverName(), (await deps.peerServers?.()) ?? new Set());
+    if (!userId) throw new ControlError(400, `'${raw}' isn't a user name on this server or a peer's.`);
     return userId;
   };
 
@@ -506,6 +521,108 @@ export function controlApp(deps: ControlDeps): express.Express {
           ? 'No reports about profile pages in the admin room.'
           : 'No reports in the admin room.';
       reply(req, res, 200, text, { reports: shown });
+    })
+  );
+
+  // --- Peers (docs/federation.md) -----------------------------------------------------------------
+
+  const peering = (): PeeringDeps => {
+    if (!deps.peering) throw new ControlError(503, 'Peering is not available in this token server.');
+    return deps.peering;
+  };
+
+  app.get(
+    '/peers',
+    route(async (req, res) => {
+      const peers = await deps.store.peers();
+      const rows = peers.map((peer) => {
+        const status = deps.peering?.status(peer.serverName);
+        const reading = status ? `reading ${status.profiles} profile(s), ${status.spaces} Space(s), ${status.feeds} feed(s)` : 'not synced yet';
+        const last = status?.lastError ? `last sync failed: ${status.lastError}` : status?.lastSync ? `last synced ${formatTime(status.lastSync)}` : '';
+        return [`${peer.name} (${peer.serverName})  ${peer.url}`, `  added ${formatTime(peer.addedAt)} by ${peer.addedBy || '?'}; ${reading}${last ? `; ${last}` : ''}`].join('\n');
+      });
+      const text = rows.length ? [`Peers (${rows.length}):`, ...rows].join('\n') : 'No peers. Add one: purrlor peers add <its address>';
+      reply(req, res, 200, text, { peers: peers.map((peer) => ({ ...peer, status: deps.peering?.status(peer.serverName) ?? null })) });
+    })
+  );
+
+  app.post(
+    '/peers/add',
+    route(async (req, res, actor, body) => {
+      const raw = one(body.url) ?? '';
+      const url = normalizePeerUrl(raw);
+      if (!url) throw new ControlError(400, `'${cleanReason(raw)}' isn't an instance's address: give its https:// address (or just its name), nothing after it.`);
+      const reason = needReason(body);
+      let answer: unknown;
+      try {
+        answer = await peering().fetchInstance(url);
+      } catch (err) {
+        throw new ControlError(502, `Couldn't reach ${url}: ${cleanReason((err as Error).message)}`);
+      }
+      const info = parseInstanceInfo(answer);
+      if ('error' in info) throw new ControlError(400, `${url}: ${info.error}`);
+      const own = await deps.serverName();
+      if (info.serverName === own) throw new ControlError(400, `${url} is this instance.`);
+      const peer: Peer = { serverName: info.serverName, url: info.url, name: info.name, addedAt: new Date().toISOString(), addedBy: actor };
+      const added = await deps.store.updatePeers((peers) => {
+        const existing = peers.find((p) => p.serverName === info.serverName);
+        // Added again: its address and name are refreshed, its history kept.
+        if (existing) return { peers: peers.map((p) => (p === existing ? { ...existing, url: info.url, name: info.name } : p)), result: false };
+        return { peers: [...peers, peer], result: true };
+      });
+      await deps.store.audit({ actor, action: 'peers.add', target: `${info.serverName} (${info.url})`, reason, result: added ? 'ok' : 'updated' });
+      // The first sync runs on its own; `purrlor peers` shows how it went.
+      void peering()
+        .sync(peer)
+        .catch((err: unknown) => console.error(`Peering: first sync of ${info.serverName} failed`, err));
+      reply(
+        req,
+        res,
+        200,
+        [
+          added ? `Added ${info.name} (${info.serverName}) as a peer.` : `${info.serverName} was already a peer; its address and name are updated.`,
+          'The bot is joining its public profile rooms and Spaces now; `purrlor peers` shows how far it got.',
+          "For its people to see this instance's too, an admin there adds this one: purrlor peers add <this instance's address>",
+        ].join('\n'),
+        { peer: info, added }
+      );
+    })
+  );
+
+  app.post(
+    '/peers/remove/:server',
+    route(async (req, res, actor, body) => {
+      const server = req.params.server;
+      const reason = needReason(body);
+      const removed = await deps.store.updatePeers((peers) => {
+        const kept = peers.filter((peer) => peer.serverName !== server);
+        return { peers: kept, result: kept.length !== peers.length };
+      });
+      if (!removed) throw new ControlError(404, `${server} isn't a peer ('purrlor peers' lists them).`);
+      const left = await peering().leave(server);
+      await deps.store.audit({ actor, action: 'peers.remove', target: server, reason, result: `ok (left ${left} room(s))` });
+      reply(
+        req,
+        res,
+        200,
+        `Removed ${server}. The bot left ${left} of its room(s); its people and Spaces are gone from Everyone, Discover and the public web here.`,
+        { server, left }
+      );
+    })
+  );
+
+  app.post(
+    '/peers/sync',
+    route(async (req, res, actor) => {
+      const peers = await deps.store.peers();
+      if (peers.length === 0) return reply(req, res, 200, 'No peers to sync.', { results: [] });
+      const results = [];
+      for (const peer of peers) results.push({ serverName: peer.serverName, ...(await peering().sync(peer)) });
+      await deps.store.audit({ actor, action: 'peers.sync', target: `${peers.length} peer(s)`, result: 'ok' });
+      const text = results
+        .map((r) => `${r.serverName}: reading ${r.profiles} profile(s), ${r.spaces} Space(s), ${r.feeds} feed(s)${r.lastError ? `; failed: ${r.lastError}` : ''}`)
+        .join('\n');
+      reply(req, res, results.some((r) => r.lastError) ? 207 : 200, text, { results });
     })
   );
 

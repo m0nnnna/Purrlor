@@ -10,6 +10,7 @@ import { handleWebhook } from './webhooks.js';
 import { controlDeps, publicWebRouter } from './publicWebRoutes.js';
 import { adminStore } from './adminStore.js';
 import { controlApp, listenOnControlSocket } from './controlServer.js';
+import { startPeering } from './peering.js';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -222,6 +223,9 @@ app.use('/api/public', publicWebRouter());
 app.listen(PORT, () => {
   console.log(`purrlor-token-server listening on :${PORT}`);
 });
+
+/** Joining approved peers' public rooms, so their people read like this server's (peering.ts). */
+startPeering();
 
 /**
  * The admin control channel (controlServer.ts, docs/admin-control.md): a root-only Unix socket the

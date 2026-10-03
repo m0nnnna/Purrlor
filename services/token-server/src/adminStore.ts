@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises
 import { dirname, join } from 'node:path';
 import { isMxc, parseHiddenList, type AdminLists } from './publicWeb.js';
 import { auditLine, type AuditEntry, type DeletionEntry, parseDeletions, parseMediaList } from './control.js';
+import { parsePeers, type Peer } from './peers.js';
 
 /**
  * What the site's admin has decided, kept as files in the token server's data volume (`/data`),
@@ -13,6 +14,7 @@ import { auditLine, type AuditEntry, type DeletionEntry, parseDeletions, parseMe
  *   public-off.txt       user IDs whose page is kept off the public web whatever their switch says
  *   blocked-media.txt    mxc:// URLs the public media route never serves (`purrlor takedown`)
  *   media-deletions.json files queued for deletion from the homeserver, and how that went
+ *   peers.json           the Purrlor instances this one federates with (`purrlor peers`)
  *   audit.log            one JSON line per admin action, only ever appended to
  *
  * The text lists are one entry per line, `#` comments allowed, so they can be read (and in a pinch
@@ -32,7 +34,8 @@ const HEADERS: Record<ListName, string> = {
 };
 
 export class AdminStore {
-  readonly files: Record<ListName, string> & { deletions: string; audit: string };
+  readonly files: Record<ListName, string> & { deletions: string; audit: string; peers: string };
+  private peerCache: { checkedAt: number; peers: Peer[] } | undefined;
   private cache = new Map<ListName, CachedList>();
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -42,6 +45,7 @@ export class AdminStore {
       publicOff: join(dir, 'public-off.txt'),
       blockedMedia: join(dir, 'blocked-media.txt'),
       deletions: join(dir, 'media-deletions.json'),
+      peers: join(dir, 'peers.json'),
       audit: join(dir, 'audit.log'),
     };
   }
@@ -115,6 +119,31 @@ export class AdminStore {
     return this.serial(async () => {
       const { entries, result } = fn(await this.deletions());
       await writeAtomic(this.files.deletions, `${JSON.stringify(entries.filter((entry) => isMxc(entry.mxc)), null, 1)}\n`);
+      return result;
+    });
+  }
+
+  /** The approved peers, re-read at most every ten seconds (a hand edit is picked up too). */
+  async peers(): Promise<Peer[]> {
+    if (this.peerCache && Date.now() - this.peerCache.checkedAt < RECHECK_MS) return this.peerCache.peers;
+    let peers: Peer[] = [];
+    try {
+      peers = parsePeers(await readFile(this.files.peers, 'utf8'));
+    } catch {
+      // No file yet: no peers.
+    }
+    this.peerCache = { checkedAt: Date.now(), peers };
+    return peers;
+  }
+
+  /** Changes the peer list under the same lock as everything else. */
+  updatePeers<T>(fn: (peers: Peer[]) => { peers: Peer[]; result: T }): Promise<T> {
+    return this.serial(async () => {
+      this.peerCache = undefined;
+      const { peers, result } = fn(await this.peers());
+      await writeAtomic(this.files.peers, `${JSON.stringify(peers, null, 1)}
+`);
+      this.peerCache = undefined;
       return result;
     });
   }

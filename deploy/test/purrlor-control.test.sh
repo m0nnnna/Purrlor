@@ -225,10 +225,43 @@ if [ "$(uname -s)" = Linux ]; then
   check "a symlinked socket is refused" never_called
 fi
 
+# --- peers ---------------------------------------------------------------------------------------
+
+run peers
+check "peers alone lists them" sent "http://purrlor/peers"
+check "and it's a GET" sent "-G"
+
+run peers add https://cats.example --reason "friends" --yes
+check "add posts the address" sent "url=https://cats.example"
+check "add carries the reason" sent "reason=friends"
+check "add goes to the add route" sent "http://purrlor/peers/add"
+
+run peers add cats.example --yes
+check "add without a reason sends nothing" never_called
+check "add without a reason fails" status_not0
+
+run peers add "https://cats.example/path" --reason x --yes
+check "an address with a path is refused before sending" never_called
+
+run peers add "cats.example;id" --reason x --yes
+check "an address with shell characters is refused" never_called
+
+run peers remove cats.example --reason "defederate" --yes
+check "remove goes to the server's route" sent "http://purrlor/peers/remove/cats.example"
+
+run peers remove "../pages" --reason x --yes
+check "remove refuses anything but a server name" never_called
+
+run peers sync
+check "sync posts to the sync route" sent "http://purrlor/peers/sync"
+
+run pages hide @mochi:cats.example --reason "spam" --yes
+check "a peer's person can be hidden by full ID" sent "http://purrlor/pages/@mochi:cats.example/hide"
+
 # --- help ----------------------------------------------------------------------------------------
 
 run help
-for word in "purrlor pages hide" "purrlor takedown file" "purrlor takedown run" "purrlor reports" "purrlor audit" "--reason"; do
+for word in "purrlor peers add" "purrlor pages hide" "purrlor takedown file" "purrlor takedown run" "purrlor reports" "purrlor audit" "--reason"; do
   check "help mentions '$word'" out_has "$word"
 done
 

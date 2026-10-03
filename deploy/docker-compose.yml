@@ -124,6 +124,13 @@ services:
       # X-Real-IP, the visitor's own address; from anywhere else that header is ignored. Needed
       # when the edge is behind Cloudflare, or every visitor shares one rate limit (clientIp.ts).
       - REAL_IP_FROM=${REAL_IP_FROM:-}
+      # Federation with other Purrlor instances (docs/federation.md): the name this one gives its
+      # peers (default: its server name), how many profile rooms and public Spaces the bot reads per
+      # peer, and PEER_SPACE_FEEDS=off to read peers' people's Global posts only, not their Spaces.
+      - PURRLOR_INSTANCE_NAME=${PURRLOR_INSTANCE_NAME:-}
+      - PEER_MAX_PROFILES=${PEER_MAX_PROFILES:-}
+      - PEER_MAX_SPACES=${PEER_MAX_SPACES:-}
+      - PEER_SPACE_FEEDS=${PEER_SPACE_FEEDS:-}
       # The admin control socket `purrlor` talks to (docs/admin-control.md). Root-only, never on
       # the network: it's a file in PURRLOR_CONTROL_DIR on the host.
       - CONTROL_SOCKET=/control/purrlor.sock

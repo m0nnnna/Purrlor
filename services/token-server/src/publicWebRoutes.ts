@@ -30,6 +30,7 @@ import {
   readPublicWeb,
   serverNameOf,
   splitMxc,
+  type AdminLists,
   type MediaSource,
   type PublicPost,
   type RawEvent,
@@ -37,6 +38,9 @@ import {
 import { RateLimiter } from './webhooks.js';
 import { onlineCounter } from './online.js';
 import { validateOpenIdToken } from './openid.js';
+import { FEDERATION_VERSION, cleanInstanceName, knownUserId, parsePeerStatus, profilePath, serverOfUser, type Peer } from './peers.js';
+import { joinFollowedProfile, leavePeer, peerStatus, syncPeer } from './peering.js';
+import { roomOriginServer } from './tenancy.js';
 
 /**
  * The public web's HTTP side (publicWeb.ts has the rules). Everything here is read-only, needs no
@@ -55,6 +59,16 @@ import { validateOpenIdToken } from './openid.js';
  *   GET /api/public/card/post/:eventId    the same for a post's link
  *   GET /api/public/card/:user/music/:album[/:track], /art/:album[/:piece], /commissions/:type
  *                                         the same for something on a page (an album, a track, a piece)
+ *
+ * Federation (docs/federation.md):
+ *   GET /api/public/instance              what this instance is, for another one peering with it
+ *   GET /api/public/peers                 the instances this one federates with
+ *   POST /api/public/status               { users } -> which of them this instance keeps off its public web
+ *   POST /api/public/peers/join           (openid_token, user_id, room_id) have the bot join a followed
+ *                                         peer's person's profile room, so it can be read here
+ *
+ * `:user` is anyone on this server or an approved peer (`@name:peer`). A peer's people are shown
+ * only while their own instance shows them too (POST /status, asked once a feed refresh).
  */
 
 /** How long the feed is reused before profile rooms are read again. */
@@ -67,6 +81,11 @@ const FEED_PAGE_SIZE = 20;
 const READ_CONCURRENCY = 4;
 
 const PUBLIC_URL = process.env.PUBLIC_WEB_URL?.replace(/\/+$/, '');
+/** What this instance calls itself to its peers; its server name when unset. */
+const INSTANCE_NAME = process.env.PURRLOR_INSTANCE_NAME;
+/** How long a peer's answer about its people stands when it can't be asked again; then they're hidden. */
+const PEER_STATUS_GRACE_MS = 30 * 60_000;
+const MAX_STATUS_USERS = 500;
 const MiB = 1024 * 1024;
 /** The largest file the media route hands out; bigger ones are refused, not cut short. */
 const MAX_MEDIA_BYTES = Number(process.env.PUBLIC_MEDIA_MAX_BYTES) > 0 ? Number(process.env.PUBLIC_MEDIA_MAX_BYTES) : 100 * MiB;
@@ -79,8 +98,18 @@ const MEDIA_CACHE_BYTES = Number(process.env.PUBLIC_MEDIA_CACHE_BYTES) > 0 ? Num
 const MEDIA_MAX_AGE_S = 600;
 
 export type ProfileRoom = { roomId: string; owner: string; state: RawEvent[]; posts: PublicPost[] };
-/** `publicPages`: owners whose page switch is on in this snapshot. */
-export type FeedCache = { at: number; rooms: Map<string, ProfileRoom>; byOwner: Map<string, ProfileRoom>; publicPages: Set<string> };
+/**
+ * `publicPages`: owners whose page switch is on in this snapshot. `homeHidden` and `homeOff`: peers'
+ * people their own instance hides, or keeps off its public web, so this one does too.
+ */
+export type FeedCache = {
+  at: number;
+  rooms: Map<string, ProfileRoom>;
+  byOwner: Map<string, ProfileRoom>;
+  publicPages: Set<string>;
+  homeHidden: Set<string>;
+  homeOff: Set<string>;
+};
 
 export const mediaIndex = new MediaIndex();
 export const mediaCache = new MediaCache(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'media-cache'), MAX_MEDIA_BYTES, MEDIA_CACHE_BYTES);
@@ -97,9 +126,26 @@ const mediaLimiter = new RateLimiter(200 * RATE_SCALE, 600 * RATE_SCALE);
 let feedCache: FeedCache | undefined;
 let feedRefresh: Promise<FeedCache> | undefined;
 
-/** Hidden people (`purrlor pages hide`): their page and their posts are gone from the public web. */
-async function hiddenUsers(): Promise<Set<string>> {
-  return (await adminStore.lists()).hidden;
+/**
+ * What the public routes go by: this site's admin decisions, plus what peers decided about their
+ * own people (FeedCache.homeHidden, homeOff).
+ */
+async function effectiveLists(feed: FeedCache): Promise<AdminLists> {
+  const lists = await adminStore.lists();
+  return {
+    ...lists,
+    hidden: new Set([...lists.hidden, ...feed.homeHidden]),
+    publicOff: new Set([...lists.publicOff, ...feed.homeOff]),
+  };
+}
+
+async function peerServers(): Promise<Set<string>> {
+  return new Set((await adminStore.peers()).map((peer) => peer.serverName));
+}
+
+/** A user ID from a visitor's `:user`, on this server or an approved peer. */
+async function resolveUser(raw: string): Promise<string | undefined> {
+  return knownUserId(raw, await serverName(), await peerServers());
 }
 
 // --- Reading profile rooms ---------------------------------------------------------------------
@@ -132,11 +178,11 @@ async function listProfileRoomIds(mx: MatrixClient): Promise<string[]> {
   return ids.slice(0, MAX_PROFILE_ROOMS);
 }
 
-async function readProfileRoom(mx: MatrixClient, roomId: string, serverName: string): Promise<ProfileRoom | undefined> {
+async function readProfileRoom(mx: MatrixClient, roomId: string, servers: ReadonlySet<string>): Promise<ProfileRoom | undefined> {
   try {
     const state = (await mx.roomState(roomId)) as unknown as RawEvent[];
     const owner = readProfileOwner(state);
-    if (!owner || serverNameOf(owner) !== serverName) return undefined;
+    if (!owner || !servers.has(serverNameOf(owner))) return undefined;
     // Straight to /messages: the SDK's createMessagesRequest wants a Filter instance, and given a
     // plain filter it throws before asking, which read every room as empty.
     const filter = JSON.stringify({ types: ['xyz.nekous.post', 'xyz.nekous.comment', 'm.reaction'] });
@@ -153,14 +199,71 @@ async function readProfileRoom(mx: MatrixClient, roomId: string, serverName: str
   }
 }
 
+/** Each peer's last answer about its people, kept so a peer that's briefly down doesn't empty the feed. */
+const peerAnswers = new Map<string, { at: number; hidden: Set<string>; publicOff: Set<string> }>();
+
+/**
+ * Asks each peer which of its people (those in this snapshot) it keeps off its own public web. A
+ * peer that can't be asked is answered from its last reply for half an hour, then all its people
+ * count as hidden: when in doubt, a peer's person isn't shown.
+ */
+async function askPeers(peers: Peer[], owners: string[]): Promise<{ hidden: Set<string>; publicOff: Set<string> }> {
+  const hidden = new Set<string>();
+  const publicOff = new Set<string>();
+  await Promise.all(
+    peers.map(async (peer) => {
+      const theirs = owners.filter((owner) => serverOfUser(owner) === peer.serverName).slice(0, MAX_STATUS_USERS);
+      if (theirs.length === 0) return;
+      try {
+        const res = await fetch(`${peer.url}/api/public/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ users: theirs }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        const answer = res.ok ? parsePeerStatus(await res.json(), peer.serverName) : undefined;
+        if (!answer) throw new Error(`HTTP ${res.status}`);
+        peerAnswers.set(peer.serverName, { at: Date.now(), ...answer });
+      } catch (err) {
+        console.warn(`Public web: couldn't ask ${peer.serverName} about its people: ${(err as Error).message}`);
+      }
+      const answer = peerAnswers.get(peer.serverName);
+      if (!answer || Date.now() - answer.at > PEER_STATUS_GRACE_MS) {
+        theirs.forEach((owner) => hidden.add(owner));
+        return;
+      }
+      answer.hidden.forEach((owner) => hidden.add(owner));
+      answer.publicOff.forEach((owner) => publicOff.add(owner));
+    })
+  );
+  return { hidden, publicOff };
+}
+
 async function refreshFeed(): Promise<FeedCache> {
   const mx = await getServiceClient();
   const serverName = serverNameOf(mx.getUserId() ?? '');
-  const ids = await listProfileRoomIds(mx);
-  const rooms = (await mapLimited(ids, READ_CONCURRENCY, (id) => readProfileRoom(mx, id, serverName))).filter(
+  const peers = await adminStore.peers();
+  const servers = new Set([serverName, ...peers.map((peer) => peer.serverName)]);
+  const ids = new Set(await listProfileRoomIds(mx));
+  // Peers' profile rooms the bot has joined (peering.ts): read like this server's own.
+  for (const room of mx.getRooms()) {
+    if (room.getMyMembership() !== 'join' || room.getType() !== PROFILE_ROOM_TYPE) continue;
+    const origin = roomOriginServer(mx, room.roomId);
+    if (origin && origin !== serverName && servers.has(origin)) ids.add(room.roomId);
+  }
+  const rooms = (await mapLimited([...ids], READ_CONCURRENCY, (id) => readProfileRoom(mx, id, servers))).filter(
     (room): room is ProfileRoom => !!room
   );
-  const cache: FeedCache = { at: Date.now(), rooms: new Map(rooms.map((room) => [room.roomId, room])), byOwner: new Map(), publicPages: new Set() };
+  const remoteOwners = [...new Set(rooms.map((room) => room.owner).filter((owner) => serverOfUser(owner) !== serverName))];
+  const home = await askPeers(peers, remoteOwners);
+  const cache: FeedCache = {
+    at: Date.now(),
+    rooms: new Map(rooms.map((room) => [room.roomId, room])),
+    byOwner: new Map(),
+    publicPages: new Set(),
+    homeHidden: home.hidden,
+    homeOff: home.publicOff,
+  };
   // A person has one profile room; if a stray second one exists, the one with posts wins.
   for (const room of rooms) {
     const current = cache.byOwner.get(room.owner);
@@ -232,11 +335,10 @@ function notFound(res: Response): void {
 
 /** The public page for a user, or undefined (for every reason it might not be shown). */
 async function publicPage(rawUser: string) {
-  const name = await serverName();
-  const userId = localUserId(rawUser, name);
-  const lists = await adminStore.lists();
-  if (!userId || lists.hidden.has(userId) || lists.publicOff.has(userId)) return undefined;
+  const userId = await resolveUser(rawUser);
   const feed = await getFeed();
+  const lists = await effectiveLists(feed);
+  if (!userId || lists.hidden.has(userId) || lists.publicOff.has(userId)) return undefined;
   const room = feed.byOwner.get(userId);
   if (!room || !readPublicWeb(room.state)) return undefined;
   const mx = await getServiceClient();
@@ -326,10 +428,10 @@ export function publicWebRouter(): Router {
     try {
       const before = typeof req.query.before === 'string' && /^\d{1,16}$/.test(req.query.before) ? Number(req.query.before) : undefined;
       const feed = await getFeed();
-      const hiddenSet = await hiddenUsers();
+      const hiddenSet = (await effectiveLists(feed)).hidden;
       let posts = [...feed.byOwner.values()].flatMap((room) => (hiddenSet.has(room.owner) ? [] : room.posts));
       if (typeof req.query.author === 'string') {
-        const author = localUserId(req.query.author, await serverName());
+        const author = await resolveUser(req.query.author);
         posts = author ? posts.filter((post) => post.author === author) : [];
       }
       const page = pageOfPosts(posts, before, FEED_PAGE_SIZE);
@@ -390,7 +492,7 @@ export function publicWebRouter(): Router {
     if (!isMxc(mxc)) return void res.status(404).end();
     try {
       const feed = await getFeed();
-      if (!mayServeMedia(mxc, mediaIndex.sources(mxc), await adminStore.lists(), feed.publicPages)) return void res.status(404).end();
+      if (!mayServeMedia(mxc, mediaIndex.sources(mxc), await effectiveLists(feed), feed.publicPages)) return void res.status(404).end();
       const width = Number(req.query.width);
       const height = Number(req.query.height);
       const thumbnail = Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 && width <= 1600 && height <= 1600;
@@ -447,7 +549,7 @@ export function publicWebRouter(): Router {
       sendCard(res, {
         title: `${post.author} on Purrlor`,
         description: post.warning ? `Content warning: ${post.warning}` : post.body || 'A post with media',
-        url: `${baseUrl(req)}/@${post.author.slice(1, post.author.indexOf(':'))}/post/${encodeURIComponent(post.eventId)}`,
+        url: `${baseUrl(req)}/${profilePath(post.author, name)}/post/${encodeURIComponent(post.eventId)}`,
         ...(image && !post.sensitive && !post.warning && { image: mediaUrl(req, image, 600) }),
         siteName: 'Purrlor',
       });
@@ -466,15 +568,15 @@ export function publicWebRouter(): Router {
       const name = await serverName();
       if (!page) return void sendCard(res, { title: `Purrlor on ${name}`, description: 'Sign in to see this page.', url: baseUrl(req), siteName: 'Purrlor' });
       allowProfileMedia(page);
-      const localpart = page.userId.slice(1, page.userId.indexOf(':'));
-      const who = page.displayName ? `${page.displayName} (@${localpart})` : `@${localpart}`;
+      const path = profilePath(page.userId, name);
+      const who = page.displayName ? `${page.displayName} (${path})` : path;
       const item = pageItemPreview(page.page, kind, id, number ? Number(number) : undefined);
       const style = page.page?.style as { colors?: { accent?: unknown } } | undefined;
       const image = item?.image ?? page.avatarUrl;
       sendCard(res, {
         title: item ? `${item.title} · ${who}` : who,
         description: item?.description ?? page.bio ?? `${page.userId} on Purrlor`,
-        url: `${baseUrl(req)}/@${localpart}/${kind}/${id}${number ? `/${number}` : ''}`,
+        url: `${baseUrl(req)}/${path}/${kind}/${id}${number ? `/${number}` : ''}`,
         ...(image && { image: mediaUrl(req, image, 600) }),
         ...(typeof style?.colors?.accent === 'string' && { themeColor: style.colors.accent }),
         siteName: 'Purrlor',
@@ -495,11 +597,11 @@ export function publicWebRouter(): Router {
       }
       allowProfileMedia(page);
       const style = page.page?.style as { colors?: { accent?: unknown } } | undefined;
-      const localpart = page.userId.slice(1, page.userId.indexOf(':'));
+      const path = profilePath(page.userId, name);
       sendCard(res, {
-        title: page.displayName ? `${page.displayName} (@${localpart})` : `@${localpart}`,
+        title: page.displayName ? `${page.displayName} (${path})` : path,
         description: page.bio ?? `${page.userId} on Purrlor`,
-        url: `${baseUrl(req)}/@${localpart}`,
+        url: `${baseUrl(req)}/${path}`,
         ...(page.avatarUrl && { image: mediaUrl(req, page.avatarUrl, 400) }),
         ...(typeof style?.colors?.accent === 'string' && { themeColor: style.colors.accent }),
         siteName: 'Purrlor',
@@ -509,8 +611,84 @@ export function publicWebRouter(): Router {
     }
   });
 
+  // --- Federation (docs/federation.md) -----------------------------------------------------------
+
+  router.get('/instance', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    try {
+      const name = await serverName();
+      res.set('Cache-Control', 'public, max-age=300').json({
+        software: 'purrlor',
+        federation: FEDERATION_VERSION,
+        serverName: name,
+        name: cleanInstanceName(INSTANCE_NAME, name),
+        url: baseUrl(req),
+      });
+    } catch {
+      res.status(503).json({ error: 'Not available right now' });
+    }
+  });
+
+  router.get('/peers', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    const peers = (await adminStore.peers()).map(({ serverName: server, name, url }) => ({ serverName: server, name, url }));
+    res.set('Cache-Control', 'public, max-age=60').json({ peers });
+  });
+
+  // Asked by peers: which of these people of ours do we keep off our public web. The same facts
+  // GET /status/:user gives anyone, a batch at a time; anyone not on this server is left out.
+  router.post('/status', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    const users: unknown[] = Array.isArray(req.body?.users) ? req.body.users.slice(0, MAX_STATUS_USERS) : [];
+    const name = await serverName().catch(() => '');
+    const lists = await adminStore.lists();
+    const ours = users.filter((user): user is string => typeof user === 'string' && localUserId(user, name) === user);
+    res.set('Cache-Control', 'no-store').json({
+      hidden: ours.filter((user) => lists.hidden.has(user)),
+      publicOff: ours.filter((user) => lists.publicOff.has(user)),
+    });
+  });
+
+  // A signed-in person here followed (or opened) a peer's person the bot isn't reading yet.
+  router.post('/peers/join', async (req, res) => {
+    if (limited(req, res, pageLimiter)) return;
+    const target = typeof req.body?.user_id === 'string' ? req.body.user_id : '';
+    const roomId = typeof req.body?.room_id === 'string' && /^![^\s/]{1,255}$/.test(req.body.room_id) ? req.body.room_id : '';
+    let caller: string;
+    try {
+      const ownServer = await serverName();
+      caller = await validateOpenIdToken(req.body?.openid_token, { serverName: ownServer, baseUrl: process.env.MATRIX_HOMESERVER_URL ?? '' });
+      if (serverNameOf(caller) !== ownServer) return void res.status(403).json({ error: 'Not an account on this server', code: 'not_local' });
+    } catch {
+      return void res.status(401).json({ error: 'Authentication failed' });
+    }
+    if (!joinLimiter.take(caller)) return void res.status(429).json({ error: 'Too many requests; slow down' });
+    const local = await serverName();
+    const userId = knownUserId(target, local, await peerServers());
+    if (!userId || !roomId || serverOfUser(userId) === local) {
+      return void res.status(400).json({ error: "user_id must be a peer's person and room_id their profile room", code: 'bad_request' });
+    }
+    try {
+      const result = await joinFollowedProfile(userId, roomId);
+      if (result === 'joined') return void res.json({ joined: true });
+      const answers = {
+        'not-a-peer': [403, "That person's server isn't one this instance federates with"],
+        'not-theirs': [404, "That isn't that person's profile room"],
+        full: [503, 'This instance reads as many rooms from that server as it will'],
+      } as const;
+      const [status, error] = answers[result];
+      res.status(status).json({ error, code: result });
+    } catch (err) {
+      console.error('Peer join failed', err);
+      res.status(502).json({ error: "Couldn't join that room", code: 'join_failed' });
+    }
+  });
+
   return router;
 }
+
+/** On-demand joins, per signed-in person: plenty for following people, not for crawling a server. */
+const joinLimiter = new RateLimiter(20, 20);
 
 /**
  * What the admin control socket (controlServer.ts) needs from the public web. It reads the same
@@ -525,6 +703,7 @@ export function controlDeps(): Omit<ControlDeps, 'store'> {
   };
   return {
     serverName,
+    peerServers,
     homeserverUrl: () => homeserverUrl,
     pageState,
     async counts() {
@@ -543,6 +722,16 @@ export function controlDeps(): Omit<ControlDeps, 'store'> {
       return (await getFeed()).rooms.get(roomId)?.owner;
     },
     forgetCopy: (mxc) => mediaCache.forget(mxc),
+    peering: {
+      async fetchInstance(url) {
+        const res = await fetch(`${url}/api/public/instance`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) throw new Error(`it answered HTTP ${res.status}`);
+        return res.json();
+      },
+      sync: async (peer) => syncPeer(await getServiceClient(), peer),
+      leave: leavePeer,
+      status: (server) => peerStatus.get(server),
+    },
   };
 }
 
@@ -555,13 +744,13 @@ export function controlDeps(): Omit<ControlDeps, 'store'> {
 async function findPost(eventId: string, author?: string): Promise<PublicPost | undefined> {
   if (!/^\$[A-Za-z0-9_\-+/=:.]{1,255}$/.test(eventId)) return undefined;
   const feed = await getFeed();
-  const hiddenSet = await hiddenUsers();
+  const hiddenSet = (await effectiveLists(feed)).hidden;
   for (const room of feed.byOwner.values()) {
     if (hiddenSet.has(room.owner)) continue;
     const post = room.posts.find((p) => p.eventId === eventId);
     if (post) return post;
   }
-  const userId = author ? localUserId(author, await serverName()) : undefined;
+  const userId = author ? await resolveUser(author) : undefined;
   const room = userId && !hiddenSet.has(userId) ? feed.byOwner.get(userId) : undefined;
   return room ? readOlderPost(room, eventId) : undefined;
 }
