@@ -174,11 +174,24 @@ maintaining a big look-and-feel library. The panel embeds a condensed copy of th
 above so a theme author doesn't have to come find this file to know what's overridable.
 
 The one exception is `THEME_PRESETS` in `AppearanceSettings.tsx` — a couple of explicitly
-requested, ready-made starting points (currently "Lola", a black-and-hot-pink palette) rendered
-as swatch chips above the editor. Clicking one loads its CSS into the textarea (it still isn't
-applied until Apply, same as "Load from file") rather than a hidden or hard-to-edit choice. Each
-preset only overrides *color* tokens — the gradient/radius/font/animation tokens are derived
-from those in `tokens.css`, so a preset reskins the whole app without redefining shape or motion.
+requested, ready-made starting points ("Y2K Chatroom", the old default; "Lola", a
+black-and-hot-pink palette; "Halloween") rendered as swatch chips above the editor. Clicking one
+loads its CSS into the textarea (it still isn't applied until Apply, same as "Load from file")
+rather than a hidden or hard-to-edit choice. Most presets only override *color* tokens — the
+gradient/radius/font/animation tokens are derived from those in `tokens.css`, so a preset
+reskins the whole app without redefining shape or motion.
+
+"Halloween" (`src/app/themes/halloween.ts`) is the worked example of going further while staying
+an ordinary theme: pumpkin and cat-eye colors and Creepster for display text, then rules on `nu-`
+classes and `data-nu-role`s that dress the mascot up. The selected Space's cat ears turn black, a
+black cat sits on the user panel swishing its tail, and eyes blink in the dark at the bottom of the
+rail. The empty screen gets a cat under a harvest moon, channel welcomes a cat-faced
+jack-o'-lantern, and the main pane a cobweb with a spider on its thread, fog, and bats now and then.
+Every picture is an SVG in a `data:` URI (written out readably in the module, encoded when the
+preset is built), so the CSS stands alone wherever it's pasted and stays inside the CSP. The
+CSS-driven motion sits in `@media (prefers-reduced-motion: no-preference)`. Its test checks that
+the sanitizer keeps every rule and that each SVG parses, and `e2e/security.spec.ts` applies it
+under production's CSP.
 
 The shipped default ("Y2K Chatroom") keeps Discord's layout — server rail, channel list, main
 timeline, member list — but leans into a glossy, candy-gradient, early-2000s-internet look

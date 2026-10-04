@@ -78,3 +78,33 @@ test("a theme can restyle the app but not read what's typed", async ({ page }) =
   await expect(role(page, 'appearance-settings-editor')).toHaveValue(/leak\.invalid/);
   expect(await violations()).toEqual([]);
 });
+
+test('the Halloween preset dresses the app up, its font and pictures allowed by the policy', async ({ page }) => {
+  const violations = await watchViolations(page);
+  const alice = await createUser('alice');
+  const { spaceName } = await createSpaceWithChannel(alice);
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  await role(page, 'user-panel-settings').click();
+  await page.getByRole('button', { name: 'Appearance' }).click();
+  await role(page, 'appearance-settings-preset').filter({ hasText: 'Halloween' }).click();
+  await role(page, 'appearance-settings-apply').click();
+  await expect(role(page, 'appearance-settings-left-out')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  const look = await page.evaluate(async () => {
+    await document.fonts.load('32px Creepster');
+    const panel = document.querySelector('[data-nu-role="user-panel"]')!;
+    return {
+      font: document.fonts.check('32px Creepster'),
+      ears: getComputedStyle(document.querySelector('.nu-server-rail__item--active .nu-server-rail__ear')!).fill,
+      cat: getComputedStyle(panel, '::before').backgroundImage,
+      lantern: getComputedStyle(document.querySelector('.nu-timeline__welcome-icon')!).backgroundImage,
+    };
+  });
+  expect(look.font).toBe(true);
+  expect(look.ears).toBe('rgb(5, 3, 7)');
+  expect(look.cat).toContain('data:image/svg+xml');
+  expect(look.lantern).toContain('data:image/svg+xml');
+  expect(await violations()).toEqual([]);
+});
