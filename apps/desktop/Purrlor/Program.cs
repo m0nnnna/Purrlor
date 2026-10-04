@@ -164,6 +164,11 @@ public sealed class MainForm : Form
     private const int ResizeGrip = 6;
     private const int WM_NCCALCSIZE = 0x0083;
     private const int WM_NCHITTEST = 0x0084;
+    private const int WM_NCACTIVATE = 0x0086;
+    private const int WM_SETTEXT = 0x000C;
+    private const int WM_SETICON = 0x0080;
+    private const int GWL_STYLE = -16;
+    private const int WS_VISIBLE = 0x10000000;
     private const int WM_QUERYENDSESSION = 0x0011;
     private const int WM_ENDSESSION = 0x0016;
     private const int WS_THICKFRAME = 0x00040000;
@@ -928,6 +933,23 @@ public sealed class MainForm : Form
         // WS_THICKFRAME (kept for Snap and resizing) would otherwise add a system frame that
         // WinForms miscounts, leaving the content short of the window's bottom edge.
         if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero) { m.Result = IntPtr.Zero; return; }
+        // With no frame of its own, Windows' default handling of these still paints the old
+        // unthemed caption bar (title, small buttons) straight over the top of the window: on
+        // focus changes, and whenever the title changes, which the page's title (unread counts)
+        // does all the time. The same workarounds Chromium uses for its frameless windows:
+        // WM_NCACTIVATE with lParam -1 changes the active state without painting anything, and
+        // the title and icon are set with the window briefly marked invisible, so nothing is drawn.
+        if (m.Msg == WM_NCACTIVATE) { m.LParam = new IntPtr(-1); base.WndProc(ref m); return; }
+        if ((m.Msg == WM_SETTEXT || m.Msg == WM_SETICON) && IsHandleCreated)
+        {
+            int style = GetWindowLong(Handle, GWL_STYLE);
+            if ((style & WS_VISIBLE) != 0)
+            {
+                SetWindowLong(Handle, GWL_STYLE, style & ~WS_VISIBLE);
+                try { base.WndProc(ref m); } finally { SetWindowLong(Handle, GWL_STYLE, style); }
+                return;
+            }
+        }
         if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
         {
             base.WndProc(ref m);
@@ -956,6 +978,8 @@ public sealed class MainForm : Form
     private static int ToColorRef(Color c) => c.R | (c.G << 8) | (c.B << 16);
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int index);
+    [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int index, int value);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr hWnd, out RECT rect);
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
