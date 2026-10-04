@@ -39,7 +39,7 @@ function fitWaveform(waveform: number[]): number[] {
  * sendVoiceMessage). Plain `m.audio` files with no voice marker keep using FileMessage as before.
  */
 export function VoiceMessage({ body, url, file, mimetype, durationMs, waveform }: VoiceMessageProps) {
-  const src = useAttachmentUrl({ url, file, mimetype });
+  const src = useAttachmentUrl({ url, file, mimetype }, { direct: true });
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);

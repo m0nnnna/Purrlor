@@ -4,13 +4,18 @@ import { Icon } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { readPost } from '../../matrix/feed';
 import type { GlobalPost } from '../../matrix/globalFeed';
-import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import type { PostAttachment } from '../../matrix/postMedia';
 import { openPostFrom } from './profileData';
 import './MediaGrid.css';
 
+/** About the size a tile is drawn at, for its thumbnail. */
+const TILE_PX = 240;
+
 function Tile({ attachment, covered }: { attachment: PostAttachment; covered: boolean }) {
-  const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype: attachment.info.mimetype });
+  const { mimetype, w, h } = attachment.info;
+  const thumbnail = attachment.kind === 'video' ? undefined : inlineThumbnailSize(mimetype, w, h, TILE_PX, TILE_PX);
+  const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype }, { direct: true, thumbnail });
   if (!src) return <span className="nu-media-grid__fill nu-media-grid__fill--loading" />;
   const className = covered ? 'nu-media-grid__fill nu-media-grid__fill--covered' : 'nu-media-grid__fill';
   return attachment.kind === 'video' ? (

@@ -26,7 +26,9 @@ function formatSize(bytes?: number): string {
  *  card. All three go through the same fetch-then-blob path as images (useAttachmentUrl),
  *  which is what makes E2EE attachments transparent here too. */
 export function FileMessage({ msgtype, body, url, file, mimetype, size }: FileMessageProps) {
-  const src = useAttachmentUrl({ url, file, mimetype });
+  // A player streams straight from the media URL; a download link needs the file itself.
+  const playable = msgtype === MsgType.Video || msgtype === MsgType.Audio;
+  const src = useAttachmentUrl({ url, file, mimetype }, { direct: playable });
   const mediaRef = usePauseWhenOffscreen();
 
   if (!src) {

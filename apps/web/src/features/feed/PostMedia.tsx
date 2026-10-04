@@ -1,8 +1,8 @@
 import { useRef, useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
-import { Lightbox } from '../../components/Lightbox';
 import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
-import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { AttachmentLightbox } from '../messaging/AttachmentLightbox';
 import { attachmentMxc, type PostAttachment } from '../../matrix/postMedia';
 import { TaggedImageOverlay } from './ImageTags';
 import './PostMedia.css';
@@ -12,9 +12,19 @@ function ratioStyle(attachment: PostAttachment): CSSProperties | undefined {
   return w && h ? { aspectRatio: `${w} / ${h}` } : undefined;
 }
 
+/** About the widest a post's image is drawn, for its thumbnail. */
+const POST_MEDIA_PX = 600;
+
 function MediaItem({ attachment, single }: { attachment: PostAttachment; single: boolean }) {
   // An encrypted attachment is fetched and decrypted here with the key from the post itself.
-  const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype: attachment.info.mimetype });
+  const { mimetype, w, h } = attachment.info;
+  const source = { url: attachment.url, file: attachment.file, mimetype };
+  // Images inline as a thumbnail about the feed's width (the whole file opens in the lightbox);
+  // video streams from the media URL.
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const thumbnail =
+    attachment.kind === 'video' || thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX);
+  const src = useAttachmentUrl(source, { direct: true, thumbnail });
   const [open, setOpen] = useState(false);
   const videoRef = usePauseWhenOffscreen();
   const imgRef = useRef<HTMLImageElement>(null);
@@ -54,7 +64,14 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
       style={attachment.tags?.length ? undefined : style}
       onClick={() => setOpen(true)}
     >
-      <img ref={imgRef} className="nu-post-media__img" src={src} alt={attachment.name} loading="lazy" />
+      <img
+        ref={imgRef}
+        className="nu-post-media__img"
+        src={src}
+        alt={attachment.name}
+        loading="lazy"
+        onError={thumbnail ? () => setThumbnailFailed(true) : undefined}
+      />
     </button>
   );
 
@@ -69,7 +86,7 @@ function MediaItem({ attachment, single }: { attachment: PostAttachment; single:
       ) : (
         image
       )}
-      {open && <Lightbox src={src} alt={attachment.name} onClose={() => setOpen(false)} />}
+      {open && <AttachmentLightbox source={source} preview={src} alt={attachment.name} onClose={() => setOpen(false)} />}
     </>
   );
 }

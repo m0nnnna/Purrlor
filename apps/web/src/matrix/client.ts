@@ -1,3 +1,4 @@
+import { startMediaWorkerAuth, stopMediaWorkerAuth } from './mediaWorker';
 import { createClient, IndexedDBStore, IndexedDBCryptoStore, type MatrixClient } from 'matrix-js-sdk';
 import type { Session } from './session';
 import { secretStorageCallbacks } from './secretStorageCallbacks';
@@ -170,9 +171,12 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   setHomeServer(mx.getDomain());
   installMemberNameFallback();
   await mx.startClient({ lazyLoadMembers: true, threadSupport: true });
+  // From here the service worker can sign this client's media requests (matrix/mediaWorker.ts).
+  startMediaWorkerAuth(mx);
 }
 
 export async function logoutClient(mx: MatrixClient): Promise<void> {
+  stopMediaWorkerAuth();
   mx.stopClient();
   try {
     await mx.logout();

@@ -1,6 +1,7 @@
-// Service worker for background push notifications and for receiving shared files. No offline
-// caching, and the only request it touches is the share target's POST (below). Registered at app
-// start (main.tsx), since the phone's share sheet can open the app before push is ever enabled.
+// Service worker for background push notifications, for receiving shared files, and for signing
+// media requests (below). No offline caching. The only requests it touches are the share target's
+// POST and GETs of the homeserver's media. Registered at app start (main.tsx), since the phone's
+// share sheet can open the app before push is ever enabled.
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -92,4 +93,59 @@ async function takeShare(request) {
     // Nothing usable arrived: open the app as it is.
   }
   return Response.redirect(target.href, 303);
+}
+
+// Media: the homeserver wants an access token on every media request, which an <img>, <video> or
+// <audio> can't send, so the page used to fetch each file whole into a blob before showing any
+// of it. The worker adds the token instead (matrix/mediaWorker.ts has the page's half), and the
+// page can point those elements straight at the media URL: video streams, images are cached and
+// load lazily. The token isn't kept here: each request asks the page that made it, and it goes
+// only to that page's homeserver, only on its media endpoints, never anywhere else.
+const MEDIA_WORKER_VERSION = 1;
+const MEDIA_PATH = /^\/_matrix\/client\/v1\/media\/(download|thumbnail)\//;
+const TOKEN_TIMEOUT_MS = 3000;
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'purrlor-media-ping') event.ports[0]?.postMessage({ version: MEDIA_WORKER_VERSION });
+});
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET' || request.headers.has('Authorization') || !event.clientId) return;
+  if (!MEDIA_PATH.test(new URL(request.url).pathname)) return;
+  event.respondWith(signedMedia(request, event.clientId));
+});
+
+async function askForToken(clientId) {
+  const client = await self.clients.get(clientId);
+  if (!client) return null;
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(null), TOKEN_TIMEOUT_MS);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      resolve(event.data);
+    };
+    client.postMessage({ type: 'purrlor-media-token' }, [channel.port2]);
+  });
+}
+
+async function signedMedia(request, clientId) {
+  const auth = await askForToken(clientId).catch(() => null);
+  const url = new URL(request.url);
+  let homeserver = null;
+  try {
+    homeserver = auth?.homeserver ? new URL(auth.homeserver).origin : null;
+  } catch {
+    homeserver = null;
+  }
+  if (!auth?.token || homeserver !== url.origin) return fetch(request);
+  const headers = new Headers();
+  // A video's seeks and its first bytes are range requests: keep them.
+  const range = request.headers.get('Range');
+  if (range) headers.set('Range', range);
+  headers.set('Authorization', `Bearer ${auth.token}`);
+  // 'only-if-cached' is allowed on same-origin requests only, and this one goes to the homeserver.
+  const cache = request.cache === 'only-if-cached' ? 'default' : request.cache;
+  return fetch(request.url, { headers, mode: 'cors', credentials: 'omit', cache, signal: request.signal });
 }

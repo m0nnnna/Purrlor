@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { decryptAttachment, type EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import { useMatrixClient } from '../MatrixClientContext';
 import { needsMediaAuthentication } from '../mediaAuth';
+import { fetchMedia } from '../mediaFetch';
+import { mediaWorkerReady } from '../mediaWorker';
 
 export type AttachmentSource = {
   /** Plain (unencrypted room) attachment: the raw `mxc://` URL. */
@@ -14,45 +16,95 @@ export type AttachmentSource = {
   mimetype?: string;
 };
 
-// Fetching (and, for encrypted rooms, decrypting) every image from scratch on every mount —
-// every room revisit, every page reload — was real, wasted, repeated work: network round trips
-// plus real AES decryption CPU time, for bytes that hadn't changed. Cache the resolved blob URL
-// per mxc URL for the life of the page/session instead of re-doing it each time.
+export type AttachmentOptions = {
+  /** For an `<img>`, `<video>` or `<audio>` only: hand back the media URL itself when the service
+   *  worker can sign it (matrix/mediaWorker.ts), so video streams and images load lazily and are
+   *  cached. Never for a download link: a link to another origin opens rather than saves, and
+   *  the worker doesn't sign navigations. Encrypted files always come back as a blob. */
+  direct?: boolean;
+  /** A thumbnail of about this size instead of the whole file (unencrypted images only; see
+   *  inlineThumbnailSize). Falls back to the whole file when the server has none. */
+  thumbnail?: { width: number; height: number };
+};
+
 const attachmentUrlCache = new Map<string, Promise<string>>();
 
-async function fetchMxcBytes(mx: ReturnType<typeof useMatrixClient>, mxcUrl: string): Promise<ArrayBuffer> {
-  const useAuth = await needsMediaAuthentication(mx);
-  const httpUrl = mx.mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, undefined, undefined, useAuth);
-  if (!httpUrl) throw new Error('Invalid media URL');
-  const res = await fetch(httpUrl, useAuth ? { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } } : undefined);
-  if (!res.ok) throw new Error(`Media fetch failed: ${res.status}`);
-  return res.arrayBuffer();
-}
-
-async function resolveAttachment(
+async function blobUrl(
   mx: ReturnType<typeof useMatrixClient>,
   mxcUrl: string,
+  httpUrl: string,
+  useAuth: boolean,
   source: AttachmentSource
 ): Promise<string> {
-  const bytes = await fetchMxcBytes(mx, mxcUrl);
+  const res = await fetchMedia(mx, mxcUrl, httpUrl, useAuth);
+  const bytes = await res.arrayBuffer();
   const decrypted = source.file ? await decryptAttachment(bytes, source.file) : new Uint8Array(bytes);
   const blob = new Blob([decrypted], { type: source.mimetype });
   return URL.createObjectURL(blob);
 }
 
+async function resolveAttachment(
+  mx: ReturnType<typeof useMatrixClient>,
+  mxcUrl: string,
+  source: AttachmentSource,
+  options: AttachmentOptions
+): Promise<string> {
+  const useAuth = await needsMediaAuthentication(mx);
+  const full = mx.mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, undefined, undefined, useAuth);
+  if (!full) throw new Error('Invalid media URL');
+  if (source.file) return blobUrl(mx, mxcUrl, full, useAuth, source);
+
+  const thumb = options.thumbnail
+    ? mx.mxcUrlToHttp(mxcUrl, options.thumbnail.width, options.thumbnail.height, 'scale', undefined, undefined, useAuth)
+    : null;
+  if (options.direct && (!useAuth || (await mediaWorkerReady()))) return thumb ?? full;
+  if (thumb) {
+    try {
+      return await blobUrl(mx, mxcUrl, thumb, useAuth, source);
+    } catch {
+      // No thumbnail for this file (or its server makes none): the whole file instead.
+    }
+  }
+  return blobUrl(mx, mxcUrl, full, useAuth, source);
+}
+
+/** Image types whose thumbnail would lose something: animation, or vector sharpness. */
+const KEEP_WHOLE = /^image\/(gif|webp|apng|png;\s*animated|svg\+xml)/;
+
 /**
- * Resolves a message attachment's `url` (plain) or `file` (encrypted) into a usable src.
- * Always fetches the bytes itself rather than pointing an <img> at an mxc-derived HTTP URL —
- * that's required anyway for encrypted attachments, and it works uniformly on homeservers that
- * require authenticated media too. Deliberately fetches full size, not a thumbnail: encrypted
- * thumbnails are a separate `info.thumbnail_file` with its own key, and skipping that halves
- * the code path at the cost of downloading full images in the timeline — fine for now, worth
- * revisiting if bandwidth becomes a real complaint.
+ * The thumbnail size for an image shown inline in a box of `boxWidth` × `boxHeight` CSS pixels,
+ * or undefined when the whole file should load: a type a thumbnail would flatten (GIF, WebP,
+ * which can be animated), or an image already about that small. Twice the box, for sharp
+ * images on high-density screens.
  */
-export function useAttachmentUrl(source: AttachmentSource): string | null {
+export function inlineThumbnailSize(
+  mimetype: string | undefined,
+  width: number | undefined,
+  height: number | undefined,
+  boxWidth: number,
+  boxHeight: number
+): { width: number; height: number } | undefined {
+  if (!mimetype || KEEP_WHOLE.test(mimetype)) return undefined;
+  const target = { width: boxWidth * 2, height: boxHeight * 2 };
+  if (width && height && width <= target.width && height <= target.height) return undefined;
+  return target;
+}
+
+/**
+ * Resolves a message attachment's `url` (plain) or `file` (encrypted) into a usable src. By
+ * default it fetches the bytes itself and hands back a blob URL — required for encrypted
+ * attachments, and the only way to attach the access token where the homeserver wants one on
+ * media. `options.direct` and `options.thumbnail` (above) make the common case, an unencrypted
+ * image or video shown inline, much lighter. A fetch that fails for a reason that may pass
+ * (another server slow to answer ours) is asked again a few times (matrix/mediaFetch.ts).
+ */
+export function useAttachmentUrl(source: AttachmentSource, options: AttachmentOptions = {}): string | null {
   const mx = useMatrixClient();
   const [src, setSrc] = useState<string | null>(null);
   const mxcUrl = source.file?.url ?? source.url;
+  const direct = !!options.direct;
+  const thumbWidth = options.thumbnail?.width;
+  const thumbHeight = options.thumbnail?.height;
 
   useEffect(() => {
     if (!mxcUrl) {
@@ -61,14 +113,15 @@ export function useAttachmentUrl(source: AttachmentSource): string | null {
     }
 
     let cancelled = false;
-
-    let cached = attachmentUrlCache.get(mxcUrl);
+    const thumbnail = thumbWidth && thumbHeight ? { width: thumbWidth, height: thumbHeight } : undefined;
+    const key = `${mxcUrl}|${direct ? 'direct' : 'blob'}|${thumbnail ? `${thumbnail.width}x${thumbnail.height}` : 'full'}`;
+    let cached = attachmentUrlCache.get(key);
     if (!cached) {
-      cached = resolveAttachment(mx, mxcUrl, source).catch((err: unknown) => {
-        attachmentUrlCache.delete(mxcUrl); // don't poison the cache with a failed attempt
+      cached = resolveAttachment(mx, mxcUrl, source, { direct, thumbnail }).catch((err: unknown) => {
+        attachmentUrlCache.delete(key); // don't poison the cache with a failed attempt
         throw err;
       });
-      attachmentUrlCache.set(mxcUrl, cached);
+      attachmentUrlCache.set(key, cached);
     }
 
     cached
@@ -81,15 +134,9 @@ export function useAttachmentUrl(source: AttachmentSource): string | null {
 
     return () => {
       cancelled = true;
-      // Deliberately not revoking the object URL here — it's cached and may be reused by
-      // another mount of the same attachment (switching back to this room, another message
-      // referencing the same file). Blob URLs accumulate for the page's lifetime as a result;
-      // an LRU cap would be the next step if that ever proves to matter in practice.
     };
-    // source.file is compared by its url above; the key/iv/hashes inside it are stable for a
-    // given event so re-keying on mxcUrl (+ mx) alone is sufficient.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mx, mxcUrl, source.mimetype]);
+  }, [mx, mxcUrl, source.mimetype, direct, thumbWidth, thumbHeight]);
 
   return src;
 }

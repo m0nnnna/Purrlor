@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
-import { Lightbox } from '../../components/Lightbox';
-import { useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { AttachmentLightbox } from './AttachmentLightbox';
 import './ImageMessage.css';
 
 type ImageMessageProps = {
@@ -19,7 +19,12 @@ const MAX_WIDTH_PX = 360;
 const MAX_HEIGHT_PX = 320;
 
 export function ImageMessage({ body, url, file, mimetype, width, height }: ImageMessageProps) {
-  const src = useAttachmentUrl({ url, file, mimetype });
+  // A thumbnail inline (a fraction of the bytes, and another server sends its own small copy
+  // rather than the original crossing over first); the whole file in the lightbox. If the
+  // thumbnail won't load, the whole file instead.
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const thumbnail = thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, width, height, MAX_WIDTH_PX, MAX_HEIGHT_PX);
+  const src = useAttachmentUrl({ url, file, mimetype }, { direct: true, thumbnail });
   const [open, setOpen] = useState(false);
 
   // Reserve the image's proportional space up front from its known dimensions, so the box is
@@ -52,9 +57,16 @@ export function ImageMessage({ body, url, file, mimetype, width, height }: Image
         onClick={() => setOpen(true)}
         style={style}
       >
-        <img className="nu-image-message__img" src={src} alt={body} />
+        <img
+          className="nu-image-message__img"
+          src={src}
+          alt={body}
+          onError={thumbnail ? () => setThumbnailFailed(true) : undefined}
+        />
       </button>
-      {open && <Lightbox src={src} alt={body} onClose={() => setOpen(false)} />}
+      {open && (
+        <AttachmentLightbox source={{ url, file, mimetype }} preview={src} alt={body} onClose={() => setOpen(false)} />
+      )}
     </>
   );
 }
