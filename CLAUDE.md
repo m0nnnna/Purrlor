@@ -2,10 +2,13 @@
 
 ## Roadmap and model split
 
-The current plan is the Claude Docs doc "Purrlor: federated social features":
-https://claude.ai/code/artifact/9f3b850d-5c06-452f-b318-70d72b63b9c4
+The current plan is the Claude Docs doc "Purrlor: link embeds for messages and posts" (2026-10-04):
+https://claude.ai/code/artifact/be32ec17-9535-4319-a37b-3904b785d48c
 
-Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's service tasks write `docs/federation.md`, the contract the Sonnet client tasks build on: read it (and `docs/public-web.md`, `docs/posts.md`) first. Tasks 2 to 9 are done and merged into `master` (2026-10-03): the service and client sides, and the two-instance test (`deploy/test/federation`, CI's `federation` job). What's left is task 10, a run between purr.meowops.net and a real second server.
+Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's tasks write `docs/embeds.md`, the contract the Sonnet client tasks build on: read it (and `docs/posts.md`, `docs/federation.md`, `docs/public-web.md`) first. Before starting it, the chat history and federated media fixes come first (2026-10-04).
+
+The previous plan, "Purrlor: federated social features", is done (2026-10-04): tasks 2 to 9 merged 2026-10-03, and task 10, a run between purr.meowops.net and a real second server, works:
+https://claude.ai/code/artifact/9f3b850d-5c06-452f-b318-70d72b63b9c4
 
 "Purrlor: gaps and missing features" (2026-10-03) is paused; its operations gaps are done:
 https://claude.ai/code/artifact/3ec0d888-2a76-4969-86fc-58e87fe84b26
