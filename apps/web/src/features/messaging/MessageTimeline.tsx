@@ -642,7 +642,6 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const contentRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [atStart, setAtStart] = useState(false);
   const [renderWindow, setRenderWindow] = useState(INITIAL_RENDER_WINDOW);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   // Where your read receipt sat when you opened the room — captured once per room visit, before
@@ -668,10 +667,17 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // can't fight the stay-at-the-bottom logic.
   const anchorRef = useRef<{ eventId: string; offset: number } | null>(null);
   const autoBackfillDoneRef = useRef(false);
+  // Set when a scrollback fails, so the automatic fill below doesn't retry in a loop; scrolling
+  // up still retries by hand.
+  const autoFillFailedRef = useRef(false);
   const roomEnteredAtRef = useRef(0);
   const forceBottomUntilRef = useRef(0);
 
   const room = mx.getRoom(roomId);
+  // Read from the live timeline on every render rather than kept as state: a limited sync replaces
+  // the live timeline with a fresh one holding only the newest events (see useRoomTimeline), and a
+  // flag remembered from the old one said "nothing older" about a timeline that's gone.
+  const atStart = room ? room.getLiveTimeline().getPaginationToken(Direction.Backward) === null : false;
   const emotes = useRoomEmotes(room ?? undefined);
   const canPin = room ? canSendStateEvent(room, mx.getUserId() ?? '', 'm.room.pinned_events') : false;
   const pinnedIdSet = new Set(pinnedIds);
@@ -704,9 +710,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     pinnedToBottomRef.current = !jumpingHere;
     anchorRef.current = null;
     autoBackfillDoneRef.current = false;
+    autoFillFailedRef.current = false;
     roomEnteredAtRef.current = now;
     forceBottomUntilRef.current = jumpingHere ? 0 : now + SETTLE_EXTENSION_MS;
-    setAtStart(false);
     setRenderWindow(INITIAL_RENDER_WINDOW);
     setShowJumpToLatest(false);
     const myUserId = mx.getUserId();
@@ -742,9 +748,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     setLoadingMore(true);
     try {
       await mx.scrollback(currentRoom, HISTORY_PAGE_SIZE);
-      if (currentRoom.getLiveTimeline().getPaginationToken(Direction.Backward) === null) {
-        setAtStart(true);
-      }
+    } catch (err) {
+      autoFillFailedRef.current = true;
+      console.warn('MessageTimeline: loading older messages failed', err);
     } finally {
       setLoadingMore(false);
     }
@@ -865,15 +871,22 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   }, [highlightedEventId]);
 
   // A freshly-synced room can start with a thin initial timeline — the homeserver's sync only
-  // sends a limited backlog per room. Back-fill proactively the first time a room's view is
-  // thin, rather than requiring the user to scroll up once just to discover there's more.
+  // sends a limited backlog per room, and a limited sync later on (a sleeping laptop, a tab left
+  // in the background) cuts an open room back to just that. Back-fill proactively once when a
+  // room's view is thin, and then for as long as the messages don't fill the view: older pages
+  // only otherwise load from a scroll near the top, and a view that can't scroll never sends one,
+  // which left rooms stuck showing a handful of messages (a page of history can be mostly
+  // reactions, edits and member events, so one page isn't always enough).
   useEffect(() => {
-    if (autoBackfillDoneRef.current || atStart || loadingMore) return;
-    if (messages.length >= THIN_TIMELINE_THRESHOLD) return;
+    if (atStart || loadingMore || autoFillFailedRef.current) return;
+    const container = containerRef.current;
+    const thin = !autoBackfillDoneRef.current && messages.length < THIN_TIMELINE_THRESHOLD;
+    const unscrollable = !!container && container.scrollHeight - container.clientHeight < LOAD_MORE_THRESHOLD_PX;
+    if (!thin && !unscrollable) return;
     autoBackfillDoneRef.current = true;
     void loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, atStart, loadingMore]);
+  }, [roomId, events, renderWindow, atStart, loadingMore]);
 
   // A new or prepended page of messages: runs before paint, so an older page landing above you
   // (or a new message below while pinned) never shows a frame in the wrong spot.

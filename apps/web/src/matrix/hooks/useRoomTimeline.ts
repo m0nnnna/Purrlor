@@ -10,6 +10,8 @@ import { useMatrixClient } from '../MatrixClientContext';
  * sync) — MessageTimeline.tsx disables actions that relate to an event by ID (edit/reply/pin/
  * delete/react) while it's still a local echo, since matrix-js-sdk can't target a not-yet-synced
  * event's real ID yet; without this listener the UI wouldn't unlock those the moment it's safe.
+ * Also on a timeline reset: a limited ("gappy") sync swaps the room's live timeline for a fresh one
+ * holding only the newest events, and the view has to follow it rather than keep the old copy.
  */
 export function useRoomTimeline(roomId: string | null): MatrixEvent[] {
   const mx = useMatrixClient();
@@ -39,12 +41,18 @@ export function useRoomTimeline(roomId: string | null): MatrixEvent[] {
       if (event.getRoomId() === roomId) update();
     };
 
+    const onTimelineReset = (resetRoom?: Room) => {
+      if (resetRoom?.roomId === roomId) update();
+    };
+
     mx.on(RoomEvent.Timeline, onTimeline);
+    mx.on(RoomEvent.TimelineReset, onTimelineReset);
     mx.on(MatrixEventEvent.Decrypted, onDecrypted);
     mx.on(RoomEvent.LocalEchoUpdated, onLocalEchoUpdated);
 
     return () => {
       mx.removeListener(RoomEvent.Timeline, onTimeline);
+      mx.removeListener(RoomEvent.TimelineReset, onTimelineReset);
       mx.removeListener(MatrixEventEvent.Decrypted, onDecrypted);
       mx.removeListener(RoomEvent.LocalEchoUpdated, onLocalEchoUpdated);
     };
