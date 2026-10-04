@@ -9,11 +9,27 @@
   overflow-anchor: none;
 }
 
+/* Floats over the top of the messages instead of taking a line above them: appearing and
+   disappearing, a line pushed every message down and back up again while you read. */
 .nu-timeline__loading {
-  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 0;
+  overflow: visible;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nu-timeline__loading > span {
+  margin-top: var(--nu-space-1);
+  padding: var(--nu-space-1) var(--nu-space-3);
+  border-radius: 999px;
+  background: var(--nu-color-bg-tertiary);
+  border: 1px solid var(--nu-color-border);
   color: var(--nu-color-text-muted);
   font-size: var(--nu-font-size-sm);
-  padding: var(--nu-space-2);
 }
 
 .nu-timeline__content {

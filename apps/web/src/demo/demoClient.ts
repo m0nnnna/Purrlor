@@ -332,6 +332,8 @@ export function createDemoClient(): MatrixClient {
       return found;
     },
     scrollback: async (room: Room) => room,
+    // The demo's rooms hold their whole history already: nothing older to fetch.
+    paginateEventTimeline: async () => false,
     getPushActionsForEvent: () => ({ notify: false, tweaks: {} }),
     getDevices: async () => ({ devices: [] }),
     setDeviceDetails: async () => {},

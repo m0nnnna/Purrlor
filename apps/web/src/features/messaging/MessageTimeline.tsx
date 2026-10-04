@@ -747,7 +747,10 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     if (atStart) return;
     setLoadingMore(true);
     try {
-      await mx.scrollback(currentRoom, HISTORY_PAGE_SIZE);
+      // Not mx.scrollback: that treats any empty page as the start of the room, and a server
+      // still backfilling a room from other servers can answer with an empty page that has more
+      // behind it. This stops only when the server says there's nothing older (no `end` token).
+      await mx.paginateEventTimeline(currentRoom.getLiveTimeline(), { backwards: true, limit: HISTORY_PAGE_SIZE });
     } catch (err) {
       autoFillFailedRef.current = true;
       console.warn('MessageTimeline: loading older messages failed', err);
@@ -815,6 +818,14 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     setShowJumpToLatest(distanceFromBottom > JUMP_BUTTON_THRESHOLD_PX);
   };
 
+  // The reader taking hold of the scroll (wheel, touch, a key, dragging the scrollbar) ends the
+  // settle window at once. It used to run its course regardless, and a room whose images were
+  // slow to arrive (other servers' media) kept pulling you back to the bottom for up to
+  // MAX_SETTLE_MS while you were trying to scroll up.
+  const endSettling = () => {
+    forceBottomUntilRef.current = 0;
+  };
+
   const jumpToLatest = () => {
     pinnedToBottomRef.current = true;
     setShowJumpToLatest(false);
@@ -839,6 +850,10 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       setPendingJump(null);
       return;
     }
+    // In the room but not yet in this view's list (the view's first render, before its events
+    // arrive from useRoomTimeline): the next render has it. Giving up here dropped jumps into a
+    // small room, which is at its start at once and so had nothing older to load meanwhile.
+    if (room?.getLiveTimeline().getEvents().includes(target) && !events.includes(target)) return;
     const el = containerRef.current?.querySelector(`[data-nu-event-id="${CSS.escape(pendingJump.eventId)}"]`);
     const targetIndex = messages.findIndex((message) => message.getId() === pendingJump.eventId);
     if (!el && targetIndex >= 0 && targetIndex < hiddenOlderCount) {
@@ -862,7 +877,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       setPendingJump(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingJump, roomId, room, messages.length, renderWindow, atStart, loadingMore]);
+  }, [pendingJump, roomId, room, events, messages.length, renderWindow, atStart, loadingMore]);
 
   useEffect(() => {
     if (!highlightedEventId) return undefined;
@@ -873,16 +888,17 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // A freshly-synced room can start with a thin initial timeline — the homeserver's sync only
   // sends a limited backlog per room, and a limited sync later on (a sleeping laptop, a tab left
   // in the background) cuts an open room back to just that. Back-fill proactively once when a
-  // room's view is thin, and then for as long as the messages don't fill the view: older pages
-  // only otherwise load from a scroll near the top, and a view that can't scroll never sends one,
-  // which left rooms stuck showing a handful of messages (a page of history can be mostly
-  // reactions, edits and member events, so one page isn't always enough).
+  // room's view is thin, and then for as long as the top of the view is still near the top of
+  // what's loaded. Older pages otherwise load only from a scroll event near the top, and none
+  // comes when a page lands and you're still up there (a page can be mostly reactions, edits and
+  // member events) or when the view is too short to scroll at all: you had to scroll away and
+  // back, sometimes several times, or were stuck with a handful of messages.
   useEffect(() => {
     if (atStart || loadingMore || autoFillFailedRef.current) return;
     const container = containerRef.current;
     const thin = !autoBackfillDoneRef.current && messages.length < THIN_TIMELINE_THRESHOLD;
-    const unscrollable = !!container && container.scrollHeight - container.clientHeight < LOAD_MORE_THRESHOLD_PX;
-    if (!thin && !unscrollable) return;
+    const nearTop = !!container && container.scrollTop < LOAD_MORE_THRESHOLD_PX;
+    if (!thin && !nearTop) return;
     autoBackfillDoneRef.current = true;
     void loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -925,10 +941,19 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     markerIndex >= 0 && shownMessages.slice(markerIndex + 1).some((event) => event.getSender() !== myUserId) ? markerIndex + 1 : -1;
 
   return (
-    <div className="nu-timeline" data-nu-role="timeline" ref={containerRef} onScroll={handleScroll}>
+    <div
+      className="nu-timeline"
+      data-nu-role="timeline"
+      ref={containerRef}
+      onScroll={handleScroll}
+      onWheel={endSettling}
+      onTouchStart={endSettling}
+      onKeyDown={endSettling}
+      onPointerDown={endSettling}
+    >
       {loadingMore && (
         <div className="nu-timeline__loading" data-nu-role="timeline-loading">
-          Loading more…
+          <span>Loading more…</span>
         </div>
       )}
       <div className="nu-timeline__content" ref={contentRef}>
