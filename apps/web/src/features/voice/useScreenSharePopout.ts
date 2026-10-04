@@ -75,7 +75,7 @@ export function useScreenSharePopout(track: MediaStreamTrack | undefined): {
     if (video) video.srcObject = new MediaStream([track]);
   }, [track, close]);
 
-  // Close the popout if this component unmounts (leaving the voice channel, navigating away).
+  // Close the popout when the call ends (ScreenSharePopoutProvider unmounts with it).
   useEffect(() => {
     return () => {
       window.clearInterval(pollRef.current);

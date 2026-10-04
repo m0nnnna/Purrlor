@@ -21,7 +21,7 @@ import { usePushToTalk } from './usePushToTalk';
 import { personVolume, setPersonVolume } from './callVolume';
 import { toggleDeafen, toggleMute } from './callActions';
 import { readAppAudioOnly, saveAppAudioOnly, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
-import { useScreenSharePopout } from './useScreenSharePopout';
+import { useCallScreenSharePopout } from './ScreenSharePopoutProvider';
 import { useSharedWatchTogether } from './watchTogetherContext';
 import { sessionMode, type WatchTogetherMode } from './watchTogether';
 import { WatchTogetherModal } from './WatchTogetherModal';
@@ -200,7 +200,8 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const setDeafened = call?.setDeafened ?? (() => {});
   const livekitRoom = useRoomContext();
   const keyframeWorkerRef = useRef<Worker>();
-  const screenSharePopout = useScreenSharePopout(activeScreenShare?.publication.track?.mediaStreamTrack);
+  // Held at call level (ScreenSharePopoutProvider), so the window stays open in other channels.
+  const screenSharePopout = useCallScreenSharePopout();
   // Held at call level (VoiceCallSession), so it outlives this pane — Listen together keeps playing
   // from the Now playing card while you're in another channel.
   const watchTogether = useSharedWatchTogether();
