@@ -7,7 +7,7 @@ import { useVoiceConnection } from '../../matrix/hooks/useVoiceConnection';
 import { VoiceCallContext, type VoiceCallContextValue } from './voiceCallContext';
 import { playConnectedSound, playDisconnectedSound, warmUpAudioContext } from './voiceSounds';
 import { validateScreenShareCodecSupport, voiceChannelRoomOptions } from './voiceChannelRoomOptions';
-import { ScreenSharePopoutProvider } from './ScreenSharePopoutProvider';
+import { ScreenShareProvider } from './ScreenShareProvider';
 import { WatchTogetherProvider } from './WatchTogetherProvider';
 import { ApplyAudioSettings } from './ApplyAudioSettings';
 import { CallHotkeys } from './CallHotkeys';
@@ -102,7 +102,7 @@ export default function ActiveVoiceCall({ room, children }: { room: MatrixRoom; 
       <VoiceCallContext.Provider value={ctxValue}>
         <CallHotkeys />
         <WatchTogetherProvider>
-          <ScreenSharePopoutProvider>{children}</ScreenSharePopoutProvider>
+          <ScreenShareProvider>{children}</ScreenShareProvider>
         </WatchTogetherProvider>
       </VoiceCallContext.Provider>
     </LiveKitRoom>

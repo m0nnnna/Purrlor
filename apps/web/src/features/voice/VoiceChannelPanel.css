@@ -384,3 +384,39 @@
   flex: 1 1 14rem;
   min-width: 0;
 }
+
+/* Whose screen to watch, when more than one person is sharing: over the top-left of the share. */
+.nu-voice-panel__share-tabs {
+  position: absolute;
+  top: var(--nu-space-2);
+  left: var(--nu-space-2);
+  right: 48px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-1);
+  z-index: 1;
+}
+
+.nu-voice-panel__share-tab {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--nu-space-1) var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nu-color-bg-app) 80%, transparent);
+  color: var(--nu-color-text-secondary);
+  font-size: var(--nu-font-size-sm);
+  cursor: pointer;
+}
+
+.nu-voice-panel__share-tab:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-voice-panel__share-tab--active {
+  border-color: var(--nu-color-accent);
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}

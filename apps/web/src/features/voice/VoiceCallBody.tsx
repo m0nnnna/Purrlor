@@ -21,7 +21,7 @@ import { usePushToTalk } from './usePushToTalk';
 import { personVolume, setPersonVolume } from './callVolume';
 import { toggleDeafen, toggleMute } from './callActions';
 import { readIncludeSystemAudio, saveIncludeSystemAudio, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
-import { useCallScreenSharePopout } from './ScreenSharePopoutProvider';
+import { useCallScreenShare } from './ScreenShareProvider';
 import { useSharedWatchTogether } from './watchTogetherContext';
 import { sessionMode, type WatchTogetherMode } from './watchTogether';
 import { WatchTogetherModal } from './WatchTogetherModal';
@@ -191,8 +191,10 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const speakingIds = new Set(speaking.map((p) => p.identity));
   const { localParticipant, isMicrophoneEnabled, isScreenShareEnabled, isCameraEnabled } = useLocalParticipant();
   const pushToTalk = usePushToTalk();
-  const screenShareTracks = useTracks([Track.Source.ScreenShare]);
-  const activeScreenShare = screenShareTracks[0];
+  // Held at call level (ScreenShareProvider): which share you're watching, and its pop-out window,
+  // which stays open in other channels.
+  const { shares: screenShares, active: activeScreenShare, select: selectScreenShare, popout: screenSharePopout } =
+    useCallScreenShare();
   const cameraTracks = useTracks([Track.Source.Camera]).filter(isTrackReference);
   const cameraTrackByIdentity = new Map(cameraTracks.map((t) => [t.participant.identity, t]));
   const call = useVoiceCall();
@@ -200,8 +202,6 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const setDeafened = call?.setDeafened ?? (() => {});
   const livekitRoom = useRoomContext();
   const keyframeWorkerRef = useRef<Worker>();
-  // Held at call level (ScreenSharePopoutProvider), so the window stays open in other channels.
-  const screenSharePopout = useCallScreenSharePopout();
   // Held at call level (VoiceCallSession), so it outlives this pane — Listen together keeps playing
   // from the Now playing card while you're in another channel.
   const watchTogether = useSharedWatchTogether();
@@ -254,8 +254,33 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
             <p className="nu-voice-panel__screen-share-popped-out">
               Popped out into its own window.
             </p>
-          ) : (
+          ) : activeScreenShare.publication.track ? (
             <VideoTrack trackRef={activeScreenShare} />
+          ) : (
+            // Just switched to: its stream is on its way (ScreenShareProvider subscribes to it).
+            <p className="nu-voice-panel__screen-share-popped-out">Loading the share…</p>
+          )}
+          {screenShares.length > 1 && (
+            // More than one person sharing: pick whose to watch. Yours is in the list too.
+            <div className="nu-voice-panel__share-tabs" role="tablist" aria-label="Screen shares" data-nu-role="voice-screen-share-tabs">
+              {screenShares.map((share) => (
+                <button
+                  key={share.participant.identity}
+                  type="button"
+                  role="tab"
+                  aria-selected={share === activeScreenShare}
+                  className={
+                    share === activeScreenShare
+                      ? 'nu-voice-panel__share-tab nu-voice-panel__share-tab--active'
+                      : 'nu-voice-panel__share-tab'
+                  }
+                  data-nu-role="voice-screen-share-tab"
+                  onClick={() => selectScreenShare(share.participant.identity)}
+                >
+                  {share.participant.isLocal ? 'Your screen' : participantDisplayName(room, share.participant)}
+                </button>
+              ))}
+            </div>
           )}
           <button
             type="button"
