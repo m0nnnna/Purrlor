@@ -89,6 +89,8 @@ narrows it to one person (their posts below their page).
 { "posts": [ { "eventId": "$…", "author": "@luna:purr.example", "ts": 1790000000000, "body": "hi :cat:",
                "emotes": [ { "shortcode": "cat", "url": "mxc://…" } ],
                "attachments": [ { "kind": "image", "url": "mxc://…", "mimetype": "image/webp", "w": 800, "h": 600 } ],
+               "embeds": [ { "url": "https://…", "kind": "card", "site": { "name": "YouTube" }, "title": "…",
+                             "image": { "url": "mxc://…", "mimetype": "image/jpeg", "w": 480, "h": 360 } } ],
                "warning": "spoilers", "sensitive": true, "edited": true,
                "repost": { "kind": "global", "author": "@bob:purr.example", "ts": …, "body": "…" },
                "likes": 3, "comments": 1 } ],
@@ -97,6 +99,9 @@ narrows it to one person (their posts below their page).
 ```
 
 `repost` is `{ "kind": "hidden" }` for a Space post. Optional fields are left out when empty.
+`embeds` are the post's link embeds (`docs/embeds.md`), cards and pictures only: `kind` is `card`,
+`post` or `image` (a player or a file is a card), their pictures are served like a post's own, and
+only links in the post's text count.
 
 ### `GET /api/public/posts/:eventId`
 

@@ -179,6 +179,20 @@ export type PublicRepost =
   /** A post from a Space: shown only as "something was shared". */
   | { kind: 'hidden' };
 
+/** A link embed as the public web shows it (docs/embeds.md, "Peers and the public web"): cards
+ *  and pictures only. A player is a card with its picture; a video or audio file is a card. */
+export type PublicEmbed = {
+  url: string;
+  kind: 'card' | 'post' | 'image';
+  site?: { name?: string; color?: string };
+  title?: string;
+  description?: string;
+  author?: { name?: string; handle?: string; url?: string; avatar?: string };
+  image?: { url: string; mimetype: string; w?: number; h?: number };
+  published?: number;
+  sensitive?: boolean;
+};
+
 export type PublicPost = {
   eventId: string;
   author: string;
@@ -186,6 +200,7 @@ export type PublicPost = {
   body: string;
   emotes?: PublicEmote[];
   attachments?: PublicAttachment[];
+  embeds?: PublicEmbed[];
   warning?: string;
   sensitive?: boolean;
   repost?: PublicRepost;
@@ -215,6 +230,70 @@ function readAttachments(raw: unknown): PublicAttachment[] {
       ];
     })
     .slice(0, 4);
+}
+
+const EMBEDS_KEY = 'xyz.nekous.embeds';
+
+function webLink(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 2048) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function embedImage(raw: unknown): PublicEmbed['image'] {
+  // An encrypted picture (`file`) can't be in a public post, and couldn't be served if it were.
+  if (!isRecord(raw) || !isMxc(raw.url)) return undefined;
+  const info = isRecord(raw.info) ? raw.info : {};
+  const mimetype = typeof info.mimetype === 'string' && info.mimetype.startsWith('image/') ? info.mimetype : undefined;
+  if (!mimetype) return undefined;
+  return { url: raw.url, mimetype, ...(typeof info.w === 'number' && { w: info.w }), ...(typeof info.h === 'number' && { h: info.h }) };
+}
+
+/** A post's link embeds, for signed-out readers: only links its text has, at most 3. */
+export function readEmbeds(raw: unknown, body: string): PublicEmbed[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(isRecord)
+    .flatMap((item): PublicEmbed[] => {
+      const url = webLink(item.url);
+      if (!url || typeof item.url !== 'string' || !body.includes(item.url)) return [];
+      const kinds: Record<string, PublicEmbed['kind']> = { card: 'card', player: 'card', video: 'card', audio: 'card', post: 'post', image: 'image' };
+      const kind = typeof item.kind === 'string' ? kinds[item.kind] : undefined;
+      if (!kind) return [];
+      const image = embedImage(item.image);
+      if (kind === 'image' && !image) return [];
+      const site = isRecord(item.site) ? item.site : undefined;
+      const author = isRecord(item.author) ? item.author : undefined;
+      const avatar = author && embedImage(author.avatar);
+      const siteName = site && readText(site.name, 64);
+      const color = site && typeof site.color === 'string' && /^#[0-9a-f]{6}$/i.test(site.color) ? site.color : undefined;
+      const authorFields = author && {
+        ...(readText(author.name, 128) && { name: readText(author.name, 128) }),
+        ...(readText(author.handle, 128) && { handle: readText(author.handle, 128) }),
+        ...(webLink(author.url) && { url: webLink(author.url) }),
+        ...(avatar && { avatar: avatar.url }),
+      };
+      const title = readText(item.title, 256);
+      const description = readText(item.description, 1000);
+      return [
+        {
+          url,
+          kind,
+          ...((siteName || color) && { site: { ...(siteName && { name: siteName }), ...(color && { color }) } }),
+          ...(title && { title }),
+          ...(description && { description }),
+          ...(authorFields && Object.keys(authorFields).length > 0 && { author: authorFields }),
+          ...(image && { image }),
+          ...(typeof item.published === 'number' && { published: item.published }),
+          ...(item.sensitive === true && { sensitive: true }),
+        },
+      ];
+    })
+    .slice(0, 3);
 }
 
 /**
@@ -268,10 +347,12 @@ export function readPublicPostContent(content: Record<string, unknown>): Omit<Pu
   const repost = readRepost(content[REPOST_KEY]);
   if (!body && attachments.length === 0 && !repost) return undefined;
   const emotes = readEmotes(content.formatted_body);
+  const embeds = readEmbeds(content[EMBEDS_KEY], body);
   return {
     body,
     ...(emotes.length > 0 && { emotes }),
     ...(attachments.length > 0 && { attachments }),
+    ...(embeds.length > 0 && { embeds }),
     ...readWarning(content),
     ...(repost && { repost }),
   };

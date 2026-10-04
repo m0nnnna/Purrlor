@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   addRoomMedia,
   collectMxc,
+  readPublicPostContent,
   isSeekableMediaType,
   isServableMediaType,
   linkCardHtml,
@@ -507,5 +508,49 @@ describe('pageItemPreview', () => {
     assert.equal(pageItemPreview(page, 'art', 'lp'), undefined);
     assert.equal(pageItemPreview(page, 'commissions', 'x'), undefined);
     assert.equal(pageItemPreview(null, 'music', 'lp'), undefined);
+  });
+});
+
+describe('link embeds in public posts', () => {
+  const body = 'look https://youtu.be/dQw4w9WgXcQ and https://news.example/story';
+  const content = {
+    body,
+    'xyz.nekous.embeds': [
+      {
+        url: 'https://youtu.be/dQw4w9WgXcQ',
+        kind: 'player',
+        title: 'A video',
+        site: { name: 'YouTube', color: '#ff0000' },
+        image: { url: 'mxc://purr.example/thumb', info: { mimetype: 'image/jpeg', w: 480, h: 360 } },
+        player: { provider: 'youtube', id: 'dQw4w9WgXcQ' },
+      },
+      {
+        url: 'https://news.example/story',
+        kind: 'post',
+        description: 'hello',
+        author: { name: 'Alice', handle: '@alice', url: 'javascript:alert(1)', avatar: { url: 'mxc://purr.example/a', info: { mimetype: 'image/png' } } },
+      },
+      { url: 'https://not-in-the-body.example/', kind: 'card', title: 'sneaky' },
+      { url: 'https://news.example/story', kind: 'image', image: { file: { url: 'mxc://purr.example/enc' }, info: { mimetype: 'image/png' } } },
+    ],
+  };
+
+  it('keeps cards and pictures for links the text has, players as cards, nothing unsafe', () => {
+    const post = readPublicPostContent(content);
+    assert.deepEqual(post?.embeds, [
+      {
+        url: 'https://youtu.be/dQw4w9WgXcQ',
+        kind: 'card',
+        site: { name: 'YouTube', color: '#ff0000' },
+        title: 'A video',
+        image: { url: 'mxc://purr.example/thumb', mimetype: 'image/jpeg', w: 480, h: 360 },
+      },
+      { url: 'https://news.example/story', kind: 'post', description: 'hello', author: { name: 'Alice', handle: '@alice', avatar: 'mxc://purr.example/a' } },
+    ]);
+  });
+
+  it('lets the public web serve their pictures', () => {
+    const post = readPublicPostContent(content);
+    assert.deepEqual([...collectMxc([post])].sort(), ['mxc://purr.example/a', 'mxc://purr.example/thumb']);
   });
 });

@@ -9,6 +9,7 @@ import { grantsForPowerLevel } from './grants.js';
 import { livekitRoomName } from './livekitRoomName.js';
 import { handleWebhook } from './webhooks.js';
 import { controlDeps, publicWebRouter } from './publicWebRoutes.js';
+import { embedsRouter } from './embedRoutes.js';
 import { adminStore } from './adminStore.js';
 import { controlApp, listenOnControlSocket } from './controlServer.js';
 import { startPeering } from './peering.js';
@@ -237,6 +238,7 @@ app.post('/api/webhooks/:roomId/:webhookId/:token', (req, res) => {
  */
 /** Errors the web app hit in someone's browser (clientErrors.ts). Before the router, which limits per page. */
 app.post('/api/public/client-errors', clientErrorHandler(errorLog));
+app.use('/api/public/embeds', embedsRouter());
 app.use('/api/public', publicWebRouter());
 
 app.use(finalErrorHandler);
