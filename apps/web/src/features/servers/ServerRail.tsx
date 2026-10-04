@@ -21,7 +21,7 @@ import { useInvites } from '../../matrix/hooks/useInvites';
 import { useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useSpacelessRooms } from '../../matrix/hooks/useSpacelessRooms';
 import { useSpaces } from '../../matrix/hooks/useSpaces';
-import { useDirectMessageUnreads, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import { useAnyRoomHasUnread, useDirectMessageUnreads, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
 import { describeRoomLevel } from '../../matrix/notificationSettings';
 import { classifyInvite, parentSpaceOf } from '../../matrix/invites';
 import { getParentSpace } from '../../matrix/voice';
@@ -48,12 +48,16 @@ type TileDrag = { dragging: boolean; clickAllowed: () => boolean; onPointerDown:
 
 function ServerRailItem({ space, active, onSelect, drag }: { space: Room; active: boolean; onSelect: () => void; drag?: TileDrag }) {
   const src = useMediaUrl(space.getMxcAvatarUrl(), { width: 96, height: 96, method: 'crop' });
-  const unread = useUnreadSummary(useSpaceRooms(space.roomId));
+  const mx = useMatrixClient();
+  const rooms = useSpaceRooms(space.roomId);
+  const unread = useUnreadSummary(rooms);
+  // Something new the counts don't cover (a webhook's post, a message under "Only @mentions").
+  const hasNew = useAnyRoomHasUnread(rooms, mx.getUserId() ?? '', (roomId) => describeRoomLevel(mx, roomId).effective === 'nothing');
 
   const className = [
     'nu-server-rail__item',
     active && 'nu-server-rail__item--active',
-    unread.total > 0 && 'nu-server-rail__item--unread',
+    (unread.total > 0 || hasNew) && 'nu-server-rail__item--unread',
     drag && 'nu-server-rail__item--draggable',
     drag?.dragging && 'nu-server-rail__item--dragging',
   ]

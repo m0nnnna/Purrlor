@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { renderHook } from '@testing-library/react';
 import type { Room } from 'matrix-js-sdk';
-import { countUnreadMessages, directMessageUnread, hasUnreadMessages } from './useUnreadCounts';
+import { countUnreadMessages, directMessageUnread, hasUnreadMessages, useAnyRoomHasUnread } from './useUnreadCounts';
 
 type Fake = { id: string; sender: string; type?: string; redacted?: boolean };
 
-function room(events: Fake[], readIds: string[]): Room {
+function room(events: Fake[], readIds: string[], roomId = '!room'): Room {
   return {
+    roomId,
+    on: () => undefined,
+    removeListener: () => undefined,
     getLiveTimeline: () => ({
       getEvents: () =>
         events.map((e) => ({
@@ -75,5 +79,21 @@ describe('directMessageUnread', () => {
     const withServer = (r: Room, total: number) => Object.assign(r, { getUnreadNotificationCount: () => total });
     expect(directMessageUnread(withServer(room([{ id: '$1', sender: '@bob', type: 'm.room.encrypted' }], []), 0), '@me')).toBe(1);
     expect(directMessageUnread(withServer(room([{ id: '$1', sender: '@bob' }], []), 5), '@me')).toBe(5);
+  });
+});
+
+describe('useAnyRoomHasUnread', () => {
+  // A webhook's post: an m.notice, which the server's counts never include.
+  const webhookPost = room([{ id: '$1', sender: '@webhook-bot' }], [], '!news');
+  const read = room([{ id: '$2', sender: '@bob' }], ['$2'], '!general');
+
+  it('marks a category or Space unread for a message the counts miss', () => {
+    const { result } = renderHook(() => useAnyRoomHasUnread([read, webhookPost], '@me', () => false));
+    expect(result.current).toBe(true);
+  });
+
+  it('leaves out muted channels, and is false when everything is read', () => {
+    expect(renderHook(() => useAnyRoomHasUnread([read, webhookPost], '@me', (id) => id === '!news')).result.current).toBe(false);
+    expect(renderHook(() => useAnyRoomHasUnread([read], '@me', () => false)).result.current).toBe(false);
   });
 });

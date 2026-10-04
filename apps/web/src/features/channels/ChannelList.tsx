@@ -31,8 +31,15 @@ import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
-import { useDirectMessageUnread, useRoomHasUnread, useRoomUnreadCount, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
+import {
+  useAnyRoomHasUnread,
+  useDirectMessageUnread,
+  useRoomHasUnread,
+  useRoomUnreadCount,
+  useUnreadSummary,
+} from '../../matrix/hooks/useUnreadCounts';
 import { useRoomNotificationLevel } from '../../matrix/hooks/useNotificationLevel';
+import { describeRoomLevel } from '../../matrix/notificationSettings';
 import { LEVEL_LABELS, RoomNotificationMenu } from '../notifications/NotificationLevelMenu';
 import { useSpaceHierarchy, type HierarchyChannel } from '../../matrix/hooks/useSpaceHierarchy';
 import { listChildRooms, useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
@@ -165,9 +172,9 @@ function ChannelListRow({
   const mx = useMatrixClient();
   const unread = useRoomUnreadCount(room);
   const { effective: level } = useRoomNotificationLevel(room.roomId);
-  // Under "Only @mentions" or "Nothing" plain messages don't count, so the counts can't say
-  // whether there's anything new; read receipts can. A muted channel stays quiet regardless.
-  const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level === 'mentions');
+  // The counts follow push rules, so they miss plain messages under "Only @mentions" and
+  // notices (webhooks, bots) under any level; read receipts don't. A muted channel stays quiet.
+  const hasNewMessages = useRoomHasUnread(room, mx.getUserId() ?? '', level !== 'nothing');
   const myUserId = mx.getUserId() ?? '';
   // In a DM every message is for you, so each one counts the way a mention does in a channel:
   // a red number (Discord's DMs work the same way). Set to "Only @mentions", it's back to mentions.
@@ -447,7 +454,9 @@ function CategoryHeader({
   /** Dragging the header moves the category (useChannelDrag.ts); absent where it can't be dragged. */
   drag?: { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void; clickAllowed: () => boolean };
 }) {
+  const mx = useMatrixClient();
   const unread = useUnreadSummary(rooms);
+  const hasNew = useAnyRoomHasUnread(rooms, mx.getUserId() ?? '', (roomId) => describeRoomLevel(mx, roomId).effective === 'nothing');
   return (
     <button
       type="button"
@@ -471,7 +480,7 @@ function CategoryHeader({
       <span className="nu-channel-list__category-name">{name}</span>
       {collapsed && (
         <span className="nu-channel-list__category-count">
-          {unread.total > 0 && <span className="nu-channel-list__category-unread" aria-label="Unread" />}
+          {(unread.total > 0 || hasNew) && <span className="nu-channel-list__category-unread" aria-label="Unread" />}
           {rooms.length}
         </span>
       )}

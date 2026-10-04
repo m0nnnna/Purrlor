@@ -132,9 +132,11 @@ export function useDirectMessageUnread(room: Room, userId: string, enabled: bool
 }
 
 /**
- * For a channel set to "Only @mentions" or "Nothing" (matrix/notificationSettings.ts): the
- * counts above stay at zero for plain messages there, so they can't say whether it has anything
- * new. This can. `enabled` false skips the work for rooms the counts already cover.
+ * Whether a channel has anything new, from read receipts rather than the server's counts. The
+ * counts follow push rules, so they stay at zero for whatever those keep quiet: every plain
+ * message under "Only @mentions", and under "All messages" too for `m.notice` (webhooks, bots,
+ * automod), which the default rules never count. A channel whose only news was a webhook post was
+ * never shown as unread. `enabled` false skips the work (a muted channel stays quiet regardless).
  */
 export function useRoomHasUnread(room: Room, userId: string, enabled: boolean): boolean {
   const [unread, setUnread] = useState(() => enabled && hasUnreadMessages(room, userId));
@@ -155,6 +157,33 @@ export function useRoomHasUnread(room: Room, userId: string, enabled: boolean): 
   }, [room, userId, enabled]);
 
   return unread;
+}
+
+/**
+ * Whether any of `rooms` has something new (hasUnreadMessages), leaving out muted ones (`isMuted`):
+ * the unread mark on a collapsed category and on a Space's tile in the rail, which the server's
+ * counts alone miss the same way a channel's do (useRoomHasUnread).
+ */
+export function useAnyRoomHasUnread(rooms: Room[], userId: string, isMuted: (roomId: string) => boolean): boolean {
+  const [, forceRender] = useState(0);
+  const roomIdsKey = rooms.map((room) => room.roomId).join(',');
+
+  useEffect(() => {
+    const update = () => forceRender((n) => n + 1);
+    rooms.forEach((room) => {
+      room.on(RoomEvent.Timeline, update);
+      room.on(RoomEvent.Receipt, update);
+    });
+    return () => {
+      rooms.forEach((room) => {
+        room.removeListener(RoomEvent.Timeline, update);
+        room.removeListener(RoomEvent.Receipt, update);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomIdsKey]);
+
+  return rooms.some((room) => !isMuted(room.roomId) && hasUnreadMessages(room, userId));
 }
 
 /** Aggregate unread/notification counts across a list of rooms — used for the server rail's

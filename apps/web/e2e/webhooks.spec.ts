@@ -68,6 +68,36 @@ test('a webhook posts into a channel under its own name, until it’s deleted', 
   );
 });
 
+// A webhook posts an m.notice, which the server's unread counts never include: the Space still
+// has to show something new (from read receipts), or a channel fed only by webhooks never does.
+test('a webhook’s post marks its Space unread for someone elsewhere', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { spaceName } = await spaceWithService(alice, [bob]);
+
+  await logIn(page, alice);
+  await openChannel(page, spaceName, 'general');
+  const row = page.locator('.nu-channel-list__row').filter({ has: role(page, 'channel-list-item').filter({ hasText: 'general' }) });
+  await row.hover();
+  await role(row, 'channel-list-row-menu').click();
+  await role(row, 'channel-list-webhooks').click();
+  await role(page, 'webhook-name').fill('CI');
+  await role(page, 'webhook-create').click();
+  const url = await role(page, 'webhook-url').inputValue();
+  await page.keyboard.press('Escape');
+
+  // Somewhere else, so the post arrives unread.
+  await role(page, 'server-rail-global-feed').click();
+  await expect(role(page, 'social-nav')).toBeVisible();
+  const tile = page.locator(`[data-nu-role="server-rail-item"][aria-label="${spaceName}"]`);
+  await expect(tile).not.toHaveClass(/nu-server-rail__item--unread/);
+
+  await eventually(
+    () => post(url, { content: 'Build 43 passed' }).then((r) => r.status),
+    (status) => status === 204
+  );
+  await expect(tile).toHaveClass(/nu-server-rail__item--unread/);
+});
+
 test('a person can’t pass themselves off as a webhook', async ({ page }) => {
   const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
   const { channelId, spaceName } = await spaceWithService(alice, [bob]);
