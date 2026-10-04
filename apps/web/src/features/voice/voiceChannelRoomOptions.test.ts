@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LocalParticipant } from 'livekit-client';
 import {
   APP_AUDIO_HINTS,
-  readAppAudioOnly,
-  saveAppAudioOnly,
+  readIncludeSystemAudio,
+  saveIncludeSystemAudio,
   SCREEN_SHARE_CODEC,
   screenShareCaptureOptions,
   startScreenShare,
@@ -26,22 +26,22 @@ describe('what a screen share publishes', () => {
 
 describe('what a screen share captures', () => {
   it('asks for 1080p at 60 fps (LiveKit would otherwise ask for 30) and for motion over sharpness', () => {
-    for (const appAudioOnly of [false, true]) {
-      const options = screenShareCaptureOptions(appAudioOnly);
+    for (const includeSystemAudio of [false, true]) {
+      const options = screenShareCaptureOptions(includeSystemAudio);
       expect(options.resolution).toEqual({ width: 1920, height: 1080, frameRate: 60 });
       expect(options.contentHint).toBe('motion');
       expect(options.audio).toMatchObject({ echoCancellation: false, noiseSuppression: false, autoGainControl: false });
     }
   });
 
-  it('lets the browser offer system sound normally', () => {
-    expect(screenShareCaptureOptions(false).systemAudio).toBe('include');
+  it('never offers the computer’s sound by default, whatever is shared', () => {
+    const options = screenShareCaptureOptions(false);
+    expect(options.systemAudio).toBe('exclude');
+    expect(options.video).toBeUndefined();
   });
 
-  it('never offers system sound when only the shared window’s is wanted, and opens the picker on windows', () => {
-    const options = screenShareCaptureOptions(true);
-    expect(options.systemAudio).toBe('exclude');
-    expect(options.video).toEqual({ displaySurface: 'window' });
+  it('offers it once the sharer asks for it', () => {
+    expect(screenShareCaptureOptions(true).systemAudio).toBe('include');
   });
 });
 
@@ -87,11 +87,11 @@ describe('startScreenShare', () => {
 
   it('starts a share with the capture options', async () => {
     const { setScreenShareEnabled, participant: p } = participant();
-    await startScreenShare(p, false);
-    expect(setScreenShareEnabled).toHaveBeenCalledWith(true, screenShareCaptureOptions(false));
+    await startScreenShare(p, true);
+    expect(setScreenShareEnabled).toHaveBeenCalledWith(true, screenShareCaptureOptions(true));
   });
 
-  it('asks the browser for window audio when only the app’s sound is wanted', async () => {
+  it('asks the browser for a shared window’s own sound by default', async () => {
     const seen: unknown[] = [];
     Object.defineProperty(navigator, 'mediaDevices', {
       value: {
@@ -107,17 +107,22 @@ describe('startScreenShare', () => {
         await navigator.mediaDevices.getDisplayMedia({ systemAudio: 'exclude' } as DisplayMediaStreamOptions);
       },
     } as unknown as LocalParticipant;
-    await startScreenShare(p, true);
+    await startScreenShare(p, false);
     expect(seen).toEqual([{ systemAudio: 'exclude', windowAudio: 'window' }]);
   });
 });
 
-describe('the app-audio-only setting', () => {
+describe('the computer’s-sound setting', () => {
   it('is off until chosen, then remembered', () => {
-    expect(readAppAudioOnly()).toBe(false);
-    saveAppAudioOnly(true);
-    expect(readAppAudioOnly()).toBe(true);
-    saveAppAudioOnly(false);
-    expect(readAppAudioOnly()).toBe(false);
+    expect(readIncludeSystemAudio()).toBe(false);
+    saveIncludeSystemAudio(true);
+    expect(readIncludeSystemAudio()).toBe(true);
+    saveIncludeSystemAudio(false);
+    expect(readIncludeSystemAudio()).toBe(false);
+  });
+
+  it('starts off for someone who had turned the old window-only option off', () => {
+    localStorage.setItem('nekous_screen_share_app_audio_only', 'false');
+    expect(readIncludeSystemAudio()).toBe(false);
   });
 });

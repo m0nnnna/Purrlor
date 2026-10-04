@@ -41,16 +41,18 @@ export const SCREEN_SHARE_CAPTURE: ScreenShareCaptureOptions = {
 };
 
 /**
- * The options for one share. `appAudioOnly` shares only the chosen window's own sound and never
- * the whole computer's: the picker opens on windows, system audio is not offered at all
- * (`systemAudio: 'exclude'`), and the browser is asked for window audio (see APP_AUDIO_HINTS).
- * Where a browser can't capture one window's audio, the share simply has none: it never falls back
- * to everything. Without it, the picker may offer the system's sound as well, as before.
+ * The options for one share. By default a share never carries the whole computer's sound: system
+ * audio is not offered (`systemAudio: 'exclude'`), a tab shares its own sound, and for a window
+ * the browser is asked for that window's sound only (see APP_AUDIO_HINTS). Where a browser can't
+ * capture one window's audio, a window share has none: it never falls back to everything.
+ *
+ * It used to be the other way round, with window-only sound an option you had to find: Chrome's
+ * sound for a shared window *is* the system's ("Also share system audio"), so sharing a window
+ * sent every sound on the computer, notifications and other calls included, to everyone in the
+ * call. `includeSystemAudio` (the "Share my computer's sound too" option) is now the opt-in.
  */
-export function screenShareCaptureOptions(appAudioOnly: boolean): ScreenShareCaptureOptions {
-  return appAudioOnly
-    ? { ...SCREEN_SHARE_CAPTURE, systemAudio: 'exclude', video: { displaySurface: 'window' } }
-    : { ...SCREEN_SHARE_CAPTURE, systemAudio: 'include' };
+export function screenShareCaptureOptions(includeSystemAudio: boolean): ScreenShareCaptureOptions {
+  return { ...SCREEN_SHARE_CAPTURE, systemAudio: includeSystemAudio ? 'include' : 'exclude' };
 }
 
 /** LiveKit doesn't pass this newer getDisplayMedia option on, so withDisplayMediaHints adds it. */
@@ -76,25 +78,27 @@ export async function withDisplayMediaHints<T>(hints: object, run: () => Promise
 }
 
 /** Starts a screen share with the capture options above. */
-export function startScreenShare(participant: LocalParticipant, appAudioOnly: boolean): Promise<unknown> {
-  const run = () => participant.setScreenShareEnabled(true, screenShareCaptureOptions(appAudioOnly));
-  return appAudioOnly ? withDisplayMediaHints(APP_AUDIO_HINTS, run) : run();
+export function startScreenShare(participant: LocalParticipant, includeSystemAudio: boolean): Promise<unknown> {
+  const run = () => participant.setScreenShareEnabled(true, screenShareCaptureOptions(includeSystemAudio));
+  return includeSystemAudio ? run() : withDisplayMediaHints(APP_AUDIO_HINTS, run);
 }
 
-const APP_AUDIO_ONLY_KEY = 'nekous_screen_share_app_audio_only';
+// A new key, not the old 'nekous_screen_share_app_audio_only' inverted: everyone starts on the safe
+// default, including those who never found the old option.
+const SYSTEM_AUDIO_KEY = 'purrlor_screen_share_system_audio';
 
-/** Whether shares are set to carry only the shared window's audio (remembered per browser). */
-export function readAppAudioOnly(): boolean {
+/** Whether shares may carry the whole computer's sound (remembered per browser; off until chosen). */
+export function readIncludeSystemAudio(): boolean {
   try {
-    return localStorage.getItem(APP_AUDIO_ONLY_KEY) === 'true';
+    return localStorage.getItem(SYSTEM_AUDIO_KEY) === 'true';
   } catch {
     return false;
   }
 }
 
-export function saveAppAudioOnly(on: boolean): void {
+export function saveIncludeSystemAudio(on: boolean): void {
   try {
-    localStorage.setItem(APP_AUDIO_ONLY_KEY, String(on));
+    localStorage.setItem(SYSTEM_AUDIO_KEY, String(on));
   } catch {
     // Not remembered this time; it still applies now.
   }

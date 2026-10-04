@@ -20,7 +20,7 @@ import { useParticipantSounds } from './useParticipantSounds';
 import { usePushToTalk } from './usePushToTalk';
 import { personVolume, setPersonVolume } from './callVolume';
 import { toggleDeafen, toggleMute } from './callActions';
-import { readAppAudioOnly, saveAppAudioOnly, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
+import { readIncludeSystemAudio, saveIncludeSystemAudio, setScreenShareJitterBufferTarget, startScreenShare } from './voiceChannelRoomOptions';
 import { useCallScreenSharePopout } from './ScreenSharePopoutProvider';
 import { useSharedWatchTogether } from './watchTogetherContext';
 import { sessionMode, type WatchTogetherMode } from './watchTogether';
@@ -207,8 +207,9 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
   const watchTogether = useSharedWatchTogether();
   const sharedMode = watchTogether?.state ? sessionMode(watchTogether.state) : undefined;
   const [watchTogetherModal, setWatchTogetherModal] = useState<WatchTogetherMode | null>(null);
-  // Share only the shared window's own sound, never the whole computer's (voiceChannelRoomOptions.ts).
-  const [appAudioOnly, setAppAudioOnly] = useState(readAppAudioOnly);
+  // Off: a share carries only its tab's or window's own sound, never the whole computer's
+  // (voiceChannelRoomOptions.ts).
+  const [includeSystemAudio, setIncludeSystemAudio] = useState(readIncludeSystemAudio);
 
   // Viewer-side only: ask the remote sharer for keyframes periodically and give the decoder a
   // slightly larger jitter buffer, trading a little latency for fewer dropped/stuttered frames.
@@ -340,13 +341,13 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
             title={
               isScreenShareEnabled
                 ? 'Stop sharing your screen'
-                : appAudioOnly
-                  ? 'Share a window, with only that window’s sound'
+                : includeSystemAudio
+                  ? 'Share your screen or a window, with your computer’s sound'
                   : 'Share your screen or a window'
             }
             onClick={() => {
               // Closing the browser's picker rejects; that's not an error worth showing.
-              const started = isScreenShareEnabled ? localParticipant.setScreenShareEnabled(false) : startScreenShare(localParticipant, appAudioOnly);
+              const started = isScreenShareEnabled ? localParticipant.setScreenShareEnabled(false) : startScreenShare(localParticipant, includeSystemAudio);
               started.catch(() => undefined);
             }}
           />
@@ -359,14 +360,14 @@ export default function VoiceCallBody({ room, onLeave }: { room: MatrixRoom; onL
               dropUp
             >
               <MenuItem
-                icon={appAudioOnly ? 'check' : undefined}
-                role="voice-share-app-audio-only"
+                icon={includeSystemAudio ? 'check' : undefined}
+                role="voice-share-system-audio"
                 onSelect={() => {
-                  setAppAudioOnly(!appAudioOnly);
-                  saveAppAudioOnly(!appAudioOnly);
+                  setIncludeSystemAudio(!includeSystemAudio);
+                  saveIncludeSystemAudio(!includeSystemAudio);
                 }}
               >
-                Only share the window’s sound
+                Share my computer’s sound too
               </MenuItem>
             </Menu>
           )}
