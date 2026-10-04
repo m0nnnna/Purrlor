@@ -3,6 +3,7 @@ import { useSetAtom } from 'jotai';
 import { selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { useMatrixClient } from '../MatrixClientContext';
 import { getParentSpace } from '../voice';
+import { joinTarget } from '../joinLinks';
 
 export type JoinFromInviteLinkState =
   | { status: 'idle' }
@@ -58,12 +59,7 @@ export function useJoinFromInviteLink(): JoinFromInviteLinkState {
 
     let cancelled = false;
     setState({ status: 'joining' });
-    void mx
-      .joinRoom(inviteRoomId)
-      .catch((err: unknown) => {
-        if (!viaServer) throw err;
-        return mx.joinRoom(inviteRoomId, { viaServers: [viaServer] });
-      })
+    void joinTarget(mx, { target: inviteRoomId, via: viaServer ? [viaServer] : [] })
       .then((room) => {
         if (cancelled) return;
         if (room.isSpaceRoom()) {

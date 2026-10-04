@@ -29,8 +29,12 @@ async function request<T>(method: string, path: string, body?: unknown, accessTo
   return data as T;
 }
 
-/** Registers a fresh account (the registration token dance, as the app's Register screen does). */
-export async function createUser(prefix: string): Promise<TestUser> {
+/**
+ * Registers a fresh account (the registration token dance, as the app's Register screen does).
+ * Marked as having seen the welcome guide (features/onboarding/), so it doesn't open over whatever
+ * a test is doing; `{ welcomed: false }` leaves it a brand-new account, for testing the guide.
+ */
+export async function createUser(prefix: string, { welcomed = true }: { welcomed?: boolean } = {}): Promise<TestUser> {
   const localpart = uniqueName(prefix).toLowerCase();
   const password = `pw-${localpart}`;
   const body = { username: localpart, password, initial_device_display_name: 'e2e setup' };
@@ -47,7 +51,9 @@ export async function createUser(prefix: string): Promise<TestUser> {
           ...body,
           auth: { type: 'm.login.registration_token', token: REGISTRATION_TOKEN, session: challenge.session },
         });
-  return { userId: done.user_id!, localpart, password, accessToken: done.access_token! };
+  const user = { userId: done.user_id!, localpart, password, accessToken: done.access_token! };
+  if (welcomed) await request('PUT', `/user/${encodeURIComponent(user.userId)}/account_data/xyz.nekous.onboarding`, { done: true }, user.accessToken);
+  return user;
 }
 
 export function api<T = Record<string, unknown>>(user: TestUser, method: string, path: string, body?: unknown): Promise<T> {

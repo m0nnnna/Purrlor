@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { logIn, role } from './app';
-import { HOMESERVER, api, createUser, uniqueName, type TestUser } from './matrix';
+import { HOMESERVER, api, createUser, eventually, uniqueName, type TestUser } from './matrix';
 
 /**
  * A profile page's background picture keeps its size while the page scrolls and grows (more posts
@@ -46,7 +46,11 @@ for (const fit of ['fixed', 'cover'] as const) {
     await role(page, 'feed-composer-input').fill(uniqueName('first'));
     await role(page, 'feed-composer-submit').click();
     await expect(role(page, 'global-feed-post').first()).toBeVisible();
-    const { roomId } = await api<{ roomId: string }>(alice, 'GET', `/user/${enc(alice.userId)}/account_data/xyz.nekous.profile_room`);
+    // Saved just after the post goes out: waited for, not assumed.
+    const { roomId } = await eventually(
+      () => api<{ roomId?: string }>(alice, 'GET', `/user/${enc(alice.userId)}/account_data/xyz.nekous.profile_room`).catch(() => ({ roomId: undefined })),
+      (data) => !!data.roomId
+    ) as { roomId: string };
     for (let i = 0; i < 40; i++) {
       await api(alice, 'PUT', `/rooms/${enc(roomId)}/send/xyz.nekous.post/${uniqueName('txn')}`, {
         body: `post number ${i} ${'with some words to make it a little longer '.repeat(3)}`,

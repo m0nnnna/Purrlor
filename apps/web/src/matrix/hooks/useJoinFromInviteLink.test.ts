@@ -13,6 +13,17 @@ function fakeRoom({ isSpace, roomId }: { isSpace: boolean; roomId: string }): Ro
   } as unknown as Room;
 }
 
+/** A client whose joined room is then known, with its state, as after a sync (joinLinks.ts waits for that). */
+function client(joinRoom: (...args: unknown[]) => Promise<Room>): MatrixClient {
+  let last: Room | undefined;
+  return {
+    joinRoom: async (...args: unknown[]) => (last = await joinRoom(...args)),
+    getRoom: () => last ?? null,
+    on: vi.fn(),
+    removeListener: vi.fn(),
+  } as unknown as MatrixClient;
+}
+
 function setUrl(search: string) {
   window.history.replaceState({}, '', `/${search}`);
 }
@@ -33,7 +44,7 @@ describe('useJoinFromInviteLink', () => {
 
   it('does nothing when there is no ?invite= param', () => {
     const joinRoom = vi.fn();
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
     expect(joinRoom).not.toHaveBeenCalled();
   });
@@ -41,7 +52,7 @@ describe('useJoinFromInviteLink', () => {
   it('tries a plain join first (no via) and strips both params immediately even when via is present', async () => {
     setUrl('?invite=!space%3Aexample.org&via=example.org');
     const joinRoom = vi.fn().mockResolvedValue(fakeRoom({ isSpace: true, roomId: '!space:example.org' }));
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     const { result } = renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
 
     expect(window.location.search).toBe('');
@@ -56,7 +67,7 @@ describe('useJoinFromInviteLink', () => {
       .fn()
       .mockRejectedValueOnce(new Error('no servers that are in the room have been provided'))
       .mockResolvedValueOnce(fakeRoom({ isSpace: true, roomId: '!space:example.org' }));
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     const { result } = renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
 
     await waitFor(() => expect(result.current.status).toBe('idle'));
@@ -70,7 +81,7 @@ describe('useJoinFromInviteLink', () => {
       .fn()
       .mockRejectedValueOnce(new Error('fail'))
       .mockResolvedValueOnce(fakeRoom({ isSpace: true, roomId: '!space:example.org' }));
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
 
     await waitFor(() => expect(joinRoom).toHaveBeenCalledTimes(2));
@@ -80,7 +91,7 @@ describe('useJoinFromInviteLink', () => {
   it('surfaces a failure as an error state when both the plain join and the via retry fail', async () => {
     setUrl('?invite=!space%3Aexample.org&via=example.org');
     const joinRoom = vi.fn().mockRejectedValue(new Error('You are not invited to this room'));
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     const { result } = renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
 
     await waitFor(() =>
@@ -91,7 +102,7 @@ describe('useJoinFromInviteLink', () => {
   it('preserves other query params while removing only ?invite= and ?via=', () => {
     setUrl('?invite=!space%3Aexample.org&via=example.org&openRoom=!other%3Aexample.org');
     const joinRoom = vi.fn().mockResolvedValue(fakeRoom({ isSpace: false, roomId: '!space:example.org' }));
-    const mx = { joinRoom } as unknown as MatrixClient;
+    const mx = client(joinRoom);
     renderHook(() => useJoinFromInviteLink(), { wrapper: wrapper(mx) });
 
     expect(window.location.search).toBe('?openRoom=%21other%3Aexample.org');

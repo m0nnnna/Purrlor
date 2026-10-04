@@ -35,6 +35,7 @@ import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
 import { useOpenRoomFromNotification } from '../matrix/hooks/useOpenRoomFromNotification';
 import { useRecoveryStatus } from '../matrix/hooks/useRecoveryStatus';
+import { WelcomeGuideHost } from '../features/onboarding/WelcomeGuideHost';
 import { openPostAtom, globalFeedOpenAtom, profileUserIdAtom, selectedRoomIdAtom, selectedSpaceViewAtom } from './state/selection';
 import { desktopMemberListHiddenAtom, mobileMemberListOpenAtom } from './state/mobile';
 
@@ -110,6 +111,8 @@ export function AppShell() {
       {!isDemoMode() && <EmoteLibraryWatcher />}
       {!isDemoMode() && <FollowPublisher />}
       <IncomingVerificationListener />
+      {/* For someone new, after the recovery key is dealt with (features/onboarding/). */}
+      {!isDemoMode() && <WelcomeGuideHost blocked={recoveryStatus === 'needed' && !recoveryResolved} />}
       {recoveryStatus === 'needed' && !recoveryResolved && (
         <RecoveryKeyPrompt onResolved={() => setRecoveryResolved(true)} />
       )}

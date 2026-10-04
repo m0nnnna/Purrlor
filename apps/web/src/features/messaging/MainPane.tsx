@@ -33,6 +33,8 @@ import { PinnedMessagesPanel } from './PinnedMessagesPanel';
 import { ThreadsOverviewModal } from './ThreadsOverviewModal';
 import { TopicBanner } from './TopicBanner';
 import { TypingIndicator } from './TypingIndicator';
+import { NoSpacesYet, useInNoSpace } from '../onboarding/WelcomeGuideHost';
+import { isDemoMode } from '../../demo/demoMode';
 import './MainPane.css';
 
 /** Same breakpoint as styles/base/shell.css's one-pane-at-a-time layout. */
@@ -103,6 +105,7 @@ export function MainPane() {
 }
 
 function MainPaneContent() {
+  const inNoSpace = useInNoSpace();
   const mx = useMatrixClient();
   const [selectedRoomId, setSelectedRoomId] = useAtom(selectedRoomIdAtom);
   const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
@@ -185,6 +188,14 @@ function MainPaneContent() {
   };
 
   if (!room) {
+    // Someone in no Space yet gets the ways in, not "pick a channel" with no channels to pick.
+    if (inNoSpace && !isDemoMode()) {
+      return (
+        <main className="nu-main-pane" data-nu-role="main-pane">
+          <NoSpacesYet />
+        </main>
+      );
+    }
     return (
       <main className="nu-main-pane" data-nu-role="main-pane">
         <div className="nu-main-pane__empty" data-nu-role="main-pane-empty">

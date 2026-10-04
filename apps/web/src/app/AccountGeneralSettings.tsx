@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useSetAtom } from 'jotai';
+import { welcomeGuideOpenAtom } from './state/onboarding';
 import { Avatar } from '../components/Avatar';
 import { BackgroundPushSettings } from './BackgroundPushSettings';
 import { InstallAppSettings } from './InstallAppSettings';
@@ -43,6 +45,7 @@ function notificationStatusLabel(status: NotificationSupport): string {
 }
 
 export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
+  const openWelcomeGuide = useSetAtom(welcomeGuideOpenAtom);
   const mx = useMatrixClient();
   const profile = useOwnProfile();
   const ownPresence = useOwnPresence();
@@ -248,6 +251,21 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
       <BackgroundPushSettings />
       <PostNotificationSettings />
       <KeywordNotificationSettings />
+      <div className="nu-field" data-nu-role="account-settings-welcome">
+        Getting started
+        <p className="nu-field__hint">The short tour new accounts get: joining Spaces, and what's where.</p>
+        <button
+          type="button"
+          className="nu-button nu-button--secondary"
+          data-nu-role="account-settings-show-welcome"
+          onClick={() => {
+            openWelcomeGuide(true);
+            onClose();
+          }}
+        >
+          Show the welcome guide
+        </button>
+      </div>
       {error && (
         <p className="nu-field__error" data-nu-role="account-settings-error">
           {error}

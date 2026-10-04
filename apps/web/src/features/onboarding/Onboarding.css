@@ -1,0 +1,217 @@
+/* The welcome guide and the "not in a Space yet" screen (features/onboarding/). */
+
+.nu-onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  width: min(36rem, 100%);
+}
+
+.nu-onboarding__dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--nu-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-onboarding__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-border);
+}
+
+.nu-onboarding__dot--on {
+  background: var(--nu-color-accent);
+}
+
+.nu-onboarding__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-onboarding__lead {
+  margin: 0;
+  font-size: var(--nu-font-size-md);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-onboarding__you {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nu-space-4);
+}
+
+.nu-onboarding__avatar {
+  position: relative;
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: var(--nu-radius-full);
+  cursor: pointer;
+}
+
+.nu-onboarding__avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  padding: 5px;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}
+
+.nu-onboarding__name {
+  flex: 1;
+}
+
+.nu-onboarding__spaces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-onboarding__space {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-onboarding__space-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-onboarding__space-name {
+  font-weight: 700;
+}
+
+.nu-onboarding__space-meta {
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nu-onboarding__join-row {
+  display: flex;
+  gap: var(--nu-space-2);
+  margin-top: var(--nu-space-1);
+}
+
+.nu-onboarding__join-row .nu-field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.nu-onboarding__link {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nu-color-text-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nu-onboarding__joined {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  margin: 0;
+  color: var(--nu-color-success);
+  font-weight: 700;
+}
+
+.nu-onboarding__tour,
+.nu-onboarding__tips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-onboarding__tour-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nu-space-3);
+}
+
+.nu-onboarding__tour-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-accent);
+}
+
+.nu-onboarding__tips li {
+  padding-left: var(--nu-space-3);
+  border-left: 3px solid var(--nu-color-accent);
+}
+
+.nu-onboarding__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-onboarding__spacer {
+  flex: 1;
+}
+
+.nu-onboarding__skip {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: var(--nu-space-1) var(--nu-space-2);
+  font: inherit;
+  color: var(--nu-color-text-muted);
+  cursor: pointer;
+}
+
+.nu-onboarding__skip:hover {
+  color: var(--nu-color-text-primary);
+}
+
+/* The main pane for someone in no Space yet. */
+.nu-no-spaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  width: min(32rem, 100%);
+  margin: auto;
+  padding: var(--nu-space-5) var(--nu-space-4);
+}
+
+.nu-no-spaces__title {
+  margin: 0;
+  font-size: var(--nu-font-size-xl);
+}
+
+.nu-no-spaces__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-2);
+}
