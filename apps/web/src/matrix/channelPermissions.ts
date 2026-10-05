@@ -298,9 +298,33 @@ function actionLevel(room: Room, action: 'invite' | 'kick'): number {
 type ChannelPlan = { powerLevels?: PowerLevels; invite: string[]; remove: string[] };
 
 /** What governChannel would change in a channel right now, as far as this user is allowed to. */
+/**
+ * The Space a channel takes its roles from, when it's in more than one: its canonical parent
+ * (`m.space.parent` with `canonical`), and if several claim to be (each "Add existing channel"
+ * used to mark its Space canonical), the one that did first. Read from the channel's own state, so
+ * every member's app picks the same one, whichever Spaces they're in themselves. Undefined when
+ * the channel names no parent: then every Space listing it governs it, as before.
+ *
+ * Without this, a channel shared by two Spaces whose roles differ was pulled both ways: each
+ * Space's admins' apps "corrected" it to their Space's levels, every half minute, for as long as
+ * both had Purrlor open, burying its messages under thousands of power-level changes.
+ */
+export function governingSpaceId(channel: Room): string | undefined {
+  const parents = (channel.currentState.getStateEvents(EventType.SpaceParent) as MatrixEvent[]).filter((event) => {
+    const via = event.getContent<{ via?: unknown }>().via;
+    return !!event.getStateKey() && Array.isArray(via) && via.length > 0;
+  });
+  if (parents.length === 0) return undefined;
+  const canonical = parents.filter((event) => event.getContent<{ canonical?: unknown }>().canonical === true);
+  const pool = canonical.length > 0 ? canonical : parents;
+  return [...pool].sort((a, b) => a.getTs() - b.getTs() || (a.getStateKey() ?? '').localeCompare(b.getStateKey() ?? ''))[0].getStateKey();
+}
+
 function planChannel(mx: MatrixClient, channel: Room, space: Room): ChannelPlan | undefined {
   const myUserId = mx.getUserId();
   if (!myUserId || channel.getMyMembership() !== 'join') return undefined;
+  const governing = governingSpaceId(channel);
+  if (governing && governing !== space.roomId) return undefined;
   const myLevel = userPowerLevel(channel, myUserId);
   const spaceLevels = spaceRoleLevels(space);
   const botUserId = readVoiceServerConfig(mx, space)?.botUserId;
@@ -360,6 +384,36 @@ function myWriterRank(mx: MatrixClient, channel: Room): number {
   return writerRank(withCreators as Record<string, number>, required, mx.getUserId() ?? '');
 }
 
+/** How often the sync may rewrite one channel's power levels before it stops (mayRewrite). */
+const REWRITE_LIMIT = 3;
+const REWRITE_WINDOW_MS = 10 * 60_000;
+const rewrites = new Map<string, number[]>();
+
+/**
+ * A circuit breaker: in step with its Space, a channel needs its power levels written once, so
+ * writing the same one again and again means something else keeps undoing it (another admin's app
+ * going by different rules). Past REWRITE_LIMIT writes in REWRITE_WINDOW_MS this app stops writing
+ * it, rather than fight and fill the channel with changes, until the page is reloaded.
+ */
+export function mayRewrite(roomId: string, now = Date.now()): boolean {
+  const recent = (rewrites.get(roomId) ?? []).filter((at) => now - at < REWRITE_WINDOW_MS);
+  if (recent.length >= REWRITE_LIMIT) {
+    if (recent.length === REWRITE_LIMIT) {
+      console.warn(`Stopped syncing roles into ${roomId}: its power levels keep being changed back (another admin's app with other rules?)`);
+      recent.push(now); // warn once
+      rewrites.set(roomId, recent);
+    }
+    return false;
+  }
+  rewrites.set(roomId, [...recent, now]);
+  return true;
+}
+
+/** Tests only. */
+export function resetRewritesForTests(): void {
+  rewrites.clear();
+}
+
 /**
  * Brings one channel in line with its Space, as far as this user is allowed to: the Space's
  * roles into its power levels, then, for a moderators-only channel, its members. Changes nothing
@@ -376,7 +430,7 @@ export async function governChannel(mx: MatrixClient, channel: Room, space: Room
     writes += 1;
   };
 
-  if (plan.powerLevels) {
+  if (plan.powerLevels && mayRewrite(channel.roomId)) {
     const next = plan.powerLevels;
     await write(() => mx.sendStateEvent(channel.roomId, EventType.RoomPowerLevels, { ...next, [ROLE_SYNC_MARKER]: Date.now() } as any, ''));
   }

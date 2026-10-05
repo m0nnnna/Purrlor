@@ -16,7 +16,13 @@ function via(mx: MatrixClient): string {
  */
 export async function addRoomToSpace(mx: MatrixClient, space: Room, room: Room): Promise<void> {
   await mx.sendStateEvent(space.roomId, EventType.SpaceChild, { via: [via(mx)], suggested: false }, room.roomId);
-  await mx.sendStateEvent(room.roomId, EventType.SpaceParent, { via: [via(mx)], canonical: true }, space.roomId).catch(() => {
+  // Canonical only for a room with no parent yet: a channel shared into a second Space keeps the
+  // one it came from, which is also the one its roles follow (channelPermissions.ts, governingSpaceId).
+  const hasParent = (room.currentState.getStateEvents(EventType.SpaceParent) as MatrixEvent[]).some((event) => {
+    const parentVia = event.getContent<{ via?: unknown }>().via;
+    return Array.isArray(parentVia) && parentVia.length > 0 && event.getStateKey() !== space.roomId;
+  });
+  await mx.sendStateEvent(room.roomId, EventType.SpaceParent, { via: [via(mx)], ...(!hasParent && { canonical: true }) }, space.roomId).catch(() => {
     // Nice-to-have for other clients' breadcrumbs; this app's own channel list doesn't need it.
   });
 }

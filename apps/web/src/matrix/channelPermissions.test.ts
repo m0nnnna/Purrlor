@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MatrixClient, Room } from 'matrix-js-sdk';
-import { governSpaces, moderatorsOnlyChanges, powerLevelsForPosting, syncedChannelUsers, syncedThresholds, writerRank } from './channelPermissions';
+import { governingSpaceId, governSpaces, mayRewrite, moderatorsOnlyChanges, resetRewritesForTests, powerLevelsForPosting, syncedChannelUsers, syncedThresholds, writerRank } from './channelPermissions';
 
 describe('powerLevelsForPosting', () => {
   it('raises posting to moderators but keeps reactions open', () => {
@@ -78,7 +78,9 @@ describe('writerRank', () => {
 /** Just enough of a Room for the sync: state events by type and key. */
 function fakeRoom(roomId: string, state: Record<string, Record<string, Record<string, unknown>>>, space = false): Room {
   const event = (type: string, key: string) =>
-    state[type]?.[key] ? { getContent: () => state[type][key], getStateKey: () => key, getSender: () => '@me' } : null;
+    state[type]?.[key]
+      ? { getContent: () => state[type][key], getStateKey: () => key, getSender: () => '@me', getTs: () => (state[type][key].__ts as number) ?? 0 }
+      : null;
   return {
     roomId,
     isSpaceRoom: () => space,
@@ -168,5 +170,59 @@ describe('custom roles and channel moderators in the sync', () => {
   it('leaves who edits the Space’s news on the Space, not copied into its channels', () => {
     const space = { events: { 'xyz.nekous.space_news': 25 } };
     expect(syncedThresholds({ events: {} }, space, 100)).toBeUndefined();
+  });
+});
+
+describe('a channel in two Spaces', () => {
+  // The live bug: #General listed by Meow>Corp (ban unset, so 50) and Court of Chaos (ban 100),
+  // both marked canonical. Each Space's admins' apps set it to their Space's level, back and forth.
+  const roles = { 'xyz.nekous.roles': { '': { roles: [] } } };
+  const meow = fakeRoom('!meow', { ...roles, 'm.room.power_levels': { '': { users: { '@me': 100 } } }, 'm.space.child': { '!general': { via: ['x'] } } }, true);
+  const court = fakeRoom('!court', { ...roles, 'm.room.power_levels': { '': { users: { '@me': 100 }, ban: 100, redact: 100 } }, 'm.space.child': { '!general': { via: ['x'] } } }, true);
+  const general = (ban: number) =>
+    fakeRoom('!general', {
+      'm.room.power_levels': { '': { users: { '@me': 100 }, ban, redact: ban } },
+      'm.space.parent': { '!meow': { via: ['x'], canonical: true, __ts: 100 }, '!court': { via: ['x'], canonical: true, __ts: 200 } },
+    });
+
+  it('takes its roles from one Space: its canonical parent, the first one when several claim it', () => {
+    expect(governingSpaceId(general(50))).toBe('!meow');
+    const noParent = fakeRoom('!x', {});
+    expect(governingSpaceId(noParent)).toBeUndefined();
+    const notCanonical = fakeRoom('!y', { 'm.space.parent': { '!b': { via: ['x'], __ts: 5 }, '!a': { via: ['x'], __ts: 5 } } });
+    expect(governingSpaceId(notCanonical)).toBe('!a');
+  });
+
+  it('is only ever written to match that Space, so admins of both Spaces agree', async () => {
+    resetRewritesForTests();
+    for (const [ban, expectWrite] of [
+      [100, true], // pulled to Court of Chaos's levels: put back to Meow>Corp's
+      [50, false], // in line with Meow>Corp: Court of Chaos leaves it alone
+    ] as const) {
+      const channel = general(ban);
+      const sendStateEvent = vi.fn(async (..._args: unknown[]) => ({}));
+      const mx = {
+        getUserId: () => '@me',
+        getRoom: (id: string) => [meow, court, channel].find((r) => r.roomId === id) ?? null,
+        getRooms: () => [meow, court, channel],
+        sendStateEvent,
+      } as unknown as MatrixClient;
+      await governSpaces(mx, undefined, { wait: async () => {} });
+      expect(sendStateEvent.mock.calls.length > 0).toBe(expectWrite);
+      if (expectWrite) expect(((sendStateEvent.mock.calls[0] as unknown[])[2] as { ban: number }).ban).toBe(50);
+    }
+  });
+});
+
+describe('mayRewrite', () => {
+  it('stops writing a channel whose levels keep being changed back', () => {
+    resetRewritesForTests();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect([0, 1, 2, 3, 4].map((i) => mayRewrite('!room', i * 1000))).toEqual([true, true, true, false, false]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(mayRewrite('!other', 5000)).toBe(true);
+    // Ten minutes on, it may again.
+    expect(mayRewrite('!room', 11 * 60_000)).toBe(true);
+    warn.mockRestore();
   });
 });

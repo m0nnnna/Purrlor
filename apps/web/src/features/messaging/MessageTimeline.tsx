@@ -58,6 +58,9 @@ import './MessageTimeline.css';
 import { fallbackName } from '../../matrix/displayName';
 
 const HISTORY_PAGE_SIZE = 30;
+/** The most a history page grows to when pages keep coming back without messages (loadMore). */
+const MAX_HISTORY_PAGE = 600;
+const HISTORY_MESSAGE_TYPES = new Set(['m.room.message', 'm.room.encrypted', 'm.sticker', 'org.matrix.msc3381.poll.start', 'm.poll.start']);
 const LOAD_MORE_THRESHOLD_PX = 150;
 const PINNED_THRESHOLD_PX = 40;
 /** Below this many visible messages on first view, proactively backfill rather than waiting
@@ -709,6 +712,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // can't fight the stay-at-the-bottom logic.
   const anchorRef = useRef<{ eventId: string; offset: number } | null>(null);
   const autoBackfillDoneRef = useRef(false);
+  const pageSizeRef = useRef(HISTORY_PAGE_SIZE);
   // Set when a scrollback fails, so the automatic fill below doesn't retry in a loop; scrolling
   // up still retries by hand.
   const autoFillFailedRef = useRef(false);
@@ -753,6 +757,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     anchorRef.current = null;
     autoBackfillDoneRef.current = false;
     autoFillFailedRef.current = false;
+    pageSizeRef.current = HISTORY_PAGE_SIZE;
     roomEnteredAtRef.current = now;
     forceBottomUntilRef.current = jumpingHere ? 0 : now + SETTLE_EXTENSION_MS;
     setRenderWindow(INITIAL_RENDER_WINDOW);
@@ -792,7 +797,16 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       // Not mx.scrollback: that treats any empty page as the start of the room, and a server
       // still backfilling a room from other servers can answer with an empty page that has more
       // behind it. This stops only when the server says there's nothing older (no `end` token).
-      await mx.paginateEventTimeline(currentRoom.getLiveTimeline(), { backwards: true, limit: HISTORY_PAGE_SIZE });
+      const timeline = currentRoom.getLiveTimeline();
+      const before = timeline.getEvents().length;
+      await mx.paginateEventTimeline(timeline, { backwards: true, limit: pageSizeRef.current });
+      // Older events are added at the front. A page with no messages in it (state changes,
+      // reactions, edits) asks for three times as many next time, up to MAX_HISTORY_PAGE: a
+      // channel buried under thousands of permission changes took dozens of round trips to show
+      // anything. A page with messages goes back to the usual size.
+      const added = timeline.getEvents().slice(0, Math.max(0, timeline.getEvents().length - before));
+      const anyMessage = added.some((event) => HISTORY_MESSAGE_TYPES.has(event.getType()));
+      pageSizeRef.current = anyMessage ? HISTORY_PAGE_SIZE : Math.min(MAX_HISTORY_PAGE, pageSizeRef.current * 3);
     } catch (err) {
       autoFillFailedRef.current = true;
       console.warn('MessageTimeline: loading older messages failed', err);
