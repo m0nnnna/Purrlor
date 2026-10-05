@@ -12,7 +12,7 @@ import { musicAudio, musicQueueAtom } from './musicPlayer';
 export function useMusicMediaSession(): void {
   const [queue, setQueue] = useAtom(musicQueueAtom);
   const item = queue?.items[queue.index];
-  const cover = useMediaUrl(item?.cover, { width: 256, height: 256, method: 'scale' });
+  const cover = useMediaUrl(item?.cover, { width: 256, height: 256, method: 'scale', blob: true });
 
   useEffect(() => {
     const session = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;

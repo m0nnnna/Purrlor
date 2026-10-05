@@ -4,6 +4,7 @@ import { useOwnProfile } from '../matrix/hooks/useOwnProfile';
 import { buildDataExport, type ExportProgress, type ExportResult } from '../matrix/dataExport';
 import { deleteAccount, spacesOnlyYouRun, WrongPasswordError, type DeleteProgress } from '../matrix/deleteAccount';
 import { Modal } from '../components/Modal';
+import { clearDeviceCaches } from '../matrix/deviceCache';
 import './YourDataSettings.css';
 
 /** Set before the reload that follows deleting an account, so the sign-in screen can say it worked. */
@@ -139,7 +140,10 @@ function deleteStatus(progress: DeleteProgress | undefined): string {
 async function leaveDeletedAccount(mx: ReturnType<typeof useMatrixClient>): Promise<void> {
   mx.stopClient();
   // Same reasoning as logoutClient: a store that won't clear mustn't keep the page here.
-  await Promise.race([mx.clearStores().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 3000))]);
+  await Promise.race([
+    Promise.all([mx.clearStores().catch(() => undefined), clearDeviceCaches()]),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]);
   try {
     localStorage.clear();
     sessionStorage.setItem(ACCOUNT_DELETED_FLAG, '1');

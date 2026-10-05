@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMediaUrl } from '../matrix/hooks/useMediaUrl';
 import './Avatar.css';
 
@@ -40,9 +41,12 @@ export function Avatar({ name, mxcUrl, size = 28, presence, animated }: AvatarPr
   const src = useMediaUrl(mxcUrl, animated ? {} : { width: size * 2, height: size * 2, method: 'crop' });
   const initial = (name || '?').trim().slice(0, 1).toUpperCase();
   const style = { width: size, height: size, fontSize: Math.round(size * 0.42) };
+  // The image is the media URL itself now (the service worker signs it), so one that won't load
+  // shows the initial rather than a broken image.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  const image = src ? (
-    <img className="nu-avatar" data-nu-role="avatar" src={src} alt="" style={style} />
+  const image = src && src !== failedSrc ? (
+    <img className="nu-avatar" data-nu-role="avatar" src={src} alt="" style={style} onError={() => setFailedSrc(src)} />
   ) : (
     <div
       className="nu-avatar nu-avatar--fallback"

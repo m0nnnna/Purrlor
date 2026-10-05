@@ -71,8 +71,25 @@ describe('history prefetch', () => {
     const ready = fakeRoom('!ready', msgs(40), msgs(50), 5);
     const { mx, limits } = client([quiet, busy, ready]);
     const waits: number[] = [];
-    startHistoryPrefetch(mx, { gapMs: 10, wait: async (ms) => void waits.push(ms) });
+    startHistoryPrefetch(mx, { gapMs: 10, wait: async (ms) => void waits.push(ms), concurrency: 1 });
     await vi.waitFor(() => expect(Object.keys(limits)).toEqual(['!busy', '!quiet']));
     expect(waits).toEqual([10, 10]);
+  });
+
+  it('fills a few rooms at once, so one slow server holds up only its own room', async () => {
+    const slow = fakeRoom('!slow', [], msgs(50), 9);
+    const fast = fakeRoom('!fast', [], msgs(50), 5);
+    let release = () => {};
+    const { mx, limits } = client([slow, fast]);
+    const paginate = vi.mocked(mx.paginateEventTimeline).getMockImplementation()!;
+    vi.mocked(mx.paginateEventTimeline).mockImplementation(async (timeline, opts) => {
+      if (timeline === slow.room.getLiveTimeline()) await new Promise<void>((resolve) => (release = resolve));
+      return paginate(timeline, opts);
+    });
+    startHistoryPrefetch(mx, { gapMs: 0, wait: async () => undefined, concurrency: 2 });
+    await vi.waitFor(() => expect(needsHistory(fast.room)).toBe(false));
+    expect(limits['!slow']).toBeUndefined();
+    release();
+    await vi.waitFor(() => expect(needsHistory(slow.room)).toBe(false));
   });
 });

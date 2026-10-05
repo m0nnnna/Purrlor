@@ -1,11 +1,40 @@
 import { useEffect, useState } from 'react';
 import type { IPreviewUrlResponse } from 'matrix-js-sdk';
 import { useMatrixClient } from '../MatrixClientContext';
+import { getCached, putCached } from '../deviceCache';
 
-// Keyed by url+bucketed-ts (matching the sdk's own 60s-bucketed cache key), same rationale as
-// useMediaUrl's cache: the same link can appear in several messages/re-renders and a homeserver
-// preview fetch is expensive enough (it fetches and parses the target page) to be worth sharing.
+/** How long a preview is kept on the device, and an answer of "no preview". */
+const PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;
+const NO_PREVIEW_TTL_MS = 60 * 60 * 1000;
+
+// Keyed by the link alone: the same link appears in several messages, a room opened again draws
+// them all again, and a homeserver preview is expensive (it fetches and parses the target page).
+// It used to be keyed by the minute, as the sdk does, so going back to a room a minute later asked
+// for every preview in it again, and each card popped in late and moved the messages below it.
 const previewCache = new Map<string, Promise<IPreviewUrlResponse | null>>();
+/** The same, once answered, so a card drawn again is there on the first paint. */
+const resolvedPreviews = new Map<string, IPreviewUrlResponse | null>();
+
+function loadPreview(mx: ReturnType<typeof useMatrixClient>, url: string): Promise<IPreviewUrlResponse | null> {
+  let cached = previewCache.get(url);
+  if (!cached) {
+    const key = `preview:${url}`;
+    cached = (async () => {
+      // Kept from an earlier visit (matrix/deviceCache.ts): no request at all.
+      const stored = await getCached<{ preview: IPreviewUrlResponse | null }>(key);
+      if (stored) return stored.preview;
+      const fresh = await mx.getUrlPreview(url, Math.floor(Date.now() / 60000) * 60000).catch(() => undefined);
+      // A failed request isn't kept: it may work next time. "No preview" is, for a while.
+      if (fresh !== undefined) void putCached(key, { preview: fresh ?? null }, fresh ? PREVIEW_TTL_MS : NO_PREVIEW_TTL_MS);
+      return fresh ?? null;
+    })().then((preview) => {
+      resolvedPreviews.set(url, preview);
+      return preview;
+    });
+    previewCache.set(url, cached);
+  }
+  return cached;
+}
 
 /**
  * Wraps `mx.getUrlPreview` (MSC-less core Matrix `/media/preview_url` — server-side OpenGraph
@@ -16,31 +45,27 @@ const previewCache = new Map<string, Promise<IPreviewUrlResponse | null>>();
  */
 export function useUrlPreview(url: string | undefined): IPreviewUrlResponse | null {
   const mx = useMatrixClient();
-  const [preview, setPreview] = useState<IPreviewUrlResponse | null>(null);
+  const [state, setState] = useState<{ url?: string; preview: IPreviewUrlResponse | null }>(() => ({
+    url,
+    preview: url ? (resolvedPreviews.get(url) ?? null) : null,
+  }));
 
   useEffect(() => {
-    if (!url) {
-      setPreview(null);
+    if (!url) return undefined;
+    if (resolvedPreviews.has(url)) {
+      const known = resolvedPreviews.get(url) ?? null;
+      setState((prev) => (prev.url === url && prev.preview === known ? prev : { url, preview: known }));
       return undefined;
     }
     let cancelled = false;
-    setPreview(null);
-    // Bucketed to the minute exactly like the sdk does internally, so our cache key matches its
-    // own in-flight dedupe instead of missing it by a few milliseconds of Date.now() drift.
-    const ts = Math.floor(Date.now() / 60000) * 60000;
-    const key = `${ts}_${url}`;
-    let cached = previewCache.get(key);
-    if (!cached) {
-      cached = mx.getUrlPreview(url, ts).catch(() => null);
-      previewCache.set(key, cached);
-    }
-    cached.then((result) => {
-      if (!cancelled) setPreview(result);
+    void loadPreview(mx, url).then((preview) => {
+      if (!cancelled) setState({ url, preview });
     });
     return () => {
       cancelled = true;
     };
   }, [mx, url]);
 
-  return preview;
+  if (!url) return null;
+  return state.url === url ? state.preview : (resolvedPreviews.get(url) ?? null);
 }

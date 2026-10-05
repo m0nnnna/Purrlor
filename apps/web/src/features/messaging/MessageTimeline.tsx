@@ -80,6 +80,15 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 /** Scrolled further than this from the bottom, the "Jump to latest" button appears. */
 const JUMP_BUTTON_THRESHOLD_PX = 400;
 
+/** Where a room's view was left, if the reader was scrolled up in it: the message at the top of
+ *  the view and how much history was drawn. */
+type RoomViewMemory = { renderWindow: number; anchor: { eventId: string; offset: number } };
+/** For the session, by room. Going back to a room you were reading further up in puts you back on
+ *  the same message, with the same history drawn, instead of at the bottom with a screenful drawn
+ *  and everything above to scroll back through (and draw) again. A room left at the bottom opens
+ *  at the bottom, as it always did. */
+const roomViews = new Map<string, RoomViewMemory>();
+
 function isSameDay(a: number, b: number): boolean {
   const da = new Date(a);
   const db = new Date(b);
@@ -773,6 +782,8 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const bottomRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [renderWindow, setRenderWindow] = useState(initialRenderWindow);
+  const renderWindowRef = useRef(renderWindow);
+  renderWindowRef.current = renderWindow;
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   // Where your read receipt sat when you opened the room — captured once per room visit, before
   // this view marks everything read, so the "New" divider stays put while you read past it
@@ -786,8 +797,9 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // may no longer be valid for the new content's height), which fires ordinary 'scroll' events
   // indistinguishable from a real user scroll — and that was corrupting this value before our
   // own snap-to-bottom logic ever got to run, which is why it kept landing in a consistent
-  // wrong spot on every revisit rather than varying. Opening a room always forces the bottom
-  // instead, the same way Discord does regardless of where you left off.
+  // wrong spot on every revisit rather than varying. Opening a room forces the bottom instead,
+  // unless it was left scrolled up (roomViews): then it goes back to the remembered message, by
+  // its anchor below, never by a scroll position.
   const pinnedToBottomRef = useRef(true);
   // The first message visible at the top of the viewport, and how far below the container's top
   // edge it sat — refreshed on every scroll. When not pinned to the bottom, any change in content
@@ -797,6 +809,10 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // can't fight the stay-at-the-bottom logic.
   const anchorRef = useRef<{ eventId: string; offset: number } | null>(null);
   const autoBackfillDoneRef = useRef(false);
+  // Set while a room is being put back where it was left (roomViews) and its message isn't drawn
+  // yet: the render before the room's events arrive still shows the previous room's, short, view,
+  // which looks scrolled to the top and would fetch history nobody asked for.
+  const restoringRef = useRef(false);
   const pageSizeRef = useRef(HISTORY_PAGE_SIZE);
   // Set when a scrollback fails, so the automatic fill below doesn't retry in a loop; scrolling
   // up still retries by hand.
@@ -833,22 +849,43 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // scrolling up (loadMore above).
   const { shown: shownMessages, hiddenOlder: hiddenOlderCount } = sliceRenderWindow(messages, renderWindow);
 
-  useEffect(() => {
+  // A layout effect, so a room opened again is put back where it was left before it's painted.
+  useLayoutEffect(() => {
     const now = Date.now();
     // A pending jump (from search) targets an exact message, not the bottom — don't fight it
     // with the usual "always open a room at the bottom" behavior.
     const jumpingHere = pendingJump?.roomId === roomId;
-    pinnedToBottomRef.current = !jumpingHere;
-    anchorRef.current = null;
-    autoBackfillDoneRef.current = false;
+    // Left scrolled up, and that message is still loaded (a limited sync can have replaced the
+    // timeline since): back to it (roomViews).
+    const remembered = jumpingHere ? undefined : roomViews.get(roomId);
+    const liveEvents = mx.getRoom(roomId)?.getLiveTimeline().getEvents() ?? [];
+    const anchorIndex = remembered ? liveEvents.findIndex((event) => event.getId() === remembered.anchor.eventId) : -1;
+    const restore = anchorIndex >= 0 ? remembered : undefined;
+    pinnedToBottomRef.current = !jumpingHere && !restore;
+    anchorRef.current = restore ? { ...restore.anchor } : null;
+    restoringRef.current = !!restore;
+    autoBackfillDoneRef.current = !!restore;
     autoFillFailedRef.current = false;
     pageSizeRef.current = HISTORY_PAGE_SIZE;
     roomEnteredAtRef.current = now;
-    forceBottomUntilRef.current = jumpingHere ? 0 : now + SETTLE_EXTENSION_MS;
-    setRenderWindow(initialRenderWindow());
-    setShowJumpToLatest(false);
+    forceBottomUntilRef.current = jumpingHere || restore ? 0 : now + SETTLE_EXTENSION_MS;
+    // Drawn back to that message at least, counting what arrived since (an overestimate: events,
+    // not just messages, follow it).
+    setRenderWindow(
+      restore ? Math.max(restore.renderWindow, windowReaching(liveEvents.length, anchorIndex, HISTORY_PAGE_SIZE)) : initialRenderWindow()
+    );
+    setShowJumpToLatest(!!restore);
     const myUserId = mx.getUserId();
     setReadMarkerEventId(myUserId ? mx.getRoom(roomId)?.getEventReadUpTo(myUserId) ?? null : null);
+    keepScrollPosition();
+    const anchor = anchorRef;
+    const pinned = pinnedToBottomRef;
+    const drawn = renderWindowRef;
+    return () => {
+      // Leaving the room (or the view): remember where, if it wasn't the bottom.
+      if (!pinned.current && anchor.current) roomViews.set(roomId, { renderWindow: drawn.current, anchor: { ...anchor.current } });
+      else roomViews.delete(roomId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -946,10 +983,12 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
       container.scrollTop = container.scrollHeight;
     } else if (anchorRef.current) {
       const el = container.querySelector<HTMLElement>(`[data-nu-event-id="${CSS.escape(anchorRef.current.eventId)}"]`);
-      if (el) {
-        const offset = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
-        container.scrollTop += offset - anchorRef.current.offset;
-      }
+      // Not drawn (yet): a room being put back where it was left draws back to it on its next
+      // render. Measuring now would replace the anchor with whatever's on screen meanwhile.
+      if (!el) return;
+      const offset = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      container.scrollTop += offset - anchorRef.current.offset;
+      restoringRef.current = false;
     }
     captureAnchor();
   };
@@ -961,7 +1000,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
 
     // Scrolls our own settling and anchoring cause aren't a reason to fetch history: only the
     // reader getting near the top is.
-    if (container.scrollTop < LOAD_MORE_THRESHOLD_PX && Date.now() >= forceBottomUntilRef.current) {
+    if (container.scrollTop < LOAD_MORE_THRESHOLD_PX && Date.now() >= forceBottomUntilRef.current && !restoringRef.current) {
       void loadMore();
     }
 
@@ -978,6 +1017,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // slow to arrive (other servers' media) kept pulling you back to the bottom for up to
   // MAX_SETTLE_MS while you were trying to scroll up.
   const endSettling = () => {
+    restoringRef.current = false;
     forceBottomUntilRef.current = 0;
   };
 
@@ -1049,7 +1089,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   // member events) or when the view is too short to scroll at all: you had to scroll away and
   // back, sometimes several times, or were stuck with a handful of messages.
   useEffect(() => {
-    if (atStart || loadingMore || autoFillFailedRef.current) return;
+    if (atStart || loadingMore || autoFillFailedRef.current || restoringRef.current) return;
     const container = containerRef.current;
     const thin = !autoBackfillDoneRef.current && messages.length < THIN_TIMELINE_THRESHOLD;
     const nearTop = !!container && container.scrollTop < LOAD_MORE_THRESHOLD_PX;
@@ -1061,7 +1101,17 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
 
   // A new or prepended page of messages: runs before paint, so an older page landing above you
   // (or a new message below while pinned) never shows a frame in the wrong spot.
+  // Sending a message (its local echo landing at the end) takes you to the bottom to see it, even
+  // from further up, as in Discord and Element.
+  const lastSeenIdRef = useRef<string | undefined>();
   useLayoutEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last && last.getId() !== lastSeenIdRef.current && last.status !== null && last.getSender() === mx.getUserId()) {
+      pinnedToBottomRef.current = true;
+      restoringRef.current = false;
+      setShowJumpToLatest(false);
+    }
+    lastSeenIdRef.current = last?.getId();
     keepScrollPosition();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, renderWindow]);

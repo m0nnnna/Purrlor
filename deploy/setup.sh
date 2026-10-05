@@ -1408,6 +1408,22 @@ server {
         return 200 '{"m.server": "$MATRIX_DOMAIN:443"}';
     }
 
+    # Media: Continuwuity sends no Cache-Control, so a browser kept nothing and fetched every
+    # thumbnail and avatar again on each visit to a channel. A media ID's bytes never change: the
+    # browser may keep them a year. Only successful answers (add_header without "always"), so a
+    # remote file that isn't here yet is asked for again. "private": never cached by Cloudflare or
+    # anything else between, since the media needs the person's token. (The app also keeps its own
+    # copy: apps/web/public/sw.js, docs/device-cache.md.)
+    location ~ ^/_matrix/client/v1/media/(download|thumbnail)/ {
+        proxy_pass http://$UPSTREAM:8008;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "private, max-age=31536000, immutable";
+    }
+
     location / {
         proxy_pass http://$UPSTREAM:8008;
         proxy_set_header Host \$host;

@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk';
+import { mediaWorkerReady } from './mediaWorker';
 
 /** Waits before each retry of a media fetch that failed for a reason that may pass. */
 const RETRY_DELAYS_MS = [1000, 3000, 8000];
@@ -30,10 +31,14 @@ export async function fetchMedia(
   useAuth: boolean,
   delays: readonly number[] = RETRY_DELAYS_MS
 ): Promise<Response> {
+  // Through the service worker when it can sign the request: it keeps a copy on the device
+  // (public/sw.js), still encrypted for an encrypted attachment, so opening it again needs no
+  // download.
+  const signHere = useAuth && !(await mediaWorkerReady());
   for (let attempt = 0; ; attempt++) {
     let status: number | null = null;
     try {
-      const res = await fetch(httpUrl, useAuth ? { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } } : undefined);
+      const res = await fetch(httpUrl, signHere ? { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } } : undefined);
       if (res.ok) return res;
       status = res.status;
     } catch {
