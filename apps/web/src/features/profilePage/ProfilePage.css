@@ -517,9 +517,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nu-profile-page__effects,
-  .nu-profile-page__effects-toggle {
-    display: none;
+  /* Still there, standing still, scattered down the screen (PageEffects.tsx). */
+  .nu-profile-page__particle {
+    animation: none;
+    top: var(--nu-particle-rest, 50%);
   }
 
   .nu-profile-page__link,

@@ -30,9 +30,10 @@ function setEffectsOff(off: boolean): void {
 
 /**
  * A page's falling-particle effect, drawn behind its blocks. Built in, not something a page
- * describes: the page only names which one. Hidden for anyone whose device asks for reduced
- * motion (ProfilePage.css), and the visitor can turn effects off on every page with one button;
- * that's remembered for the visitor, not the page.
+ * describes: the page only names which one. For anyone whose device asks for reduced motion the
+ * particles stand still where they are (ProfilePage.css): they used to be hidden altogether, so a
+ * page's owner with animations off in Windows never saw the effect their visitors did. The visitor
+ * can turn effects off on every page with one button; that's remembered for the visitor, not the page.
  */
 export function PageEffects({ effect }: { effect: PageEffect }) {
   const [off, setOff] = useState(effectsOff);
@@ -53,6 +54,8 @@ export function PageEffects({ effect }: { effect: PageEffect }) {
                   animationDelay: `${(i * 1.7) % 9}s`,
                   animationDuration: `${8 + ((i * 3) % 7)}s`,
                   fontSize: `${10 + ((i * 5) % 12)}px`,
+                  // Where it rests when nothing may move.
+                  ['--nu-particle-rest' as string]: `${4 + ((i * 53) % 90)}%`,
                 }}
               >
                 {particle}
