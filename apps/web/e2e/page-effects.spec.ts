@@ -29,7 +29,7 @@ async function pageWithEffect(page: Page, user: TestUser): Promise<void> {
 
 const particleTops = (page: Page) =>
   role(page, 'profile-page-effects').evaluate((layer) =>
-    [...layer.querySelectorAll('.nu-profile-page__particle')].slice(0, 4).map((p) => Math.round(p.getBoundingClientRect().top))
+    Array.from(layer.querySelectorAll('.nu-profile-page__particle')).slice(0, 4).map((p) => Math.round(p.getBoundingClientRect().top))
   );
 
 test('the owner sees their page’s effect, falling', async ({ page }) => {

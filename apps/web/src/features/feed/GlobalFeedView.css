@@ -167,3 +167,19 @@
     display: none;
   }
 }
+
+/* Your own picture behind the feed (matrix/feedBackground.ts): the app's background laid over it at
+   the chosen dim, so posts stay readable. A scrolling box's background stays put by default, so the
+   posts scroll over it. */
+.nu-feed--background {
+  background-color: var(--nu-color-bg-app);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--nu-color-bg-app) var(--nu-feed-background-dim, 60%), transparent),
+      color-mix(in srgb, var(--nu-color-bg-app) var(--nu-feed-background-dim, 60%), transparent)
+    ),
+    var(--nu-feed-background);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}

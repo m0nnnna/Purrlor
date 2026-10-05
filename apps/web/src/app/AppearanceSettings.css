@@ -81,3 +81,18 @@
 .nu-appearance-settings__reference-list code {
   color: var(--nu-color-text-secondary);
 }
+
+/* Feed background (FeedBackgroundSetting.tsx). */
+.nu-feed-background-setting__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-feed-background-setting__dim {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+}

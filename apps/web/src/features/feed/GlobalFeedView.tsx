@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useFeedBackground } from '../../matrix/feedBackground';
+import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { OnlineCount } from '../online/OnlineCount';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
@@ -50,6 +52,8 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
   const mx = useMatrixClient();
   const setGlobalFeedOpen = useSetAtom(globalFeedOpenAtom);
   const tab = useAtomValue(socialViewAtom);
+  const feedBackground = useFeedBackground();
+  const feedBackgroundSrc = useMediaUrl(feedBackground?.url);
   const openSocial = useOpenSocial();
   const follows = useFollows();
   // Whoever you follow is read directly, even past the directory caps. Loaded once this view
@@ -155,6 +159,17 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
     </button>
   );
 
+  // Your own picture behind the feed (Settings → Appearance; matrix/feedBackground.ts), under a
+  // layer of the app's background so posts stay readable. Not behind Notifications.
+  const feedBackgroundStyle =
+    feedBackgroundSrc && feedBackground && tab !== 'notifications'
+      ? ({
+          // A quoted CSS string: JSON's escaping of quotes and backslashes is CSS's too.
+          '--nu-feed-background': `url(${JSON.stringify(feedBackgroundSrc)})`,
+          '--nu-feed-background-dim': `${feedBackground.dim}%`,
+        } as CSSProperties)
+      : undefined;
+
   return (
     <main className="nu-main-pane" data-nu-role="main-pane" style={hidden ? { display: 'none' } : undefined}>
       <div className="nu-main-pane__header nu-global-feed__header" data-nu-role="main-pane-header">
@@ -200,7 +215,13 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
         </div>
       </div>
 
-      <div className="nu-feed" data-nu-role="global-feed" ref={scroll.ref} onScroll={scroll.onScroll}>
+      <div
+        className={feedBackgroundStyle ? 'nu-feed nu-feed--background' : 'nu-feed'}
+        data-nu-role="global-feed"
+        ref={scroll.ref}
+        onScroll={scroll.onScroll}
+        style={feedBackgroundStyle}
+      >
         {tab === 'notifications' ? (
           // Only while it's on screen: it marks everything it shows as seen, and new notifications
           // arriving while you're in a chat must still light up the bell.
