@@ -359,3 +359,23 @@ a.nu-embed__body:hover .nu-embed__title {
   background: var(--nu-color-bg-app);
   color: var(--nu-color-text-primary);
 }
+
+.nu-embed__watch-together {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  margin-top: var(--nu-space-1);
+  padding: 2px var(--nu-space-2);
+  border: 1px solid var(--nu-color-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--nu-color-text-secondary);
+  font-size: var(--nu-font-size-xs);
+  cursor: pointer;
+}
+
+.nu-embed__watch-together:hover {
+  border-color: var(--nu-color-accent);
+  color: var(--nu-color-text-primary);
+}

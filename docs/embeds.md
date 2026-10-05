@@ -34,6 +34,12 @@ A list in the content of an `m.room.message` (`m.text`, `m.emote`, `m.notice`) o
 `xyz.nekous.post`, at most 3, in the order their links appear in the body. In an edit it goes in
 `m.new_content` like the rest of the content; an edit without it has no embeds.
 
+An **empty list** means "no embeds": the sender removed them, or the sites had nothing to show.
+Readers then don't ask the homeserver for a preview either. The field is **left out** when the body
+has no links, when embeds aren't allowed (rule 3), or when none of its links could be looked up at
+all (the token server unreachable): then readers fall back to the homeserver's preview, as for a
+message from before embeds.
+
 ```json
 "xyz.nekous.embeds": [
   {
@@ -184,8 +190,10 @@ Resolved embeds are cached per URL for 14 minutes, while their files are still k
 - The person's setting (Settings → Appearance, "Link embeds"): all (default), no players (players
   draw as cards that open the link), or none (plain links).
 - `sensitive`, or a post marked sensitive: blurred until clicked.
-- A player in a voice-connected channel offers "Watch together", which hands the link to the call's
-  Watch Together.
+- A channel can turn players off for everyone in it (its permissions, "No players in link embeds":
+  `no_players: true` in `xyz.nekous.channel_settings`, which only Purrlor reads). They draw as cards.
+- A YouTube player, while you're in a call, offers "Watch together", which hands the link to the
+  call's Watch Together.
 
 ## Peers and the public web
 

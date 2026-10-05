@@ -42,6 +42,7 @@ import { LinkPreviewCard } from './LinkPreviewCard';
 import { EmbedList } from './EmbedCard';
 import { embeddableLinks, embedsContent, hasEmbedsField, readEmbeds } from '../../matrix/embeds';
 import { prepareEmbeds } from '../../matrix/embedResolve';
+import { readChannelPermissions } from '../../matrix/channelPermissions';
 import { useEmbedSettings } from '../../matrix/embedSettings';
 import { PollCard } from './PollCard';
 import { WatchPartyCard } from '../calendar/WatchPartyCard';
@@ -468,7 +469,12 @@ function MessageRow({
             </CollapsibleText>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
             {embedSettings.show !== 'none' && (
-              <EmbedList embeds={storedEmbeds} eventKey={eventId ?? event.getTxnId() ?? ''} onRemove={isEditable && !isPending ? removeEmbed : undefined} />
+              <EmbedList
+                embeds={storedEmbeds}
+                eventKey={eventId ?? event.getTxnId() ?? ''}
+                onRemove={isEditable && !isPending ? removeEmbed : undefined}
+                noPlayers={readChannelPermissions(room).noPlayers}
+              />
             )}
             {content.msgtype === 'm.notice' && typeof content[NOTICE_EVENT_KEY] === 'string' && (
               <WatchPartyCard room={room} eventId={content[NOTICE_EVENT_KEY]} />

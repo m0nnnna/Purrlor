@@ -6,6 +6,7 @@ import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { useEmbedSettings } from '../../matrix/embedSettings';
 import { playerFrameUrl, playerSpec, type EmbedFile, type StoredEmbed } from '../../matrix/embeds';
 import { AttachmentLightbox } from './AttachmentLightbox';
+import { useSharedWatchTogether } from '../voice/watchTogetherContext';
 import './EmbedCard.css';
 
 /**
@@ -145,6 +146,8 @@ function PostView({ embed, onRemove }: { embed: StoredEmbed; onRemove?: () => vo
 
 function PlayerView({ embed, onRemove, playerKey }: { embed: StoredEmbed; onRemove?: () => void; playerKey: string }) {
   const active = useActivePlayer();
+  // In a call: hand a YouTube video to the call's Watch Together (features/voice/useWatchTogether.ts).
+  const watchTogether = useSharedWatchTogether();
   const frame = playerFrameUrl(embed.player, window.location.hostname);
   if (!frame || !embed.player) return <CardView embed={embed} onRemove={onRemove} />;
   const spec = playerSpec(embed.player.provider);
@@ -159,6 +162,19 @@ function PlayerView({ embed, onRemove, playerKey }: { embed: StoredEmbed; onRemo
           </a>
         )}
         {embed.author?.name && <div className="nu-embed__author-line">{embed.author.name}</div>}
+        {watchTogether && embed.player.provider === 'youtube' && (
+          <button
+            type="button"
+            className="nu-embed__watch-together"
+            data-nu-role="embed-watch-together"
+            onClick={() => {
+              if (watchTogether.start(embed.url, 'watch')) setActivePlayer(null);
+            }}
+          >
+            <Icon name="tv" size={14} />
+            Watch together
+          </button>
+        )}
       </div>
       {playing ? (
         <iframe
@@ -246,8 +262,10 @@ function MediaView({ embed, onRemove }: { embed: StoredEmbed; onRemove?: () => v
 
 // --- The list ------------------------------------------------------------------------------------
 
-export function EmbedView({ embed, onRemove, playerKey }: { embed: StoredEmbed; onRemove?: () => void; playerKey: string }) {
-  const { show } = useEmbedSettings();
+export function EmbedView({ embed, onRemove, playerKey, noPlayers = false }: { embed: StoredEmbed; onRemove?: () => void; playerKey: string; noPlayers?: boolean }) {
+  const settings = useEmbedSettings();
+  // A channel can turn players off for everyone (channelPermissions.ts); a person, for themselves.
+  const show = noPlayers && settings.show === 'all' ? 'no-players' : settings.show;
   const signedIn = !!useContext(MatrixClientContext);
   // Stop this one's player if it goes away while playing.
   useEffect(() => () => {
@@ -274,12 +292,29 @@ export function EmbedView({ embed, onRemove, playerKey }: { embed: StoredEmbed; 
  * An event's embeds, under its text. `onRemove` (your own messages and posts) offers a × on each,
  * which edits it out. `eventKey` keeps each player's identity distinct across the timeline.
  */
-export function EmbedList({ embeds, eventKey, onRemove }: { embeds: StoredEmbed[]; eventKey: string; onRemove?: (url: string) => void }) {
+export function EmbedList({
+  embeds,
+  eventKey,
+  onRemove,
+  noPlayers,
+}: {
+  embeds: StoredEmbed[];
+  eventKey: string;
+  onRemove?: (url: string) => void;
+  /** The channel turned players off. */
+  noPlayers?: boolean;
+}) {
   if (embeds.length === 0) return null;
   return (
     <div className="nu-embeds" data-nu-role="embeds">
       {embeds.map((embed) => (
-        <EmbedView key={embed.url} embed={embed} playerKey={`${eventKey}|${embed.url}`} onRemove={onRemove ? () => onRemove(embed.url) : undefined} />
+        <EmbedView
+          key={embed.url}
+          embed={embed}
+          playerKey={`${eventKey}|${embed.url}`}
+          onRemove={onRemove ? () => onRemove(embed.url) : undefined}
+          noPlayers={noPlayers}
+        />
       ))}
     </div>
   );

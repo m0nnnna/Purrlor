@@ -55,6 +55,8 @@ export type ChannelPermissions = {
   slowmodeSeconds: number;
   /** People who moderate this channel only (docs/roles.md): moderator level here, whatever their role in the Space. */
   channelModerators: string[];
+  /** Link embeds' players draw as cards here (docs/embeds.md). Only Purrlor knows about it. */
+  noPlayers: boolean;
 };
 
 type PowerLevels = {
@@ -66,7 +68,7 @@ type PowerLevels = {
   [key: string]: unknown;
 };
 
-type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown; moderators?: unknown };
+type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown; moderators?: unknown; no_players?: unknown };
 
 function powerLevels(room: Room): PowerLevels {
   return room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent<PowerLevels>() ?? {};
@@ -86,6 +88,7 @@ export function readChannelPermissions(room: Room): ChannelPermissions {
     channelModerators: Array.isArray(settings.moderators)
       ? settings.moderators.filter((id): id is string => typeof id === 'string' && id.startsWith('@'))
       : [],
+    noPlayers: settings.no_players === true,
   };
 }
 
@@ -128,6 +131,12 @@ export async function setSlowmode(mx: MatrixClient, room: Room, seconds: number)
   const current = room.currentState.getStateEvents(CHANNEL_SETTINGS_EVENT, '')?.getContent<Record<string, unknown>>() ?? {};
   const next = { ...current, slowmode_seconds: seconds > 0 ? Math.floor(seconds) : undefined };
   await mx.sendStateEvent(room.roomId, CHANNEL_SETTINGS_EVENT as any, next as any, '');
+}
+
+/** Turns link embeds' players into cards in this channel, or back. */
+export async function setNoPlayers(mx: MatrixClient, room: Room, on: boolean): Promise<void> {
+  const current = room.currentState.getStateEvents(CHANNEL_SETTINGS_EVENT, '')?.getContent<Record<string, unknown>>() ?? {};
+  await mx.sendStateEvent(room.roomId, CHANNEL_SETTINGS_EVENT as any, { ...current, no_players: on || undefined } as any, '');
 }
 
 /** Moderators aren't slowed down, as on Discord. */

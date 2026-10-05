@@ -10,6 +10,7 @@ import {
   setPostingMode,
   spaceRoleLevels,
   setSlowmode,
+  setNoPlayers,
   setVisibility,
   type PostingMode,
   type Visibility,
@@ -45,6 +46,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const [posting, setPosting] = useState<PostingMode>(initial.posting);
   const [visibility, setVisibilityChoice] = useState<Visibility>(initial.visibility);
   const [slowmode, setSlowmodeChoice] = useState(initial.slowmodeSeconds);
+  const [noPlayers, setNoPlayersChoice] = useState(initial.noPlayers);
   const [channelModerators, setChannelModeratorList] = useState<string[]>(initial.channelModerators);
   const spaceMembers = useRoomMembers(space.roomId);
   const spaceLevels = spaceRoleLevels(space);
@@ -79,6 +81,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
     try {
       if (posting !== initial.posting) await setPostingMode(mx, channel, posting);
       if (slowmode !== initial.slowmodeSeconds) await setSlowmode(mx, channel, slowmode);
+      if (noPlayers !== initial.noPlayers) await setNoPlayers(mx, channel, noPlayers);
       if (visibility !== initial.visibility) await setVisibility(mx, channel, space, visibility);
       if (moderatorsChanged) await setChannelModerators(mx, channel, space, channelModerators);
       // Last, so a failure above doesn't leave the one change that can't be undone half-made.
@@ -145,6 +148,22 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
             apps don’t know about it.
           </span>
         </label>
+        <div className="nu-field" data-nu-role="channel-permissions-no-players">
+          <label className="nu-field__checkbox-row">
+            <input
+              type="checkbox"
+              checked={noPlayers}
+              disabled={!canChangeSlowmode}
+              data-nu-role="channel-permissions-no-players-toggle"
+              onChange={(e) => setNoPlayersChoice(e.target.checked)}
+            />
+            No players in link embeds
+          </label>
+          <span className="nu-field__hint">
+            Videos and music linked here show as cards that open the site, rather than playing in the channel. Only Purrlor
+            knows about this.
+          </span>
+        </div>
         <div className="nu-field" data-nu-role="channel-permissions-moderators">
           Channel moderators
           {channelModerators.length > 0 && (

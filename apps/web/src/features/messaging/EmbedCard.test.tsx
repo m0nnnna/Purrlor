@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { MatrixClientContext } from '../../matrix/MatrixClientContext';
 import type { StoredEmbed } from '../../matrix/embeds';
 import { EmbedList } from './EmbedCard';
+
+const watchTogether = { current: null as null | { start: (url: string, mode?: string) => boolean } };
+vi.mock('../voice/watchTogetherContext', () => ({ useSharedWatchTogether: () => watchTogether.current }));
 
 function fakeClient(settings: Record<string, unknown> = {}): MatrixClient {
   return {
@@ -76,5 +79,23 @@ describe('EmbedList', () => {
     );
     fireEvent.click(view.getByRole('button', { name: 'Remove this embed' }));
     expect(removed).toBe('https://x.example');
+  });
+
+  it('draws players as cards in a channel that turned them off', () => {
+    const view = render(
+      <MatrixClientContext.Provider value={fakeClient()}>
+        <EmbedList embeds={[video('aaaaaaaaaaa')]} eventKey="$e" noPlayers />
+      </MatrixClientContext.Provider>
+    );
+    expect(view.queryByRole('button', { name: /Play/ })).toBeNull();
+  });
+
+  it('hands a YouTube video to the call’s Watch Together', () => {
+    const start = vi.fn(() => true);
+    watchTogether.current = { start };
+    const view = renderEmbeds([video('aaaaaaaaaaa')]);
+    fireEvent.click(view.getByRole('button', { name: /Watch together/ }));
+    expect(start).toHaveBeenCalledWith('https://www.youtube.com/watch?v=aaaaaaaaaaa', 'watch');
+    watchTogether.current = null;
   });
 });
