@@ -99,6 +99,8 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
   const sourcesRef = useRef(new Map<string, FeedSource>());
   // What's shown or waiting, for telling a new post from one already there.
   const knownIdsRef = useRef(new Set<string>());
+  // When the feed started loading: only a post made after it is "new" (held for the pill).
+  const loadedAtRef = useRef(Date.now());
   const busyRef = useRef(false);
   // Every post edit seen so far: an edit can arrive on a different page from its post.
   const editsRef = useRef<MatrixEvent[]>([]);
@@ -109,6 +111,22 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
     );
     return list;
   }, []);
+  /**
+   * Posts that turned up after the feed was shown: held back for the "N new posts" pill if they
+   * were made since it loaded, put straight in (by date, where they belong) if they're older. A
+   * room the app joins, or catches up on after the tab slept, arrives with its latest events, which
+   * looked just like new posts: "8 new posts" that were already on screen, or older ones that
+   * sorted far down, so pressing the pill seemed to do nothing.
+   */
+  const addArrivals = useCallback(
+    (arrivals: GlobalPost[]) => {
+      const fresh = arrivals.filter((post) => post.ts > loadedAtRef.current);
+      const older = arrivals.filter((post) => post.ts <= loadedAtRef.current);
+      if (older.length) setPosts((prev) => withEdits(mergePosts(prev, older)));
+      if (fresh.length) setPending((prev) => withEdits(mergePosts(prev, fresh)));
+    },
+    [withEdits]
+  );
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
   const initialLoadRef = useRef(false);
@@ -119,6 +137,7 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
     if (!enabled) return undefined;
     let cancelled = false;
     initialLoadRef.current = true;
+    loadedAtRef.current = Date.now();
     tokensRef.current = new Map();
     sourcesRef.current = new Map();
     knownIdsRef.current = new Set();
@@ -245,7 +264,7 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
       incoming.forEach((post) => knownIdsRef.current.add(post.eventId));
       // Your own post goes straight in — you just made it and expect to see it.
       if (event.getSender() === mx.getUserId()) setPosts((prev) => withEdits(mergePosts(prev, incoming)));
-      else setPending((prev) => withEdits(mergePosts(prev, incoming)));
+      else addArrivals(incoming);
     };
     const onRedaction = (redaction: MatrixEvent) => {
       const redacted = redaction.event.redacts ?? redaction.getContent().redacts;
@@ -260,7 +279,7 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
       mx.removeListener(RoomEvent.Timeline, onTimeline);
       mx.removeListener(RoomEvent.Redaction, onRedaction);
     };
-  }, [mx, enabled, generation, withEdits]);
+  }, [mx, enabled, generation, withEdits, addArrivals]);
 
   const loadMore = useCallback(() => {
     if (busyRef.current || tokensRef.current.size === 0) return;
@@ -345,7 +364,7 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
             fresh.push(post);
           });
         });
-        if (fresh.length) setPending((prev) => withEdits(mergePosts(prev, fresh)));
+        if (fresh.length) addArrivals(fresh);
         if (edited) setPosts((prev) => (applyPostEdits(prev.map((post) => post.event), editsRef.current) ? [...prev] : prev));
       } finally {
         checking = false;
@@ -354,7 +373,7 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
     checkRef.current = check;
     const timer = setInterval(() => void check(), NEW_POSTS_CHECK_MS);
     return () => clearInterval(timer);
-  }, [mx, enabled, generation, withEdits]);
+  }, [mx, enabled, generation, withEdits, addArrivals]);
 
   // Back in sight after a while away: catch up now rather than at the next tick.
   useEffect(() => {
@@ -388,9 +407,14 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
 
   const publicSpaceIds = new Set(publicSpaces.map((space) => space.roomId));
 
+  // Never counted while it's already on screen: a post can reach both, from sync (before the
+  // feed's first pages are in, when nothing is known yet) and from those pages.
+  const shownIds = new Set(posts.map((post) => post.eventId));
+  const waiting = pending.filter((post) => !shownIds.has(post.eventId));
+
   return {
     posts,
-    pending,
+    pending: waiting,
     showNew,
     sources,
     loading,

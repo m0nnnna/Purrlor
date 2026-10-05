@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { logIn, role } from './app';
-import { api, createUser, eventually, uniqueName } from './matrix';
+import { api, createUser, eventually, uniqueName, type TestUser } from './matrix';
 
 const enc = encodeURIComponent;
 
@@ -12,20 +12,28 @@ const enc = encodeURIComponent;
  */
 test('"new posts" counts only new posts, and pressing it shows them at the top', async ({ page }) => {
   test.setTimeout(180_000);
-  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
-  const bobPage = await (await page.context().browser()!.newContext()).newPage();
-  await logIn(bobPage, bob);
-  await role(bobPage, 'server-rail-global-feed').click();
-  await role(bobPage, 'feed-composer-input').fill(uniqueName('bob first'));
-  await role(bobPage, 'feed-composer-submit').click();
-  const { roomId } = (await eventually(
-    () => api<{ roomId?: string }>(bob, 'GET', `/user/${enc(bob.userId)}/account_data/xyz.nekous.profile_room`).catch(() => ({ roomId: undefined })),
-    (data) => !!data.roomId
-  )) as { roomId: string };
+  const [alice, bob, carol] = await Promise.all([createUser('alice'), createUser('bob'), createUser('carol')]);
+  // A profile room each, made by posting once through the app.
+  const profileRoom = async (user: TestUser) => {
+    const userPage = await (await page.context().browser()!.newContext()).newPage();
+    await logIn(userPage, user);
+    await role(userPage, 'server-rail-global-feed').click();
+    await role(userPage, 'feed-composer-input').fill(uniqueName(`${user.localpart} first`));
+    await role(userPage, 'feed-composer-submit').click();
+    const { roomId } = (await eventually(
+      () => api<{ roomId?: string }>(user, 'GET', `/user/${enc(user.userId)}/account_data/xyz.nekous.profile_room`).catch(() => ({ roomId: undefined })),
+      (data) => !!data.roomId
+    )) as { roomId: string };
+    await userPage.close();
+    return roomId;
+  };
+  const roomId = await profileRoom(bob);
+  const carolRoom = await profileRoom(carol);
+  const carolOlder = uniqueName('carol older');
+  for (let i = 0; i < 10; i++) await api(carol, 'PUT', `/rooms/${enc(carolRoom)}/send/xyz.nekous.post/${uniqueName('txn')}`, { body: `${carolOlder} #${i}#` });
   // Plenty of older posts: more than a room comes with from sync, so there's history behind them.
   const older = uniqueName('older');
   for (let i = 0; i < 40; i++) await api(bob, 'PUT', `/rooms/${enc(roomId)}/send/xyz.nekous.post/${uniqueName('txn')}`, { body: `${older} #${i}#` });
-  await bobPage.close();
   // Alice is in Bob's profile room (as when following someone), so it updates live, and her app
   // has history behind its latest events to fetch.
   await api(alice, 'POST', `/join/${enc(roomId)}`, {});
@@ -35,6 +43,12 @@ test('"new posts" counts only new posts, and pressing it shows them at the top',
   await expect(role(page, 'global-feed-post').filter({ hasText: `${older} #39#` })).toBeVisible({ timeout: 30_000 });
   // Long enough for the background history fill to have run.
   await page.waitForTimeout(8000);
+  await expect(role(page, 'global-feed-new-posts')).toHaveCount(0);
+
+  // Joining a room while watching (as following someone does) brings its latest events through
+  // sync: older posts, which go into the feed where they belong, not under "new posts".
+  await api(alice, 'POST', `/join/${enc(carolRoom)}`, {});
+  await page.waitForTimeout(5000);
   await expect(role(page, 'global-feed-new-posts')).toHaveCount(0);
 
   const fresh = uniqueName('just now');
