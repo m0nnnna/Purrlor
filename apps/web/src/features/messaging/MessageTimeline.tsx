@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom, useSetAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
@@ -53,7 +53,7 @@ import { CollapsibleText } from './CollapsibleText';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
 import { VoiceMessage } from './VoiceMessage';
-import { INITIAL_RENDER_WINDOW, sliceRenderWindow, windowReaching } from './timelineWindow';
+import { initialRenderWindow, sliceRenderWindow, windowReaching } from './timelineWindow';
 import './MessageTimeline.css';
 import { fallbackName } from '../../matrix/displayName';
 
@@ -91,17 +91,19 @@ function dayLabel(ts: number): string {
   const now = Date.now();
   if (isSameDay(ts, now)) return 'Today';
   if (isSameDay(ts, now - 24 * 60 * 60 * 1000)) return 'Yesterday';
-  const date = new Date(ts);
-  return date.toLocaleDateString([], {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    ...(date.getFullYear() !== new Date(now).getFullYear() && { year: 'numeric' }),
-  });
+  return (new Date(ts).getFullYear() !== new Date(now).getFullYear() ? DAY_WITH_YEAR : DAY).format(ts);
 }
 
+// Made once and reused: `toLocaleTimeString` and friends build a new formatter on every call,
+// which, once per message on every redraw, was the single biggest cost of scrolling on a phone.
+const TIME = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' });
+const DATE = new Intl.DateTimeFormat([]);
+const DATE_TIME = new Intl.DateTimeFormat([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+const DAY = new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric' });
+const DAY_WITH_YEAR = new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
 function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return TIME.format(ts);
 }
 
 /** A labeled rule across the timeline — a new day, or where your unread messages begin. */
@@ -174,7 +176,66 @@ function ReplyPreview({ room, replyEventId }: { room: Room; replyEventId: string
   );
 }
 
-function MessageRow({
+/** How long a finger rests on a message before its actions open. */
+const LONG_PRESS_MS = 450;
+
+/**
+ * On a touch screen there's no hover: a tap left a message's hover toolbar stuck open over the
+ * messages around it. Its actions open on a long press instead (as in Discord's and Telegram's
+ * apps), and close at the next touch anywhere else. Does nothing with a mouse.
+ */
+function useLongPressActions() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const cancel = () => clearTimeout(timer.current);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (evt: Event) => {
+      if (!ref.current?.contains(evt.target as Node)) setOpen(false);
+    };
+    document.addEventListener('touchstart', closeOutside, { passive: true });
+    return () => document.removeEventListener('touchstart', closeOutside);
+  }, [open]);
+  useEffect(() => cancel, []);
+
+  return {
+    ref,
+    open,
+    close: () => setOpen(false),
+    handlers: {
+      onTouchStart: (evt: React.TouchEvent) => {
+        cancel();
+        if (evt.touches.length !== 1) return;
+        // Not over something that's already a control of its own.
+        if ((evt.target as HTMLElement).closest('a, button, input, textarea, video, audio, iframe, [role="button"]')) return;
+        timer.current = setTimeout(() => {
+          setOpen(true);
+          navigator.vibrate?.(10);
+        }, LONG_PRESS_MS);
+      },
+      onTouchMove: cancel,
+      onTouchEnd: cancel,
+      onTouchCancel: cancel,
+    },
+  };
+}
+
+const NO_READERS: never[] = [];
+const NO_REACTIONS: never[] = [];
+
+/**
+ * What about an event can change without it becoming a new object: decrypting it, an edit, its
+ * local echo being confirmed (a new ID), its sending failing, a redaction. MessageRow is memoized
+ * (only redrawn when its props change, not on every timeline update), so this is passed to it.
+ */
+function eventRevision(event: MatrixEvent): string {
+  return [event.getId(), event.getType(), event.status ?? '', event.replacingEventId() ?? '', event.isRedacted(), event.isDecryptionFailure()].join('|');
+}
+
+/** Memoized: on a phone, redrawing every row for every scroll or timeline update made the app crawl. */
+const MessageRow = memo(function MessageRow({
   mx,
   room,
   event,
@@ -208,7 +269,10 @@ function MessageRow({
   reactionGroups: ReactionGroup[];
   saved: boolean;
   threadSummary?: ThreadSummary;
-  onOpenThread: () => void;
+  /** Opens this message's thread (called with its event ID). */
+  onOpenThread: (eventId: string | null) => void;
+  /** Changes whenever the event does in place (eventRevision): the row is memoized. */
+  revision: string;
   onReply: (target: ReplyTarget) => void;
   members: RoomMember[];
   /** The Space's service bot, whose messages may carry a webhook's name (matrix/webhooks.ts). */
@@ -313,19 +377,23 @@ function MessageRow({
   const [showForward, setShowForward] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const senderId = event.getSender();
+  const touchActions = useLongPressActions();
 
   return (
     <div
+      ref={touchActions.ref}
       className={[
         'nu-timeline__message',
         isGrouped && 'nu-timeline__message--grouped',
         mentionsMe && 'nu-timeline__message--mentions-me',
         isHighlighted && 'nu-timeline__message--highlighted',
+        touchActions.open && 'nu-timeline__message--actions-open',
       ]
         .filter(Boolean)
         .join(' ')}
       data-nu-role="timeline-message"
       data-nu-event-id={eventId ?? undefined}
+      {...touchActions.handlers}
     >
       {isGrouped ? (
         <div className="nu-timeline__message-gutter" data-nu-role="timeline-message-gutter">
@@ -370,8 +438,8 @@ function MessageRow({
                     APP
                   </span>
                 )}
-                <time className="nu-timeline__message-time" dateTime={new Date(event.getTs()).toISOString()} title={new Date(event.getTs()).toLocaleString()}>
-                  {isSameDay(event.getTs(), Date.now()) ? formatTime(event.getTs()) : `${new Date(event.getTs()).toLocaleDateString()} ${formatTime(event.getTs())}`}
+                <time className="nu-timeline__message-time" dateTime={new Date(event.getTs()).toISOString()} title={DATE_TIME.format(event.getTs())}>
+                  {isSameDay(event.getTs(), Date.now()) ? formatTime(event.getTs()) : `${DATE.format(event.getTs())} ${formatTime(event.getTs())}`}
                 </time>
               </>
             )}
@@ -380,7 +448,7 @@ function MessageRow({
                 type="button"
                 className="nu-timeline__message-edited-tag"
                 data-nu-role="timeline-edited-tag"
-                title={`Edited ${new Date(editedEvent.getTs()).toLocaleString()} — click to see edit history`}
+                title={`Edited ${DATE_TIME.format(editedEvent.getTs())} — click to see edit history`}
                 onClick={() => setShowEditHistory(true)}
               >
                 (edited)
@@ -496,7 +564,7 @@ function MessageRow({
             type="button"
             className="nu-timeline__message-thread-summary"
             data-nu-role="timeline-thread-summary"
-            onClick={onOpenThread}
+            onClick={() => onOpenThread(eventId ?? null)}
           >
             <Icon name="threads" size={14} />
             <strong>
@@ -534,10 +602,27 @@ function MessageRow({
             data-nu-role="timeline-thread-action"
             title="Reply in thread"
             aria-label="Reply in thread"
-            onClick={onOpenThread}
+            onClick={() => onOpenThread(eventId ?? null)}
           >
             <Icon name="threads" size={16} />
           </button>
+          {/* Touch screens only (MessageTimeline.css): a long press opens these actions instead
+              of selecting text, so copying needs a button of its own. */}
+          {typeof content.body === 'string' && content.body && (
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action nu-timeline__message-copy-action"
+              data-nu-role="timeline-copy-action"
+              title="Copy text"
+              aria-label="Copy text"
+              onClick={() => {
+                void navigator.clipboard?.writeText(String(content.body)).catch(() => undefined);
+                touchActions.close();
+              }}
+            >
+              <Icon name="copy" size={16} />
+            </button>
+          )}
           {!isPollMessage && (
             <button
               type="button"
@@ -658,7 +743,7 @@ function MessageRow({
       {showForward && <ForwardMessageModal event={event} onClose={() => setShowForward(false)} />}
     </div>
   );
-}
+});
 
 /**
  * Renders `m.room.message` events, with image messages inline, pin/unpin, read receipts,
@@ -687,7 +772,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const contentRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [renderWindow, setRenderWindow] = useState(INITIAL_RENDER_WINDOW);
+  const [renderWindow, setRenderWindow] = useState(initialRenderWindow);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   // Where your read receipt sat when you opened the room — captured once per room visit, before
   // this view marks everything read, so the "New" divider stays put while you read past it
@@ -760,7 +845,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     pageSizeRef.current = HISTORY_PAGE_SIZE;
     roomEnteredAtRef.current = now;
     forceBottomUntilRef.current = jumpingHere ? 0 : now + SETTLE_EXTENSION_MS;
-    setRenderWindow(INITIAL_RENDER_WINDOW);
+    setRenderWindow(initialRenderWindow());
     setShowJumpToLatest(false);
     const myUserId = mx.getUserId();
     setReadMarkerEventId(myUserId ? mx.getRoom(roomId)?.getEventReadUpTo(myUserId) ?? null : null);
@@ -820,14 +905,28 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     const content = contentRef.current;
     if (!container || !content) return;
     const top = container.getBoundingClientRect().top;
-    for (const el of Array.from(content.querySelectorAll<HTMLElement>('[data-nu-event-id]'))) {
-      const rect = el.getBoundingClientRect();
-      if (rect.bottom > top) {
-        anchorRef.current = { eventId: el.dataset.nuEventId ?? '', offset: rect.top - top };
-        return;
+    // The first row reaching below the top edge, by binary search: rows are in order down the
+    // page, so a handful of measurements instead of one per row. This runs on every scroll event,
+    // and measuring every row each time made scrolling stutter on phones.
+    const rows = content.querySelectorAll<HTMLElement>('[data-nu-event-id]');
+    let low = 0;
+    let high = rows.length - 1;
+    let found = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (rows[mid].getBoundingClientRect().bottom > top) {
+        found = mid;
+        high = mid - 1;
+      } else {
+        low = mid + 1;
       }
     }
-    anchorRef.current = null;
+    if (found < 0) {
+      anchorRef.current = null;
+      return;
+    }
+    const el = rows[found];
+    anchorRef.current = { eventId: el.dataset.nuEventId ?? '', offset: el.getBoundingClientRect().top - top };
   };
 
   // Called after anything that may have changed the content's height: while the room is still
@@ -1043,12 +1142,13 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
               canPin={canPin}
               isHighlighted={!!event.getId() && event.getId() === highlightedEventId}
               isGrouped={isGrouped}
-              readers={readReceipts.get(event.getId() ?? '') ?? []}
+              readers={readReceipts.get(event.getId() ?? '') ?? NO_READERS}
               emotes={emotes}
-              reactionGroups={reactions.get(event.getId() ?? '') ?? []}
+              reactionGroups={reactions.get(event.getId() ?? '') ?? NO_REACTIONS}
               saved={savedEventIds.has(event.getId() ?? '')}
               threadSummary={threads.get(event.getId() ?? '')}
-              onOpenThread={() => setOpenThreadRootId(event.getId() ?? null)}
+              onOpenThread={setOpenThreadRootId}
+              revision={eventRevision(event)}
               onReply={onReply}
               members={members}
               webhookBotId={webhookBotId}

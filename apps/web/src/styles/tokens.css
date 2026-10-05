@@ -117,6 +117,22 @@ body,
   margin: 0;
 }
 
+/* No grey flash on every tap (iOS draws one over anything tappable), and no double-tap-to-zoom
+   wait on controls: the app draws its own pressed states. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 :root {
   color-scheme: var(--nu-color-scheme);
   /* Native checkboxes, radios and range sliders take the accent instead of browser blue. */

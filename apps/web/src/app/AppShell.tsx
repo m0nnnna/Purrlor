@@ -32,6 +32,7 @@ import { MusicPlayerBar } from '../features/music/MusicPlayerBar';
 import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
 import { useOnlinePing } from '../features/online/useOnlinePing';
 import { InstallHint } from './InstallHint';
+import { useVisualViewport } from './useVisualViewport';
 import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
 import { useOpenRoomFromNotification } from '../matrix/hooks/useOpenRoomFromNotification';
@@ -59,6 +60,7 @@ export function AppShell() {
   // or the global feed. The last two aren't rooms, so a room check alone left them invisible.
   const mainPaneHasContent = !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
   useOpenRoomFromNotification();
+  useVisualViewport();
   useComposeShortcut();
   useShareTarget();
   useOpenPublicRoute();
@@ -93,7 +95,8 @@ export function AppShell() {
       )}
       <MusicPlayerHost />
       <MusicPlayerBar variant="mini" />
-      {isDemoMode() ? <DemoModeBanner /> : <InstallHint />}
+      {/* Not over a chat, where it covered the composer: on the channel list. */}
+      {isDemoMode() ? <DemoModeBanner /> : !mainPaneHasContent && <InstallHint />}
       <DesktopNotifications />
       <AppBadge />
       {!isDemoMode() && <AutoAway />}

@@ -105,9 +105,34 @@
  * (MainPane.tsx) via data-nu-mobile-members-open.
  */
 @media (max-width: 900px) {
+  /* The page itself never scrolls in the app: only its panes do. On an iPhone a page that can
+     scroll gets pushed up by the keyboard and dragged by rubber-band overscroll, taking the whole
+     app with it. (Only with the app shell: the public pages scroll the ordinary way.) */
+  html:has(.nu-shell),
+  html:has(.nu-shell) body {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   .nu-shell {
     display: flex;
     overflow: hidden;
+    /* The part of the screen showing, above the keyboard (useVisualViewport.ts). */
+    height: var(--nu-viewport-height, 100dvh);
+  }
+
+  html[data-nu-keyboard] .nu-shell {
+    padding-bottom: 0;
+  }
+
+  /* A pane scrolled to its end stops there, rather than pulling the app along. */
+  .nu-shell [data-nu-role='timeline'],
+  .nu-shell .nu-feed,
+  .nu-shell .nu-channel-list,
+  .nu-shell .nu-member-list {
+    overscroll-behavior: contain;
   }
 
   .nu-server-rail {

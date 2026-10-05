@@ -522,3 +522,48 @@ button.nu-timeline__reply-preview:focus-visible {
   letter-spacing: 0.04em;
   line-height: 16px;
 }
+
+/* Touch screens: no hover (useLongPressActions in MessageTimeline.tsx). A tap would otherwise leave
+   a message highlighted and its toolbar stuck open over its neighbours; a long press opens the
+   toolbar instead, and doesn't start selecting text (Copy text is in the toolbar). */
+.nu-timeline__message-copy-action {
+  display: none;
+}
+
+@media (hover: none) {
+  .nu-timeline__message {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me) {
+    background: none;
+  }
+
+  .nu-timeline__message:hover .nu-timeline__message-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .nu-timeline__message--actions-open .nu-timeline__message-actions,
+  .nu-timeline__message--actions-open:hover .nu-timeline__message-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nu-timeline__message--actions-open:not(.nu-timeline__message--mentions-me),
+  .nu-timeline__message--actions-open:hover:not(.nu-timeline__message--mentions-me) {
+    background: color-mix(in srgb, var(--nu-color-bg-tertiary) 55%, transparent);
+  }
+
+  .nu-timeline__message-copy-action {
+    display: flex;
+  }
+
+  /* Bigger targets for fingers. */
+  .nu-timeline__message-pin-action {
+    width: 38px;
+    height: 36px;
+  }
+}

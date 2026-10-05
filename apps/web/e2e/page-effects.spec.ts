@@ -29,7 +29,10 @@ async function pageWithEffect(page: Page, user: TestUser): Promise<void> {
 
 const particleTops = (page: Page) =>
   role(page, 'profile-page-effects').evaluate((layer) =>
-    Array.from(layer.querySelectorAll('.nu-profile-page__particle')).slice(0, 4).map((p) => Math.round(p.getBoundingClientRect().top))
+    // Relative to the effect's own view, so the page loading and shifting under it doesn't count as movement.
+    Array.from(layer.querySelectorAll('.nu-profile-page__particle'))
+      .slice(0, 4)
+      .map((p) => Math.round(p.getBoundingClientRect().top - layer.firstElementChild!.getBoundingClientRect().top))
   );
 
 test('the owner sees their page’s effect, falling', async ({ page }) => {
