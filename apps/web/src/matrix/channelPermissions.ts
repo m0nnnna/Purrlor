@@ -299,32 +299,28 @@ type ChannelPlan = { powerLevels?: PowerLevels; invite: string[]; remove: string
 
 /** What governChannel would change in a channel right now, as far as this user is allowed to. */
 /**
- * The Space a channel takes its roles from, when it's in more than one: its canonical parent
- * (`m.space.parent` with `canonical`), and if several claim to be (each "Add existing channel"
- * used to mark its Space canonical), the one that did first. Read from the channel's own state, so
- * every member's app picks the same one, whichever Spaces they're in themselves. Undefined when
- * the channel names no parent: then every Space listing it governs it, as before.
- *
- * Without this, a channel shared by two Spaces whose roles differ was pulled both ways: each
- * Space's admins' apps "corrected" it to their Space's levels, every half minute, for as long as
- * both had Purrlor open, burying its messages under thousands of power-level changes.
+ * Whether the role sync may bring a channel in line with this Space. Only a channel that names
+ * this Space as its one parent (`m.space.parent`), or names none at all (made before parents were
+ * written). A channel shared by several Spaces is left alone: their roles can differ, and each
+ * Space's admins' apps then "corrected" it to their own Space's levels, back and forth every half
+ * minute while both were open, burying its messages under thousands of power-level changes.
+ * Picking one of them can't be done reliably (a parent's timestamp is its last write, not its
+ * first), and every member's app has to come to the same answer from what they can all see: the
+ * channel's own state. Its permissions are set by hand (Channel settings → Permissions).
  */
-export function governingSpaceId(channel: Room): string | undefined {
+export function syncsFromSpace(channel: Room, spaceId: string): boolean {
   const parents = (channel.currentState.getStateEvents(EventType.SpaceParent) as MatrixEvent[]).filter((event) => {
     const via = event.getContent<{ via?: unknown }>().via;
     return !!event.getStateKey() && Array.isArray(via) && via.length > 0;
   });
-  if (parents.length === 0) return undefined;
-  const canonical = parents.filter((event) => event.getContent<{ canonical?: unknown }>().canonical === true);
-  const pool = canonical.length > 0 ? canonical : parents;
-  return [...pool].sort((a, b) => a.getTs() - b.getTs() || (a.getStateKey() ?? '').localeCompare(b.getStateKey() ?? ''))[0].getStateKey();
+  if (parents.length === 0) return true;
+  return parents.length === 1 && parents[0].getStateKey() === spaceId;
 }
 
 function planChannel(mx: MatrixClient, channel: Room, space: Room): ChannelPlan | undefined {
   const myUserId = mx.getUserId();
   if (!myUserId || channel.getMyMembership() !== 'join') return undefined;
-  const governing = governingSpaceId(channel);
-  if (governing && governing !== space.roomId) return undefined;
+  if (!syncsFromSpace(channel, space.roomId)) return undefined;
   const myLevel = userPowerLevel(channel, myUserId);
   const spaceLevels = spaceRoleLevels(space);
   const botUserId = readVoiceServerConfig(mx, space)?.botUserId;

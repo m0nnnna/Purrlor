@@ -170,7 +170,9 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   // handle, which depends on knowing this server (matrix/displayName.ts).
   setHomeServer(mx.getDomain());
   installMemberNameFallback();
-  await mx.startClient({ lazyLoadMembers: true, threadSupport: true });
+  // 30 events per room from sync rather than the SDK's 8: with only 8, a room whose latest events
+  // were reactions, edits or state changes opened empty and had to ask for history first.
+  await mx.startClient({ lazyLoadMembers: true, threadSupport: true, initialSyncLimit: 30 });
   // From here the service worker can sign this client's media requests (matrix/mediaWorker.ts).
   startMediaWorkerAuth(mx);
 }

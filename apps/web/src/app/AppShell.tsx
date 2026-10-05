@@ -12,6 +12,7 @@ import { FeedGovernance } from '../features/feed/FeedGovernance';
 import { FollowPublisher } from '../features/feed/FollowPublisher';
 import { ChannelGovernance } from '../features/channels/ChannelGovernance';
 import { ModerationWatcher } from '../features/moderation/ModerationWatcher';
+import { HistoryPrefetch } from '../features/messaging/HistoryPrefetch';
 import { ReminderWatcher } from '../features/reminders/ReminderWatcher';
 import { ActivityWatcher } from '../features/notifications/ActivityWatcher';
 import { MentionInboxCollector } from '../features/notifications/MentionInboxCollector';
@@ -101,6 +102,7 @@ export function AppShell() {
       {!isDemoMode() && <FeedGovernance />}
       {!isDemoMode() && <ChannelGovernance />}
       {!isDemoMode() && <ModerationWatcher />}
+      {!isDemoMode() && <HistoryPrefetch />}
       <ReminderWatcher />
       <CommissionAlerts />
       <MentionInboxCollector />

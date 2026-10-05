@@ -17,7 +17,8 @@ function via(mx: MatrixClient): string {
 export async function addRoomToSpace(mx: MatrixClient, space: Room, room: Room): Promise<void> {
   await mx.sendStateEvent(space.roomId, EventType.SpaceChild, { via: [via(mx)], suggested: false }, room.roomId);
   // Canonical only for a room with no parent yet: a channel shared into a second Space keeps the
-  // one it came from, which is also the one its roles follow (channelPermissions.ts, governingSpaceId).
+  // one it came from (other clients' breadcrumbs). Shared, it's no longer synced to either Space's
+  // roles (channelPermissions.ts, syncsFromSpace).
   const hasParent = (room.currentState.getStateEvents(EventType.SpaceParent) as MatrixEvent[]).some((event) => {
     const parentVia = event.getContent<{ via?: unknown }>().via;
     return Array.isArray(parentVia) && parentVia.length > 0 && event.getStateKey() !== space.roomId;

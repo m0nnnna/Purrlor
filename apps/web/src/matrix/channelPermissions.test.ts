@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MatrixClient, Room } from 'matrix-js-sdk';
-import { governingSpaceId, governSpaces, mayRewrite, moderatorsOnlyChanges, resetRewritesForTests, powerLevelsForPosting, syncedChannelUsers, syncedThresholds, writerRank } from './channelPermissions';
+import { governSpaces, mayRewrite, moderatorsOnlyChanges, resetRewritesForTests, syncsFromSpace, powerLevelsForPosting, syncedChannelUsers, syncedThresholds, writerRank } from './channelPermissions';
 
 describe('powerLevelsForPosting', () => {
   it('raises posting to moderators but keeps reactions open', () => {
@@ -185,19 +185,23 @@ describe('a channel in two Spaces', () => {
       'm.space.parent': { '!meow': { via: ['x'], canonical: true, __ts: 100 }, '!court': { via: ['x'], canonical: true, __ts: 200 } },
     });
 
-  it('takes its roles from one Space: its canonical parent, the first one when several claim it', () => {
-    expect(governingSpaceId(general(50))).toBe('!meow');
-    const noParent = fakeRoom('!x', {});
-    expect(governingSpaceId(noParent)).toBeUndefined();
-    const notCanonical = fakeRoom('!y', { 'm.space.parent': { '!b': { via: ['x'], __ts: 5 }, '!a': { via: ['x'], __ts: 5 } } });
-    expect(governingSpaceId(notCanonical)).toBe('!a');
+  it('syncs a channel only from its one parent Space, or from any when it names none', () => {
+    expect(syncsFromSpace(general(50), '!meow')).toBe(false);
+    expect(syncsFromSpace(general(50), '!court')).toBe(false);
+    const own = fakeRoom('!own', { 'm.space.parent': { '!meow': { via: ['x'], canonical: true } } });
+    expect(syncsFromSpace(own, '!meow')).toBe(true);
+    expect(syncsFromSpace(own, '!court')).toBe(false);
+    expect(syncsFromSpace(fakeRoom('!old', {}), '!court')).toBe(true);
+    // A parent that was taken away (no via) doesn't count.
+    const left = fakeRoom('!left', { 'm.space.parent': { '!meow': { via: ['x'] }, '!court': {} } });
+    expect(syncsFromSpace(left, '!meow')).toBe(true);
   });
 
-  it('is only ever written to match that Space, so admins of both Spaces agree', async () => {
+  it('is left alone by both Spaces’ admins, so nobody fights over it', async () => {
     resetRewritesForTests();
     for (const [ban, expectWrite] of [
-      [100, true], // pulled to Court of Chaos's levels: put back to Meow>Corp's
-      [50, false], // in line with Meow>Corp: Court of Chaos leaves it alone
+      [100, false],
+      [50, false],
     ] as const) {
       const channel = general(ban);
       const sendStateEvent = vi.fn(async (..._args: unknown[]) => ({}));
@@ -209,7 +213,6 @@ describe('a channel in two Spaces', () => {
       } as unknown as MatrixClient;
       await governSpaces(mx, undefined, { wait: async () => {} });
       expect(sendStateEvent.mock.calls.length > 0).toBe(expectWrite);
-      if (expectWrite) expect(((sendStateEvent.mock.calls[0] as unknown[])[2] as { ban: number }).ban).toBe(50);
     }
   });
 });
