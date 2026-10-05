@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
-import { inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
+import { INLINE_IMAGE_BOX, inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import { AttachmentLightbox } from './AttachmentLightbox';
 import './ImageMessage.css';
 
@@ -14,9 +14,7 @@ type ImageMessageProps = {
   height?: number;
 };
 
-/** Must match .nu-image-message's max-width/max-height in ImageMessage.css. */
-const MAX_WIDTH_PX = 360;
-const MAX_HEIGHT_PX = 320;
+const { width: MAX_WIDTH_PX, height: MAX_HEIGHT_PX } = INLINE_IMAGE_BOX;
 
 export function ImageMessage({ body, url, file, mimetype, width, height }: ImageMessageProps) {
   // A thumbnail inline (a fraction of the bytes, and another server sends its own small copy

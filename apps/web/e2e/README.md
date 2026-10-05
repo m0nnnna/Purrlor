@@ -31,7 +31,8 @@ the same server.
 | `page-background.spec.ts` | A profile page's background picture, "fill" and "stay put", keeps its size while a long profile scrolls and more posts load; "stay put" stays at the top, "fill" scrolls away |
 | `link-previews.spec.ts` | A link in a channel message and in a post gets a preview card (the homeserver fetching a page the token server serves); a link in an encrypted conversation gets none, and the app never asks |
 | `onboarding.spec.ts` | A new account gets the welcome guide: sets its name, finds and joins a public Space, lands in it, and never sees the guide again (after a reload too); one that skips it gets the ways in on the empty screen and joins by pasting an invite link; Account Settings opens the guide again. Every other spec's accounts are marked as welcomed (`createUser`) |
-| `media.spec.ts` | An image in a channel loads from its media URL through the service worker (which adds the access token the homeserver wants), as a thumbnail inline and the whole file in the lightbox |
+| `media.spec.ts` | An image in a channel loads from its media URL through the service worker (which adds the access token the homeserver wants), as a thumbnail inline and the whole file in the lightbox; an image shown once is kept in the device's media cache, which signing out deletes |
+| `room-revisit.spec.ts` | A channel left scrolled up opens again at the same message without asking the homeserver for anything; one left at the bottom opens at the bottom |
 | `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
 
 ## Running locally

@@ -71,11 +71,41 @@ test('an image loads from its URL through the service worker, as a thumbnail, an
   await openChannel(page, spaceName, 'general');
 
   const inline = role(page, 'timeline-image').locator('img');
-  await expect(inline).toHaveAttribute('src', /^http:\/\/127\.0\.0\.1:6167\/_matrix\/client\/v1\/media\/thumbnail\/.*width=720/);
+  await expect(inline).toHaveAttribute('src', /^http:\/\/127\.0\.0\.1:6167\/_matrix\/client\/v1\/media\/thumbnail\/.*width=800/);
   await expect.poll(() => inline.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
   await role(page, 'timeline-image').click();
   const whole = role(page, 'lightbox').locator('img');
   await expect(whole).toHaveAttribute('src', /\/_matrix\/client\/v1\/media\/download\//);
   await expect.poll(() => whole.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1600);
+});
+
+// What was loaded once is kept on the device (public/sw.js): opening the room again, or the app
+// again, shows it from there instead of asking the homeserver (and, for another server's media,
+// that server) for it again. Signing out deletes it.
+test('an image shown once is kept on the device, and signing out deletes it', async ({ page }) => {
+  const [alice, bob] = await Promise.all([createUser('alice'), createUser('bob')]);
+  const { channelId, spaceName } = await createSpaceWithChannel(alice, [bob]);
+  const bytes = png(1600, 1200);
+  const mxc = await upload(bob, bytes, 'image/png');
+  await api(bob, 'PUT', `/rooms/${enc(channelId)}/send/m.room.message/${uniqueName('txn')}`, {
+    msgtype: 'm.image',
+    body: 'big.png',
+    url: mxc,
+    info: { mimetype: 'image/png', w: 1600, h: 1200, size: bytes.length },
+  });
+
+  await logIn(page, alice);
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  await openChannel(page, spaceName, 'general');
+  const inline = role(page, 'timeline-image').locator('img');
+  await expect.poll(() => inline.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  const src = await inline.getAttribute('src');
+
+  const cached = () => page.evaluate(async (url) => !!(await (await caches.open('purrlor-media-v1')).match(url!)), src);
+  await expect.poll(cached).toBe(true);
+
+  await role(page, 'user-panel-logout').click();
+  await expect(role(page, 'login-screen')).toBeVisible();
+  expect(await page.evaluate(() => caches.has('purrlor-media-v1'))).toBe(false);
 });

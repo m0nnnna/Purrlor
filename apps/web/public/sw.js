@@ -1,6 +1,6 @@
 // Service worker for background push notifications, for receiving shared files, and for signing
-// media requests (below). No offline caching. The only requests it touches are the share target's
-// POST and GETs of the homeserver's media. Registered at app start (main.tsx), since the phone's
+// and caching media requests (below). No offline caching of the app itself. The only requests it
+// touches are the share target's POST and GETs of the homeserver's media. Registered at app start (main.tsx), since the phone's
 // share sheet can open the app before push is ever enabled.
 
 self.addEventListener('install', () => {
@@ -113,7 +113,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || request.headers.has('Authorization') || !event.clientId) return;
   if (!MEDIA_PATH.test(new URL(request.url).pathname)) return;
-  event.respondWith(signedMedia(request, event.clientId));
+  event.respondWith(signedMedia(request, event.clientId, event));
 });
 
 async function askForToken(clientId) {
@@ -130,7 +130,59 @@ async function askForToken(clientId) {
   });
 }
 
-async function signedMedia(request, clientId) {
+// What was fetched once is kept on the device: a media ID's bytes never change, so a cached copy is
+// good forever, and a room opened again (or the app opened again) shows its images, thumbnails
+// and avatars from disk without asking the page for the token or the homeserver for anything.
+// Another server's media is the slowest to arrive (it crosses federation first), and is cached
+// the same way. Not kept: a range request (a video streaming or seeking), a whole video or audio
+// file, or anything larger than MEDIA_CACHE_MAX_BYTES. An encrypted attachment is kept as it
+// arrived, still encrypted: the page decrypts it each time. Signing out deletes the cache
+// (matrix/deviceCache.ts).
+const MEDIA_CACHE = 'purrlor-media-v1';
+const MEDIA_CACHE_MAX_ENTRIES = 5000;
+const MEDIA_CACHE_MAX_BYTES = 20 * 1024 * 1024;
+/** The cache is trimmed (oldest first) once every this many additions. */
+const TRIM_EVERY = 100;
+let addedSinceTrim = 0;
+
+function cacheable(request, response) {
+  if (request.headers.get('Range') || response.status !== 200) return false;
+  const type = response.headers.get('Content-Type') || '';
+  if (/^(video|audio)\//.test(type)) return false;
+  const length = Number(response.headers.get('Content-Length'));
+  // Without a length (a streamed thumbnail) only a thumbnail is kept: they're small.
+  if (!length) return isThumbnail(request.url);
+  return length <= MEDIA_CACHE_MAX_BYTES;
+}
+
+function isThumbnail(url) {
+  return new URL(url).pathname.includes('/media/thumbnail/');
+}
+
+async function trimMediaCache(cache) {
+  const keys = await cache.keys();
+  const excess = keys.length - MEDIA_CACHE_MAX_ENTRIES;
+  for (let i = 0; i < excess; i++) await cache.delete(keys[i]);
+}
+
+async function rememberMedia(url, response) {
+  try {
+    const cache = await caches.open(MEDIA_CACHE);
+    await cache.put(url, response);
+    if (++addedSinceTrim >= TRIM_EVERY) {
+      addedSinceTrim = 0;
+      await trimMediaCache(cache);
+    }
+  } catch {
+    // Out of space, or the response was cut off (the image left the page): just not kept.
+  }
+}
+
+async function signedMedia(request, clientId, event) {
+  if (!request.headers.get('Range')) {
+    const hit = await caches.match(request.url, { cacheName: MEDIA_CACHE }).catch(() => undefined);
+    if (hit) return hit;
+  }
   const auth = await askForToken(clientId).catch(() => null);
   const url = new URL(request.url);
   let homeserver = null;
@@ -147,5 +199,7 @@ async function signedMedia(request, clientId) {
   headers.set('Authorization', `Bearer ${auth.token}`);
   // 'only-if-cached' is allowed on same-origin requests only, and this one goes to the homeserver.
   const cache = request.cache === 'only-if-cached' ? 'default' : request.cache;
-  return fetch(request.url, { headers, mode: 'cors', credentials: 'omit', cache, signal: request.signal });
+  const response = await fetch(request.url, { headers, mode: 'cors', credentials: 'omit', cache, signal: request.signal });
+  if (cacheable(request, response)) event.waitUntil(rememberMedia(request.url, response.clone()));
+  return response;
 }

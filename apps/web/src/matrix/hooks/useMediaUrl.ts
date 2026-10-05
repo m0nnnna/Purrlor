@@ -1,12 +1,17 @@
 import { useContext, useEffect, useState } from 'react';
 import { MatrixClientContext, type useMatrixClient } from '../MatrixClientContext';
 import { needsMediaAuthentication } from '../mediaAuth';
+import { mediaWorkerReady } from '../mediaWorker';
+import { serverThumbnail } from '../thumbnails';
 import { publicMediaUrl } from '../publicWeb';
 
 type MediaUrlOptions = {
   width?: number;
   height?: number;
   method?: 'crop' | 'scale';
+  /** For a consumer the service worker can't sign for, such as the system's media controls
+   *  fetching artwork: always a blob URL where the homeserver wants a token. */
+  blob?: boolean;
 };
 
 // Same rationale as useAttachmentUrl's cache: the same avatar renders in several places at
@@ -65,8 +70,9 @@ async function resolveAuthenticatedMedia(mx: ReturnType<typeof useMatrixClient>,
  * Resolves a plain (unencrypted) `mxc://` URL — avatars, mainly — into something usable in
  * `<img src>`. On homeservers that don't require authenticated media, this is just the plain
  * HTTP URL (cheap: browser-cacheable, no extra fetch). On ones that do, a bare <img> tag can't
- * attach the required Authorization header, so this fetches the bytes itself and hands back a
- * cached blob: URL instead. For message attachments, which may additionally be E2EE-encrypted
+ * attach the required Authorization header: the service worker adds it when it can (and caches
+ * the file on the device), and otherwise this fetches the bytes itself and hands back a cached
+ * blob: URL instead. For message attachments, which may additionally be E2EE-encrypted
  * at the file level, see useAttachmentUrl — that's a different problem (always needs a byte
  * fetch to decrypt) from this hook's "cheap path when possible" one.
  */
@@ -74,14 +80,22 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
   // Signed out there's no client: the public media route serves what a public answer referenced
   // (matrix/publicWeb.ts), and needs no authorisation header.
   const mx = useContext(MatrixClientContext);
-  const { width, height } = options;
-  // Only defaults to 'scale' when an actual thumbnail is being requested (width or height
-  // given) — matrix-js-sdk's mxcUrlToHttp treats a *truthy* resizeMethod alone as "this is a
-  // thumbnail request" regardless of width/height, so a bare `method` default here would wrongly
-  // route a no-dimensions request (Avatar.tsx's animated path, EmoteImage.tsx) to `/thumbnail`
-  // instead of `/download` — the wrong endpoint for "give me the whole original file".
-  const method = options.method ?? (width || height ? 'scale' : undefined);
-  const [src, setSrc] = useState<string | null>(() => (mx ? getResolvedSrc(mx, mxcUrl, width, height, method) : null));
+  const { blob = false } = options;
+  // A thumbnail is asked for at the server's own size it would get anyway (matrix/thumbnails.ts),
+  // so every place showing the same picture at about the same size shares one URL, one download
+  // and one cached copy; past the largest, the whole file. Without width or height, the whole
+  // file — no `method` then either: matrix-js-sdk's mxcUrlToHttp treats a *truthy* resizeMethod
+  // alone as a thumbnail request, which would route Avatar.tsx's animated path and EmoteImage.tsx
+  // to `/thumbnail` instead of `/download`.
+  const askedWidth = options.width ?? options.height;
+  const askedHeight = options.height ?? options.width;
+  const thumbnail = askedWidth && askedHeight ? serverThumbnail(askedWidth, askedHeight) : undefined;
+  const width = thumbnail?.width;
+  const height = thumbnail?.height;
+  const method = thumbnail?.method;
+  // A blob and the media URL itself are kept apart in the resolved-src cache.
+  const resolvedAs = blob ? `${method ?? ''}|blob` : method;
+  const [src, setSrc] = useState<string | null>(() => (mx ? getResolvedSrc(mx, mxcUrl, width, height, resolvedAs) : null));
 
   useEffect(() => {
     if (!mxcUrl) {
@@ -90,7 +104,7 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
     }
     if (!mx) return undefined;
 
-    const known = getResolvedSrc(mx, mxcUrl, width, height, method);
+    const known = getResolvedSrc(mx, mxcUrl, width, height, resolvedAs);
     if (known) {
       setSrc(known);
       return undefined;
@@ -106,8 +120,10 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
         return;
       }
 
-      if (!useAuth) {
-        setResolvedSrc(mx, mxcUrl, httpUrl, width, height, method);
+      // The service worker signs it (matrix/mediaWorker.ts) and keeps a copy on the device
+      // (public/sw.js), so the next visit, and the next session, loads it from disk.
+      if (!useAuth || (!blob && (await mediaWorkerReady()))) {
+        setResolvedSrc(mx, mxcUrl, httpUrl, width, height, resolvedAs);
         if (!cancelled) setSrc(httpUrl);
         return;
       }
@@ -123,7 +139,7 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
 
       try {
         const url = await cached;
-        setResolvedSrc(mx, mxcUrl, url, width, height, method);
+        setResolvedSrc(mx, mxcUrl, url, width, height, resolvedAs);
         if (!cancelled) setSrc(url);
       } catch {
         if (!cancelled) setSrc(null);
@@ -134,7 +150,7 @@ export function useMediaUrl(mxcUrl: string | null | undefined, options: MediaUrl
       cancelled = true;
       // Not revoking — see useAttachmentUrl for the same cached-and-shared-across-mounts tradeoff.
     };
-  }, [mx, mxcUrl, width, height, method]);
+  }, [mx, mxcUrl, width, height, method, blob, resolvedAs]);
 
   return mx ? src : mxcUrl ? publicMediaUrl(mxcUrl, width, height) : null;
 }

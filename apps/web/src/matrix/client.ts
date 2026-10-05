@@ -1,4 +1,5 @@
 import { startMediaWorkerAuth, stopMediaWorkerAuth } from './mediaWorker';
+import { clearDeviceCaches } from './deviceCache';
 import { createClient, IndexedDBStore, IndexedDBCryptoStore, type MatrixClient } from 'matrix-js-sdk';
 import type { Session } from './session';
 import { secretStorageCallbacks } from './secretStorageCallbacks';
@@ -173,6 +174,12 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   // 30 events per room from sync rather than the SDK's 8: with only 8, a room whose latest events
   // were reactions, edits or state changes opened empty and had to ask for history first.
   await mx.startClient({ lazyLoadMembers: true, threadSupport: true, initialSyncLimit: 30 });
+  // The sync store (IndexedDBStore) is written at most every five minutes, so opening the app
+  // again started from rooms as they were up to five minutes before, and caught up from there.
+  // Leaving the tab (switching away, closing it, a phone locking) writes it now.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void mx.store.save(true).catch(() => undefined);
+  });
   // From here the service worker can sign this client's media requests (matrix/mediaWorker.ts).
   startMediaWorkerAuth(mx);
 }
@@ -195,8 +202,9 @@ export async function logoutClient(mx: MatrixClient): Promise<void> {
   // server now rejects, which matrix-js-sdk's own crypto-migration check retries forever with no
   // backoff — a permanent "stuck loading" for anyone who hits this until they manually clear
   // browser storage. A 3s race is generous; a healthy deletion completes in milliseconds.
+  // The media and previews this device kept (matrix/deviceCache.ts) go with it.
   await Promise.race([
-    mx.clearStores().catch(() => {}),
+    Promise.all([mx.clearStores().catch(() => {}), clearDeviceCaches()]),
     new Promise((resolve) => setTimeout(resolve, 3000)),
   ]);
   window.localStorage.clear();

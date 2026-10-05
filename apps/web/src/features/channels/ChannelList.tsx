@@ -40,7 +40,7 @@ import {
 } from '../../matrix/hooks/useUnreadCounts';
 import { useRoomNotificationLevel } from '../../matrix/hooks/useNotificationLevel';
 import { describeRoomLevel } from '../../matrix/notificationSettings';
-import { needsHistory, prefetchHistory } from '../../matrix/historyPrefetch';
+import { prepareRoom } from '../../matrix/historyPrefetch';
 import { LEVEL_LABELS, RoomNotificationMenu } from '../notifications/NotificationLevelMenu';
 import { useSpaceHierarchy, type HierarchyChannel } from '../../matrix/hooks/useSpaceHierarchy';
 import { listChildRooms, useSpaceRooms } from '../../matrix/hooks/useSpaceRooms';
@@ -221,9 +221,9 @@ function ChannelListRow({
         data-nu-role="channel-list-item"
         aria-current={active ? 'page' : undefined}
         onClick={handleSelect}
-        // About to open it, probably: have its history ready (matrix/historyPrefetch.ts).
-        onPointerEnter={() => needsHistory(room) && void prefetchHistory(mx, room)}
-        onFocus={() => needsHistory(room) && void prefetchHistory(mx, room)}
+        // About to open it, probably: have its history and media ready (matrix/historyPrefetch.ts).
+        onPointerEnter={() => prepareRoom(mx, room)}
+        onFocus={() => prepareRoom(mx, room)}
       >
         {isDirectMessage ? (
           <Avatar
