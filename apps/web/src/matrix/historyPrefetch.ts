@@ -1,4 +1,5 @@
 import { Direction, EventType, type MatrixClient, type Room } from 'matrix-js-sdk';
+import { readFeedMarker } from './feed';
 
 /**
  * Keeps a screenful of history ready in each room, so opening one shows its messages at once
@@ -29,6 +30,8 @@ export function messageCount(room: Room): number {
 /** Whether a room could use filling: a chat room with fewer messages ready than it should, and more behind them. */
 export function needsHistory(room: Room): boolean {
   if (room.isSpaceRoom() || room.getMyMembership() !== 'join') return false;
+  // Posts' rooms (feeds, profiles): the feeds page through them themselves.
+  if (readFeedMarker(room)) return false;
   if (room.getLiveTimeline().getPaginationToken(Direction.Backward) === null) return false;
   return messageCount(room) < READY_MESSAGES;
 }

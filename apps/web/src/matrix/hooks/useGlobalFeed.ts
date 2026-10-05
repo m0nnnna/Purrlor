@@ -227,9 +227,14 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
       }
     })();
 
-    const onTimeline = (event: MatrixEvent, room: Room | undefined) => {
+    const onTimeline = (event: MatrixEvent, room: Room | undefined, toStartOfTimeline?: boolean, removed?: boolean, data?: { liveEvent?: boolean }) => {
       const source = room && sourcesRef.current.get(room.roomId);
       if (!source) return;
+      // Only what just arrived. History fetched further back (the room views, the background fill
+      // in historyPrefetch.ts) fires the same event, and old posts counted as "N new posts"; shown,
+      // they sorted far down the feed, so pressing the pill seemed to do nothing. The feed reads
+      // older posts through its own pages.
+      if (toStartOfTimeline || removed || data?.liveEvent === false) return;
       if (editTargetOf(event)) {
         editsRef.current.push(event);
         setPosts((prev) => (applyPostEdits(prev.map((post) => post.event), editsRef.current) ? [...prev] : prev));

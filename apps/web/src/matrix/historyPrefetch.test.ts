@@ -18,6 +18,7 @@ function fakeRoom(roomId: string, have: Ev[], older: Ev[], lastActive = 0) {
     getMyMembership: () => 'join',
     getLiveTimeline: () => timeline,
     getLastActiveTimestamp: () => lastActive,
+    currentState: { getStateEvents: () => null },
   } as unknown as Room;
   const paginate = (limit: number) => {
     events.unshift(...behind.splice(Math.max(0, behind.length - limit)));
