@@ -7,11 +7,18 @@ import { MsgType, RelationType, type MatrixClient, type MatrixEvent } from 'matr
  * path needed. `body` carries the classic `* <text>` fallback for clients that don't render
  * edits, per the spec's own convention.
  */
-export async function editMessage(mx: MatrixClient, roomId: string, eventId: string, newBody: string): Promise<void> {
+export async function editMessage(
+  mx: MatrixClient,
+  roomId: string,
+  eventId: string,
+  newBody: string,
+  /** More of the new content: its link embeds (matrix/embeds.ts), which an edit restates whole. */
+  extra: Record<string, unknown> = {}
+): Promise<void> {
   await mx.sendMessage(roomId, null, {
     msgtype: MsgType.Text,
     body: `* ${newBody}`,
-    'm.new_content': { msgtype: MsgType.Text, body: newBody },
+    'm.new_content': { msgtype: MsgType.Text, body: newBody, ...extra },
     'm.relates_to': { rel_type: RelationType.Replace, event_id: eventId },
   });
 }

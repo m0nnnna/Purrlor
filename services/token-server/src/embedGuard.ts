@@ -8,6 +8,22 @@ import { isIP } from 'node:net';
 
 const ALLOWED_PORTS = new Set(['', '80', '443', '8080', '8443']);
 
+/**
+ * Tests only (apps/web/e2e/docker-compose.yml): host names the guard lets through although they're
+ * local, so an end-to-end test can embed a page the token server itself serves. Never set in a
+ * real deployment.
+ */
+const TEST_ALLOWED_HOSTS = new Set(
+  (process.env.EMBEDS_TEST_ALLOW_HOSTS ?? '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+export function isTestAllowedHost(host: string): boolean {
+  return TEST_ALLOWED_HOSTS.has(host.toLowerCase());
+}
+
 /** Why a URL can't be fetched, or undefined when it can be (as far as the URL alone says). */
 export function urlProblem(raw: string): string | undefined {
   let url: URL;
@@ -18,9 +34,10 @@ export function urlProblem(raw: string): string | undefined {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'not http or https';
   if (url.username || url.password) return 'carries a user name or password';
-  if (!ALLOWED_PORTS.has(url.port)) return `port ${url.port} isn't allowed`;
   const host = hostOf(url);
   if (!host) return 'no host';
+  if (isTestAllowedHost(host)) return undefined;
+  if (!ALLOWED_PORTS.has(url.port)) return `port ${url.port} isn't allowed`;
   // A name with no dot is a local one (Docker's service names: matrix, livekit, token-server).
   if (!isIP(host) && !host.includes('.')) return 'a local name';
   if (/\.(local|localhost|internal|lan|home|arpa)$/i.test(host) || host.toLowerCase() === 'localhost') return 'a local name';

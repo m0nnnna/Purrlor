@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import conf from '../../deploy/security-headers.conf?raw';
 import { parseCsp, parseSecurityHeaders, previewHeaders } from './securityHeaders';
+import { PLAYERS, playerFrameUrl } from '../matrix/embeds';
+
+const SAMPLE_IDS: Record<string, string> = {
+  youtube: 'dQw4w9WgXcQ',
+  vimeo: '76979871',
+  spotify: 'track/4uLU6hMCjMI75M1A2tKUQC',
+  soundcloud: 'artist/a-song',
+  'twitch-clip': 'FunnyClip',
+  'twitch-video': '123456',
+  streamable: 'abc123',
+};
 
 const headers = parseSecurityHeaders(conf);
 const csp = parseCsp(headers['Content-Security-Policy'] ?? '');
@@ -26,6 +37,11 @@ describe('deploy/security-headers.conf', () => {
     expect(csp.get('default-src')).toEqual(["'self'"]);
     expect(csp.get('object-src')).toEqual(["'none'"]);
     expect(csp.get('base-uri')).toEqual(["'self'"]);
+  });
+
+  it('frames only the players link embeds load (matrix/embeds.ts), and YouTube for Watch Together', () => {
+    const playerHosts = Object.keys(PLAYERS).map((provider) => new URL(playerFrameUrl({ provider, id: SAMPLE_IDS[provider] }, 'purr.example')!).origin);
+    expect(new Set(csp.get('frame-src'))).toEqual(new Set(['https://www.youtube.com', ...playerHosts]));
   });
 
   it('lets no other site frame the app', () => {

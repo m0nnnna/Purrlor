@@ -27,6 +27,11 @@ import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
 import { sendFileMessage, sendVoiceMessage } from '../../matrix/upload';
 import { computeWaveform } from '../../matrix/waveform';
+import { embedsContent } from '../../matrix/embeds';
+import { useEmbedSettings } from '../../matrix/embedSettings';
+import { isEncryptedRoom } from '../../matrix/encryption';
+import { useComposerEmbeds } from '../../matrix/hooks/useComposerEmbeds';
+import { ComposerEmbeds } from './ComposerEmbeds';
 import { CreatePollModal } from './CreatePollModal';
 import { EmojiAndEmotePicker } from './EmojiAndEmotePicker';
 import { membersAsPeople, useMentionAutocomplete } from './useMentionAutocomplete';
@@ -78,6 +83,12 @@ export function Composer({
   const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Link embeds (docs/embeds.md): not in an encrypted chat unless you've allowed them (Settings →
+  // Privacy), and not for commands.
+  const embedSettings = useEmbedSettings();
+  const encrypted = room ? isEncryptedRoom(room) : false;
+  const isCommandDraft = text.trim().startsWith('/') && !text.trim().startsWith('//');
+  const embeds = useComposerEmbeds(text, !isCommandDraft && (!encrypted || embedSettings.encrypted), encrypted);
   const lastTypingSentAtRef = useRef(0);
   const people = useMemo(() => membersAsPeople(members), [members]);
   const mention = useMentionAutocomplete({ text, setText, textareaRef, people });
@@ -211,10 +222,12 @@ export function Composer({
             roomMentionAllowed
           );
           const relatesTo = replyTo && !fileToSend ? buildReplyRelation(replyTo) : undefined;
-          if (formattedBody || relatesTo || mentionedUserIds.length > 0 || mentionsRoom) {
+          const linkEmbeds = await embeds.prepare(effectiveBody);
+          if (formattedBody || relatesTo || mentionedUserIds.length > 0 || mentionsRoom || linkEmbeds) {
             await mx.sendMessage(roomId, threadId, {
               msgtype: MsgType.Text,
               body: effectiveBody,
+              ...(linkEmbeds && embedsContent(linkEmbeds)),
               ...(formattedBody && { format: 'org.matrix.custom.html', formatted_body: formattedBody }),
               ...((mentionedUserIds.length > 0 || mentionsRoom) && {
                 'm.mentions': { ...(mentionedUserIds.length > 0 && { user_ids: mentionedUserIds }), ...(mentionsRoom && { room: true }) },
@@ -228,6 +241,7 @@ export function Composer({
       }
       mention.reset();
       shortcodeAutocomplete.reset();
+      embeds.reset();
       onCancelReply?.();
     } catch (err) {
       setText(body); // restore the draft so a failed send doesn't lose it
@@ -467,6 +481,7 @@ export function Composer({
       )}
       {mention.dropdown}
       {shortcodeAutocomplete.dropdown}
+      {!isRecordingUi && <ComposerEmbeds previews={embeds.previews} onRemove={embeds.remove} />}
       {isRecordingUi ? (
         <VoiceRecorderBar
           elapsedMs={voiceRecorder.state.status === 'recording' ? voiceRecorder.state.elapsedMs : 0}

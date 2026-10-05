@@ -1,3 +1,4 @@
+import { embedsContent, hasEmbedsField, readEmbeds, type StoredEmbed } from './embeds';
 import {
   EventType,
   HistoryVisibility,
@@ -116,6 +117,8 @@ export type PostContent = {
   warning?: string;
   /** The media is sensitive: shown blurred until the reader asks, even without a warning. */
   sensitive?: boolean;
+  /** Link embeds (matrix/embeds.ts). Present, even empty, when the post's links were looked at. */
+  embeds?: StoredEmbed[];
 };
 
 /** Custom content keys. Namespaced, since `xyz.nekous.post` content is otherwise message-shaped. */
@@ -268,6 +271,7 @@ export function readPostContent(content: Record<string, unknown>): PostContent |
   const warning = typeof content[WARNING_KEY] === 'string' ? (content[WARNING_KEY] as string).trim() : '';
   return {
     body,
+    ...(hasEmbedsField(content) && { embeds: readEmbeds(content) }),
     ...(typeof content.format === 'string' && content.format && { format: content.format }),
     ...(typeof content.formatted_body === 'string' && content.formatted_body && { formatted_body: content.formatted_body }),
     ...(attachments.length && { attachments }),
@@ -280,7 +284,7 @@ export function readPostContent(content: Record<string, unknown>): PostContent |
 export function buildPostContent(
   body: string,
   formattedBody?: string,
-  extras: { attachments?: PostAttachment[]; repostOf?: RepostOf; mentions?: string[]; warning?: string; sensitive?: boolean } = {}
+  extras: { attachments?: PostAttachment[]; repostOf?: RepostOf; mentions?: string[]; warning?: string; sensitive?: boolean; embeds?: StoredEmbed[] } = {}
 ): PostContent {
   const warning = extras.warning?.trim();
   // Someone tagged in a picture is mentioned too: that's what notifies them (imageTags.ts).
@@ -294,14 +298,16 @@ export function buildPostContent(
     ...(warning && { warning }),
     // Only meaningful with media to cover.
     ...(extras.sensitive && extras.attachments?.length && { sensitive: true }),
+    ...(extras.embeds && { embeds: extras.embeds }),
   };
 }
 
 /** PostContent → the event content actually sent (the custom fields under namespaced keys). */
 export function toEventContent(content: PostContent): Record<string, unknown> {
-  const { attachments, repostOf, mentions, warning, sensitive, ...message } = content;
+  const { attachments, repostOf, mentions, warning, sensitive, embeds, ...message } = content;
   return {
     ...message,
+    ...(embeds && embedsContent(embeds)),
     ...(attachments?.length && { [ATTACHMENTS_KEY]: attachments }),
     ...(repostOf && { [REPOST_KEY]: repostOf }),
     ...(mentions?.length && { 'm.mentions': { user_ids: mentions } }),

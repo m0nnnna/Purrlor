@@ -1,3 +1,4 @@
+import { EmbedEncryptedSwitch } from './EmbedSettings';
 import { ErrorReportsSwitch } from './ErrorReportsSwitch';
 import { PublicPageSwitch } from './PublicPageSwitch';
 
@@ -6,6 +7,7 @@ export function PrivacySettings() {
   return (
     <div className="nu-privacy-settings" data-nu-role="privacy-settings">
       <PublicPageSwitch />
+      <EmbedEncryptedSwitch />
       <ErrorReportsSwitch />
     </div>
   );

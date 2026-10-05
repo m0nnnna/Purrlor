@@ -44,6 +44,9 @@ services:
       LIVEKIT_API_KEY: e2e-key
       LIVEKIT_API_SECRET: e2e-secret-that-is-long-enough-for-livekit
       ALLOWED_ORIGINS: '*'
+      # Test only: link embeds may fetch the token server itself (its link cards), so a test can embed
+      # a page without the internet. Deployed, the resolver never reaches a local name (embedGuard.ts).
+      EMBEDS_TEST_ALLOW_HOSTS: token-server
       MATRIX_HOMESERVER_URL: http://matrix:8008
       MATRIX_BOT_USERNAME: e2e-bot
       MATRIX_BOT_PASSWORD: e2e-bot-password

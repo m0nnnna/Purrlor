@@ -35,6 +35,19 @@ export type PublicRepost =
   | { kind: 'hidden' }
   | { kind: 'global'; author: string; ts: number; body?: string; emotes?: PublicEmote[]; attachments?: PublicAttachment[] };
 
+/** A post's link embed on the public web: cards and pictures only (docs/embeds.md). */
+export type PublicEmbed = {
+  url: string;
+  kind: 'card' | 'post' | 'image';
+  site?: { name?: string; color?: string };
+  title?: string;
+  description?: string;
+  author?: { name?: string; handle?: string; url?: string; avatar?: string };
+  image?: { url: string; mimetype: string; w?: number; h?: number };
+  published?: number;
+  sensitive?: boolean;
+};
+
 export type PublicPost = {
   eventId: string;
   author: string;
@@ -42,6 +55,7 @@ export type PublicPost = {
   body: string;
   emotes?: PublicEmote[];
   attachments?: PublicAttachment[];
+  embeds?: PublicEmbed[];
   warning?: string;
   sensitive?: boolean;
   edited?: boolean;

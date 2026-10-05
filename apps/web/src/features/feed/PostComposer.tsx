@@ -12,6 +12,8 @@ import { ACCEPTED_MEDIA_TYPES, formatBytes } from '../../matrix/postMedia';
 import { publishToTarget, type PostTarget } from '../../matrix/postPublishing';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useOwnProfile } from '../../matrix/hooks/useOwnProfile';
+import { useComposerEmbeds } from '../../matrix/hooks/useComposerEmbeds';
+import { ComposerEmbeds } from '../messaging/ComposerEmbeds';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { membersAsPeople, useMentionAutocomplete } from '../messaging/useMentionAutocomplete';
 import { CharCounter, isOverLimit } from './CharCounter';
@@ -128,6 +130,10 @@ ${shared}` : shared));
   }, [focusRequest, store]);
 
   const tooLong = isOverLimit(text);
+  // Link embeds (docs/embeds.md). Feed rooms aren't encrypted rooms, so posts always get them; their
+  // pictures are encrypted wherever the post isn't public, like its media.
+  const postIsPublic = !(privately && canPrivate) && !!target && (target.target.kind === 'global' || target.isPublic);
+  const embeds = useComposerEmbeds(text, !(privately && canPrivate), !postIsPublic);
 
   const handleSubmit = async (evt: FormEvent) => {
     evt.preventDefault();
@@ -147,11 +153,13 @@ ${shared}` : shared));
         onPrivateSaved?.();
       } else {
         const { formattedBody, mentionedUserIds } = buildMessageFormatting(body, emotes, mention.candidates());
+        const linkEmbeds = await embeds.prepare(body);
         const { source } = await publishToTarget(
           mx,
           target.target,
           buildPostContent(body, formattedBody, {
             attachments,
+            embeds: linkEmbeds,
             mentions: mentionedUserIds,
             ...(warningOpen && { warning }),
             sensitive,
@@ -163,6 +171,7 @@ ${shared}` : shared));
       }
       setText('');
       mention.reset();
+      embeds.reset();
       media.clear();
       setWarning('');
       setWarningOpen(false);
@@ -211,6 +220,7 @@ ${shared}` : shared));
         placeholder={placeholder}
         rows={3}
       />
+      <ComposerEmbeds previews={embeds.previews} onRemove={embeds.remove} />
       <StagedMediaPreviews staged={staged} onRemove={media.remove} role="feed-composer-previews" people={people} onSetTags={media.setTags} />
       <div className="nu-post-composer__bar">
         <button

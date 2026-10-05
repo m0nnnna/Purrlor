@@ -8,6 +8,9 @@ import { useHiddenLibraryImages, useWithLibraryEmotes } from '../../matrix/hooks
 import { useIgnoredUsers } from '../../matrix/hooks/useIgnoredUsers';
 import { useRepostStatus } from '../../matrix/hooks/useRepostStatus';
 import { LinkPreviewCard } from '../messaging/LinkPreviewCard';
+import { EmbedList } from '../messaging/EmbedCard';
+import type { StoredEmbed } from '../../matrix/embeds';
+import { useEmbedSettings } from '../../matrix/embedSettings';
 import { extractFirstUrl, renderMessageText } from '../messaging/renderMessageText';
 import { formatPostTime } from './formatPostTime';
 import { PostMedia } from './PostMedia';
@@ -98,7 +101,11 @@ function WarningGate({ warning, children }: { warning?: string; children: ReactN
 }
 
 /** The first link in a post, unfurled — unless the post has its own media to show instead. */
-function PostLinkPreview({ content }: { content: { body: string; attachments?: unknown[] } }) {
+/** A post's stored link embeds (docs/embeds.md); a post from before them, the homeserver's preview. */
+function PostLinkPreview({ content, eventKey }: { content: { body: string; attachments?: unknown[]; embeds?: StoredEmbed[] }; eventKey: string }) {
+  const { show } = useEmbedSettings();
+  if (show === 'none') return null;
+  if (content.embeds) return <EmbedList embeds={content.embeds} eventKey={eventKey} />;
   const url = content.attachments?.length ? undefined : extractFirstUrl(content.body);
   return url ? <LinkPreviewCard url={url} /> : null;
 }
@@ -160,7 +167,7 @@ function RepostQuote({
           <div className="nu-post__text">{renderMessageText(repost.body, [], [], myUserId, { onHashtag: openHashtag })}</div>
         )}
         {repost.attachments && <PostMedia attachments={repost.attachments} sensitive={repost.sensitive} />}
-        <PostLinkPreview content={repost} />
+        <PostLinkPreview content={repost} eventKey={`repost|${repost.eventId}`} />
       </WarningGate>
     </blockquote>
   );
@@ -252,7 +259,7 @@ export function PostCard({
               </div>
             )}
             {content.attachments && <PostMedia attachments={content.attachments} sensitive={content.sensitive} />}
-            <PostLinkPreview content={content} />
+            <PostLinkPreview content={content} eventKey={`post|${author.name}|${ts}`} />
           </WarningGate>
         )}
         {repost && <RepostQuote repost={repost} myUserId={myUserId} onOpenProfile={onOpenProfile} openerFor={openerFor} />}

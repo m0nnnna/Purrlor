@@ -1,3 +1,5 @@
+import { EmbedList } from '../messaging/EmbedCard';
+import type { StoredEmbed } from '../../matrix/embeds';
 import { useState, type ReactNode } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
@@ -9,6 +11,7 @@ import {
   publicPagePath,
   type PublicAttachment,
   type PublicAuthor,
+  type PublicEmbed,
   type PublicEmote,
   type PublicPost,
   type PublicRepost,
@@ -45,6 +48,18 @@ function PublicMediaItem({ attachment, onOpen }: { attachment: PublicAttachment;
       </button>
     </div>
   );
+}
+
+/** The public answer's embed in the shape EmbedCard draws (pictures are plain mxc: no encryption here). */
+function storedFromPublic(embed: PublicEmbed): StoredEmbed {
+  const { image, author, ...rest } = embed;
+  return {
+    ...rest,
+    ...(image && { image: { url: image.url, info: { mimetype: image.mimetype, w: image.w, h: image.h } } }),
+    ...(author && {
+      author: { name: author.name, handle: author.handle, url: author.url, ...(author.avatar && { avatar: { url: author.avatar, info: { mimetype: 'image/*' } } }) },
+    }),
+  };
 }
 
 function PublicMedia({ attachments, sensitive }: { attachments: PublicAttachment[]; sensitive?: boolean }) {
@@ -156,6 +171,7 @@ export function PublicPostCard({
         <WarningGate warning={post.warning}>
           {post.body && <div className="nu-post__text">{renderMessageText(post.body, toEmotes(post.emotes))}</div>}
           {post.attachments && <PublicMedia attachments={post.attachments} sensitive={post.sensitive} />}
+          {post.embeds && <EmbedList embeds={post.embeds.map(storedFromPublic)} eventKey={post.eventId} />}
         </WarningGate>
         {post.repost && <RepostQuote repost={post.repost} authors={authors} />}
         <div className="nu-post__actions nu-public__counts">

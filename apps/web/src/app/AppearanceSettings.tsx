@@ -1,3 +1,4 @@
+import { EmbedDisplaySetting } from './EmbedSettings';
 import { useState, type ChangeEvent } from 'react';
 import { getStoredThemeCss, saveThemeCss } from './theme';
 import { HALLOWEEN_CSS } from './themes/halloween';
@@ -88,6 +89,7 @@ export function AppearanceSettings() {
 
   return (
     <div className="nu-appearance-settings" data-nu-role="appearance-settings">
+      <EmbedDisplaySetting />
       <p className="nu-field__hint">
         Override any token below in a <code>:root</code> rule to reskin the app. Applied
         instantly, saved to this browser only (not synced to your account).

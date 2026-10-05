@@ -2,7 +2,7 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { LookupFunction } from 'node:net';
-import { hostOf, isBlockedAddress, urlProblem } from './embedGuard.js';
+import { hostOf, isBlockedAddress, isTestAllowedHost, urlProblem } from './embedGuard.js';
 
 /** A fetch the guard refused, or that went wrong: the link simply gets no embed. */
 export class FetchRefused extends Error {}
@@ -37,7 +37,7 @@ const USER_AGENT = `Purrlor link previews (+${process.env.PUBLIC_URL ?? 'https:/
 export const guardedLookup = ((hostname: string, options: { all?: boolean }, callback: (...args: unknown[]) => void) => {
   dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses: LookupAddress[]) => {
     if (err) return callback(err);
-    if (addresses.length === 0 || addresses.some((a) => isBlockedAddress(a.address))) {
+    if (addresses.length === 0 || (!isTestAllowedHost(hostname) && addresses.some((a) => isBlockedAddress(a.address)))) {
       return callback(new FetchRefused(`${hostname} resolves to a private address`));
     }
     if (options?.all) return callback(null, addresses);

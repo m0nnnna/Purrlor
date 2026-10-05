@@ -39,6 +39,10 @@ import { FileMessage } from './FileMessage';
 import { ForwardMessageModal } from './ForwardMessageModal';
 import { ImageMessage } from './ImageMessage';
 import { LinkPreviewCard } from './LinkPreviewCard';
+import { EmbedList } from './EmbedCard';
+import { embeddableLinks, embedsContent, hasEmbedsField, readEmbeds } from '../../matrix/embeds';
+import { prepareEmbeds } from '../../matrix/embedResolve';
+import { useEmbedSettings } from '../../matrix/embedSettings';
 import { PollCard } from './PollCard';
 import { WatchPartyCard } from '../calendar/WatchPartyCard';
 import { NOTICE_EVENT_KEY } from '../../matrix/watchParty';
@@ -246,8 +250,14 @@ function MessageRow({
   // states render their own content instead of this branch at all.
   // Not in an encrypted conversation: a preview is the homeserver fetching the link, which would
   // tell it what was said there (Element skips them in encrypted rooms too).
+  // Stored link embeds (docs/embeds.md) when the message has the field; otherwise, as before
+  // embeds, the homeserver's preview of its first link.
+  const embedSettings = useEmbedSettings();
+  const storedEmbeds = readEmbeds(content as Record<string, unknown>);
   const firstUrl =
-    content.msgtype !== 'm.emote' && !isEncryptedRoom(room) ? extractFirstUrl(String(content.body ?? '')) : undefined;
+    content.msgtype !== 'm.emote' && !isEncryptedRoom(room) && !hasEmbedsField(content as Record<string, unknown>) && embedSettings.show !== 'none'
+      ? extractFirstUrl(String(content.body ?? ''))
+      : undefined;
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -268,7 +278,30 @@ function MessageRow({
     const newBody = draft.trim();
     setIsEditing(false);
     if (!eventId || !newBody || newBody === String(content.body ?? '')) return;
-    void editMessage(mx, room.roomId, eventId, newBody);
+    void editWithEmbeds(newBody);
+  };
+
+  // An edit restates its embeds: the ones whose links are still there stay as they were, a link
+  // that was there before without one (removed, or nothing to show) stays without, and a new
+  // link is looked up (only where embeds are allowed: docs/embeds.md, rule 3).
+  const editWithEmbeds = async (newBody: string) => {
+    if (!eventId) return;
+    const links = embeddableLinks(newBody);
+    const before = new Set(embeddableLinks(String(content.body ?? '')));
+    const kept = storedEmbeds.filter((embed) => links.includes(embed.url));
+    const encrypted = isEncryptedRoom(room);
+    const fresh = links.filter((url) => !before.has(url));
+    const added = fresh.length && (!encrypted || embedSettings.encrypted) ? await prepareEmbeds(mx, fresh, encrypted) : [];
+    const embeds = links.flatMap((url) => [...kept, ...added].filter((embed) => embed.url === url));
+    const keepField = links.length > 0 && (hasEmbedsField(content as Record<string, unknown>) || added.length > 0);
+    await editMessage(mx, room.roomId, eventId, newBody, keepField ? embedsContent(embeds) : {});
+  };
+
+  // The × on one of your own message's embeds: the same text, without it.
+  const removeEmbed = (url: string) => {
+    if (!eventId) return;
+    const body = String(content.body ?? '');
+    void editMessage(mx, room.roomId, eventId, body, embedsContent(storedEmbeds.filter((embed) => embed.url !== url)));
   };
 
   const [showProfile, setShowProfile] = useState(false);
@@ -434,6 +467,9 @@ function MessageRow({
               })}
             </CollapsibleText>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
+            {embedSettings.show !== 'none' && (
+              <EmbedList embeds={storedEmbeds} eventKey={eventId ?? event.getTxnId() ?? ''} onRemove={isEditable && !isPending ? removeEmbed : undefined} />
+            )}
             {content.msgtype === 'm.notice' && typeof content[NOTICE_EVENT_KEY] === 'string' && (
               <WatchPartyCard room={room} eventId={content[NOTICE_EVENT_KEY]} />
             )}
