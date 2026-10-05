@@ -5,7 +5,7 @@
 The current plan is the Claude Docs doc "Purrlor: link embeds for messages and posts" (2026-10-04):
 https://claude.ai/code/artifact/be32ec17-9535-4319-a37b-3904b785d48c
 
-Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's tasks write `docs/embeds.md`, the contract the Sonnet client tasks build on: read it (and `docs/posts.md`, `docs/federation.md`, `docs/public-web.md`) first. Before starting it, the chat history and federated media fixes come first (2026-10-04).
+Its "Work split" table assigns each task a model and has a Status column. "start sonnet work" / "start opus work" means: read that doc first (the Model dropdowns, checks, open questions and Verify first results may have changed), then do every task assigned to that model, on a new branch off `master`. Opus's tasks write `docs/embeds.md`, the contract the Sonnet client tasks build on: read it (and `docs/posts.md`, `docs/federation.md`, `docs/public-web.md`) first. All eight tasks are done and merged into `master` (2026-10-04); what's left are its "Verify first" checks against real sites from the live server.
 
 The previous plan, "Purrlor: federated social features", is done (2026-10-04): tasks 2 to 9 merged 2026-10-03, and task 10, a run between purr.meowops.net and a real second server, works:
 https://claude.ai/code/artifact/9f3b850d-5c06-452f-b318-70d72b63b9c4
