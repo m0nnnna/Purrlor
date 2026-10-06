@@ -8,9 +8,10 @@ server's rooms and media, on federation) for what it already had.
 | Rooms, their latest ~50 events, account data | matrix-js-sdk's `IndexedDBStore` (`nekous-sync-store`) | Until sign-out. Written every 5 minutes and whenever the tab is hidden | `matrix/client.ts` |
 | Media: thumbnails, avatars, emotes, images, files up to 20 MB (encrypted ones still encrypted) | The service worker's Cache Storage, `purrlor-media-v1` | Until sign-out; the oldest go past 5000 files. Never: range requests (video streaming), whole video or audio files | `public/sw.js` |
 | Link previews | IndexedDB `purrlor-device-cache` | 24 hours (an answer of "no preview": 1 hour) | `matrix/hooks/useUrlPreview.ts`, `matrix/deviceCache.ts` |
-| The feed's last timeline, and each profile's (60 posts, their sources and edits; never an encrypted post) | IndexedDB `purrlor-device-cache`, and memory | A week | `matrix/feedSnapshot.ts`, `useGlobalFeed` |
-| A post's likes, reposts and newest comments | IndexedDB `purrlor-device-cache`, and memory | A day | `matrix/hooks/usePostInteractions.ts` |
-| Profile pages | IndexedDB `purrlor-device-cache`, and memory | A week | `matrix/hooks/useProfilePage.ts` |
+| The feed's last timeline, and each profile's: up to 300 posts, every feed it reads and how far each was read, edits; never an encrypted post | IndexedDB `purrlor-device-cache`, and memory | A week | `matrix/feedSnapshot.ts`, `useGlobalFeed` |
+| A post's likes, reposts and newest comments | IndexedDB `purrlor-device-cache`, and memory | A day; not asked again for 3 minutes | `matrix/hooks/usePostInteractions.ts` |
+| Profile pages | IndexedDB `purrlor-device-cache`, and memory | A week; not asked again for 10 minutes | `matrix/hooks/useProfilePage.ts` |
+| Extended profiles (bio, banner, where someone's posts live) | IndexedDB `purrlor-device-cache`, and memory | A week; shown at once, asked again after 5 minutes (where posts live: a day). Your own changes forget your own | `matrix/extendedProfile.ts` |
 | A peer's room directory (read over federation) | IndexedDB `purrlor-device-cache`, and memory | Used as is for 5 minutes, then shown while a fresh one is read, up to a day | `listPeerDirectory` in `matrix/globalFeed.ts` |
 | Decrypted attachments, resolved media URLs, previews | Memory | The session | `useAttachmentUrl.ts`, `useMediaUrl.ts` |
 | Where each room was left, if scrolled up | Memory | The session | `MessageTimeline.tsx` (`roomViews`) |
@@ -52,26 +53,56 @@ first time; this moves that wait out of the way.
 
 Gathering the feed is the app's slowest read: this server's directory and every peer's (over
 federation, several pages each), then a `/state` and a `/messages` for every Space and profile in
-it, then each post card's likes and comments. None of it syncs, so none of it was in the SDK's
-store; every visit, and every profile opened, read it all again from nothing.
+it, each followed person's extended profile (their own server's answer, over federation for a
+peer's), then each post card's likes and comments. None of it syncs, so none of it is in the SDK's
+store. It used to be read again from nothing on every visit and every profile opened.
 
-Now each of those is shown from what was read last time, and read again behind it:
+Now what was read last time is shown at once, and only what may have changed is asked for:
 
-- **The timeline.** The feed and each profile keep the posts they last showed
-  (`matrix/feedSnapshot.ts`). Opened again, in this session or a new one, they're there on the first
-  paint; the fresh read replaces them whole when it lands. A profile not visited before starts from
-  the feed's own posts by that person. Encrypted posts are never written to the device.
-- **Likes and comments.** A card shows the counts and comments it had last time instead of zeros,
-  and reads them again.
-- **Profile pages.** Drawn at once from the last read. A peer's person's kept page is used only while
-  their instance is still an approved peer.
-- **Peers' directories.** The part that crosses federation before anything else can start. Kept on
-  the device and used for five minutes as they are; after that, a copy up to a day old is used at
-  once while a fresh one is read for next time. Only approved peers' directories are ever used.
-- **Post media.** Pictures in posts and their authors' avatars already go through the service
-  worker's cache like a channel's. The newest 20 posts' pictures (at the size `PostMedia` asks for)
-  and avatars are fetched ahead once the feed or a profile loads (`warmPostMedia`), nothing behind
-  a content warning or marked sensitive.
+- **The timeline** (`matrix/feedSnapshot.ts`). The feed and each profile keep the posts they last
+  showed, every feed they read and how far each was read. Opened again, in this session or a new
+  one, the posts are there on the first paint, and then:
+  - the **list of feeds** (directory, peers' directories, every Space's and profile's state) is used
+    as it is if it was gathered in the last 15 minutes, and gathered again otherwise;
+  - each **feed** kept from a load in the last 6 hours is asked only for its newest 10 posts, which
+    also brings in edits and drops deleted ones; one read in the last 30 seconds isn't asked at all.
+    A feed with 10 new posts (there may be more), one whose kept posts don't reach where its older
+    posts carry on, and any feed not kept, is read from the top as before;
+  - older than 6 hours, everything is read again, which also catches deletions further back.
+
+  The refresh button always reads everything again. A profile reads only that person's feeds, and
+  starts from the feed's own posts by them when it has none of its own yet. Encrypted posts are
+  never written to the device (their feed is read from the top next time).
+- **Likes and comments.** A card shows what it had last time, and asks again only once that's three
+  minutes old. A feed room you're in updates them live anyway.
+- **Profile pages.** Drawn at once from the last read; one you aren't in is asked again after ten
+  minutes, or after your own publish. A peer's person's kept page is used only while their instance
+  is still an approved peer.
+- **Extended profiles.** Shown at once from the last read and asked again after five minutes; where
+  someone's posts live is trusted for a day (a room that turns out not to be theirs is asked again).
+  When their server doesn't answer, what was read last time is used.
+- **Peers' directories.** Kept on the device and used for five minutes as they are; after that, a
+  copy up to a day old is used at once while a fresh one is read for next time. Only approved peers'
+  directories are ever used.
+- **Post media.** Pictures in posts and their authors' avatars go through the service worker's cache
+  like a channel's. The newest 20 posts' pictures (at the size `PostMedia` asks for) and avatars are
+  fetched ahead once the feed or a profile loads (`warmPostMedia`), nothing behind a content warning
+  or marked sensitive.
+
+## What the browser keeps
+
+The web container's nginx (`apps/web/deploy/nginx.conf`) tells the browser, and the desktop app's
+WebView2 (which keeps its cache in `%LOCALAPPDATA%\Purrlor` between runs), what it may keep:
+
+| What | Cache-Control | So |
+|---|---|---|
+| `/assets/` (the build's scripts and styles, named by their contents) | `public, max-age=31536000, immutable` | Never downloaded twice. A missing one is a 404, never `index.html` |
+| `index.html` (every app address), `sw.js`, `global-shim.js`, the manifest | `no-cache` | Kept, but checked on each load (a 304 when nothing changed), so a deploy shows at once |
+| Icons | `public, max-age=604800` | A week |
+| `/config.json` | `no-store` | Never kept |
+
+Text is gzipped. Media keeps the edge nginx's year-long `private` header (above), and the token
+server's public answers carry their own short `max-age`.
 
 ## Going back to a room
 

@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk';
+import { getCached, putCached } from './deviceCache';
 
 /**
  * Discord-style profile extras Matrix's own global profile has no room for (it's just
@@ -57,13 +58,59 @@ export function serverSupportsExtendedProfiles(mx: MatrixClient): Promise<boolea
   return supportPromise;
 }
 
+/**
+ * What each person's extended profile was when last read: in memory for the session and on the
+ * device (deviceCache.ts) for a week. Reading one is a request to their homeserver, over
+ * federation for anyone on another server, and following people reads one per person on every
+ * load of the feed; the part that matters there, where their posts live, practically never
+ * changes. Your own changes forget your own copy (forgetOwnProfile).
+ */
+type KeptProfile = { profile: ExtendedProfile; at: number };
+const keptProfiles = new Map<string, KeptProfile>();
+const PROFILE_KEPT_MS = 7 * 24 * 60 * 60_000;
+const profileKey = (userId: string) => `extended-profile:${userId}`;
+
+function remember(userId: string, profile: ExtendedProfile): void {
+  const kept = { profile, at: Date.now() };
+  keptProfiles.set(userId, kept);
+  void putCached(profileKey(userId), kept, PROFILE_KEPT_MS);
+}
+
+/** The kept copy, from memory, or the device (the app was just opened). */
+export async function keptExtendedProfile(userId: string): Promise<KeptProfile | undefined> {
+  const inMemory = keptProfiles.get(userId);
+  if (inMemory) return inMemory;
+  const stored = await getCached<KeptProfile>(profileKey(userId));
+  if (stored?.profile) keptProfiles.set(userId, stored);
+  return stored?.profile ? stored : undefined;
+}
+
+/** This session's kept copy, for a first paint. */
+export function keptExtendedProfileNow(userId: string): ExtendedProfile | undefined {
+  return keptProfiles.get(userId)?.profile;
+}
+
+function forgetOwnProfile(mx: MatrixClient): void {
+  const me = mx.getUserId?.();
+  if (!me) return;
+  keptProfiles.delete(me);
+  void putCached(profileKey(me), null, -1);
+}
+
 /** `M_NOT_FOUND` for a user who's never set any of these (or a server without MSC4133 at all) is
  *  the expected common case, not an error worth surfacing — same "absence is just absence"
- *  posture as the rest of this app's optional-data reads. */
-export async function getExtendedProfile(mx: MatrixClient, userId: string): Promise<ExtendedProfile> {
+ *  posture as the rest of this app's optional-data reads. Any other failure (their server didn't
+ *  answer) gives what was kept from last time, if anything.
+ *
+ *  `maxAgeMs`: a kept copy younger than this is used without asking. */
+export async function getExtendedProfile(mx: MatrixClient, userId: string, { maxAgeMs = 0 } = {}): Promise<ExtendedProfile> {
+  if (maxAgeMs > 0) {
+    const kept = await keptExtendedProfile(userId);
+    if (kept && Date.now() - kept.at < maxAgeMs) return kept.profile;
+  }
   try {
     const raw = await mx.getExtendedProfile(userId);
-    return {
+    const profile: ExtendedProfile = {
       bio: typeof raw[PROFILE_KEYS.bio] === 'string' ? (raw[PROFILE_KEYS.bio] as string) : undefined,
       bannerUrl: typeof raw[PROFILE_KEYS.bannerUrl] === 'string' ? (raw[PROFILE_KEYS.bannerUrl] as string) : undefined,
       avatarAnimated: raw[PROFILE_KEYS.avatarAnimated] === true,
@@ -71,9 +118,31 @@ export async function getExtendedProfile(mx: MatrixClient, userId: string): Prom
       typingVerb: typeof raw[PROFILE_KEYS.typingVerb] === 'string' ? (raw[PROFILE_KEYS.typingVerb] as string) : undefined,
       pinnedPost: readPinnedPost(raw[PROFILE_KEYS.pinnedPost]),
     };
-  } catch {
-    return {};
+    remember(userId, profile);
+    return profile;
+  } catch (err) {
+    if ((err as { errcode?: string } | null)?.errcode === 'M_NOT_FOUND') {
+      remember(userId, {});
+      return {};
+    }
+    return (await keptExtendedProfile(userId))?.profile ?? {};
   }
+}
+
+/** How long a kept profile room is trusted: it only changes if its owner's is recreated, and a
+ *  room that turns out not to be theirs is read again (getProfileRoomOf's callers check). */
+const PROFILE_ROOM_MAX_AGE_MS = 24 * 60 * 60_000;
+
+/**
+ * Where someone's global posts live, from what was kept when there is one (a day), otherwise
+ * asked. A kept copy without a room is asked again: they may have posted since. `fresh` asks.
+ */
+export async function getProfileRoomOf(mx: MatrixClient, userId: string, { fresh = false } = {}): Promise<string | undefined> {
+  if (!fresh) {
+    const kept = await keptExtendedProfile(userId);
+    if (kept?.profile.profileRoom && Date.now() - kept.at < PROFILE_ROOM_MAX_AGE_MS) return kept.profile.profileRoom;
+  }
+  return (await getExtendedProfile(mx, userId)).profileRoom;
 }
 
 /** Sets or clears the bio/banner — omitted keys are left untouched, an explicit `''`/`null`
@@ -114,6 +183,7 @@ export async function updateExtendedProfile(
   }
 
   await Promise.all(writes);
+  forgetOwnProfile(mx);
 }
 
 /** Whether the *types this app itself uploads as an avatar* animate — a real animation check
@@ -125,6 +195,7 @@ export async function updateExtendedProfile(
  *  directory instead (globalFeed.ts), not that posting should fail. */
 export async function setProfileRoom(mx: MatrixClient, roomId: string): Promise<void> {
   await mx.setExtendedProfileProperty(PROFILE_KEYS.profileRoom, roomId).catch(() => {});
+  forgetOwnProfile(mx);
 }
 
 export function isAnimatableImageType(mimeType: string): boolean {
@@ -134,10 +205,12 @@ export function isAnimatableImageType(mimeType: string): boolean {
 export async function setAvatarAnimated(mx: MatrixClient, animated: boolean): Promise<void> {
   if (animated) await mx.setExtendedProfileProperty(PROFILE_KEYS.avatarAnimated, true);
   else await mx.deleteExtendedProfileProperty(PROFILE_KEYS.avatarAnimated).catch(() => {});
+  forgetOwnProfile(mx);
 }
 
 /** Pins a post to the top of your profile, or unpins with `null`. */
 export async function setPinnedPost(mx: MatrixClient, post: PinnedPostRef | null): Promise<void> {
   if (post) await mx.setExtendedProfileProperty(PROFILE_KEYS.pinnedPost, { room_id: post.roomId, event_id: post.eventId });
   else await mx.deleteExtendedProfileProperty(PROFILE_KEYS.pinnedPost).catch(() => {});
+  forgetOwnProfile(mx);
 }

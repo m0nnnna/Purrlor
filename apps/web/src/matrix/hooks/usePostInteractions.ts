@@ -65,12 +65,16 @@ type State = {
 /**
  * What each post's likes and comments were when last read, so a card drawn again (the feed opened
  * again, scrolled back to, the app opened again) shows them on its first paint instead of zeros
- * that jump a moment later. Every card still reads them again behind that. In memory for the
- * session; on the device (deviceCache.ts) for a day. A post's likes and comments are as readable
- * as the post, and only what came back readable is counted (summarizeRelations).
+ * that jump a moment later. Read again behind that only once they're a few minutes old: a feed
+ * room you're in updates them live anyway, and one you aren't in is a snapshot like its posts.
+ * In memory for the session; on the device (deviceCache.ts) for a day. A post's likes and comments
+ * are as readable as the post, and only what came back readable is counted (summarizeRelations).
  */
-const known = new Map<string, State>();
+type Kept = { state: State; at: number };
+const known = new Map<string, Kept>();
 const KEPT_MS = 24 * 60 * 60_000;
+/** Kept likes and comments younger than this aren't asked for again. */
+const FRESH_MS = 3 * 60_000;
 const keptKey = (postId: string) => `post-stats:${postId}`;
 
 const EMPTY: State = {
@@ -92,10 +96,12 @@ const EMPTY: State = {
  */
 export function usePostInteractions(roomId: string, postId: string, ownerId: string, postTs: number) {
   const mx = useMatrixClient();
-  const [state, setState] = useState<State>(() => known.get(postId) ?? EMPTY);
+  const [state, setState] = useState<State>(() => known.get(postId)?.state ?? EMPTY);
   const [loaded, setLoaded] = useState(false);
   // Whether the server's answer is in yet: until it is, a copy from the device may stand in.
   const answered = useRef(false);
+  // When the server last answered (or the kept copy was read, when it was fresh enough to use).
+  const answeredAt = useRef(0);
   const [busy, setBusy] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const alive = useRef(true);
@@ -118,6 +124,7 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
           ? summarizeCommentStats([...(commentLikes ?? []), ...(reposts?.events ?? [])], postId, mx.getUserId() ?? '')
           : undefined;
       answered.current = true;
+      answeredAt.current = Date.now();
       setState((prev) => ({
         commentStats: commentStats ?? prev.commentStats,
         ...likes,
@@ -139,14 +146,24 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
     pagedBack.current = false;
     answered.current = false;
     let current = true;
+    const use = (kept: Kept) => {
+      setState(kept.state);
+      if (Date.now() - kept.at >= FRESH_MS) return false;
+      answered.current = true;
+      answeredAt.current = kept.at;
+      setLoaded(true);
+      return true;
+    };
     const inMemory = known.get(postId);
-    setState(inMemory ?? EMPTY);
-    if (!inMemory) {
-      void getCached<State>(keptKey(postId)).then((kept) => {
-        if (kept && current && !answered.current) setState(kept);
+    setState(EMPTY);
+    if (inMemory) {
+      if (!use(inMemory)) void reload();
+    } else {
+      void getCached<Kept>(keptKey(postId)).then((kept) => {
+        if (!current || answered.current) return;
+        if (!kept?.state || !use(kept)) void reload();
       });
     }
-    void reload();
     return () => {
       current = false;
       alive.current = false;
@@ -158,8 +175,9 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
     if (!loaded || !answered.current) return;
     // A like still on its way isn't one to show next time.
     if (state.myLikeId === 'pending' || Object.values(state.commentStats).some((stats) => stats.myLikeId === 'pending')) return;
-    known.set(postId, state);
-    void putCached(keptKey(postId), state, KEPT_MS);
+    const kept = { state, at: answeredAt.current };
+    known.set(postId, kept);
+    void putCached(keptKey(postId), kept, KEPT_MS);
   }, [postId, loaded, state]);
 
   useEffect(() => {

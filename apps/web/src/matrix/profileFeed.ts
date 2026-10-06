@@ -6,7 +6,7 @@ import {
   type MatrixClient,
 } from 'matrix-js-sdk';
 import { channelTypeInitialStateEvent } from './channelType';
-import { getExtendedProfile, setProfileRoom } from './extendedProfile';
+import { getProfileRoomOf, setProfileRoom } from './extendedProfile';
 import { FEED_MARKER_EVENT, feedJoinVia, POST_EVENT_TYPE, rejoinOwnRoom } from './feed';
 
 /**
@@ -154,7 +154,7 @@ export async function publishFollow(mx: MatrixClient, userId: string, following:
   await mx.sendStateEvent(roomId, FOLLOW_STATE_EVENT as any, (following ? { following: true } : {}) as any, followStateKey(userId));
   if (!following) return;
   // Tell them. Best-effort: someone who has never posted globally has no profile room to tell.
-  const { profileRoom } = await getExtendedProfile(mx, userId);
+  const profileRoom = await getProfileRoomOf(mx, userId);
   if (!profileRoom) return;
   try {
     if (mx.getRoom(profileRoom)?.getMyMembership() !== 'join') {

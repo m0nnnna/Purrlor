@@ -24,7 +24,7 @@ import {
   type GlobalPost,
 } from '../globalFeed';
 import { fetchPeers } from '../peers';
-import { loadSnapshot, MAIN_FEED_SNAPSHOT, saveSnapshot, snapshotInMemory, type FeedSnapshot } from '../feedSnapshot';
+import { loadSnapshot, MAIN_FEED_SNAPSHOT, saveSnapshot, snapshotInMemory, updateFeed, type FeedSnapshot, type RoomRead } from '../feedSnapshot';
 import { warmPostMedia } from '../mediaWarm';
 
 export type GlobalFeed = {
@@ -60,26 +60,36 @@ export type Pinned = { users: string[]; spaces: string[] };
 const NOTHING_PINNED: Pinned = { users: [], spaces: [] };
 
 /**
- * Where a view keeps the timeline it last showed (feedSnapshot.ts), and which posts are its own:
- * a profile keeps only that person's. A view with none of its own yet starts from the main feed's,
- * narrowed to `keep`.
+ * Where a view keeps the timeline it last showed (feedSnapshot.ts), and whose posts are its own: a
+ * profile reads and keeps only that person's feeds (every feed is still listed, for follower
+ * counts). A view with none of its own yet starts from the main feed's.
  */
-export type SnapshotOptions = { key: string; keep?: (post: GlobalPost) => boolean };
+export type SnapshotOptions = { key: string; keep?: (source: FeedSource) => boolean };
+
+function narrowed(snapshot: FeedSnapshot, keep: SnapshotOptions['keep']): FeedSnapshot {
+  return keep ? { ...snapshot, posts: snapshot.posts.filter((post) => keep(post.source)) } : snapshot;
+}
 
 function initialSnapshot(snapshot: SnapshotOptions | undefined): FeedSnapshot | undefined {
   if (!snapshot) return undefined;
   const own = snapshotInMemory(snapshot.key);
   if (own) return own;
   const main = snapshot.keep && snapshotInMemory(MAIN_FEED_SNAPSHOT);
-  if (!main || !snapshot.keep) return undefined;
-  const posts = main.posts.filter(snapshot.keep);
-  return posts.length ? { ...main, posts } : undefined;
+  return main ? narrowed(main, snapshot.keep) : undefined;
 }
 
 /** How long the timeline waits to settle before it's kept again. */
 const SNAPSHOT_SAVE_DELAY_MS = 1500;
 /** Posts near the top whose pictures are fetched ahead of the reader (mediaWarm.ts). */
 const WARM_POSTS = 20;
+/** A kept list of feeds younger than this is used as it is: no directory or `/state` reads. */
+const SOURCES_FRESH_MS = 15 * 60_000;
+/** A kept timeline younger than this is brought up to date (each feed's newest posts) rather than
+ *  read again (a page of each). Older, it's read again whole, which also catches deletions further
+ *  back than the newest posts. */
+const UPDATE_WITHIN_MS = 6 * 60 * 60_000;
+/** A kept timeline younger than this isn't asked about at all: it was just read. */
+const JUST_READ_MS = 30_000;
 
 /** How often feeds this client isn't in are asked for new posts. */
 const NEW_POSTS_CHECK_MS = 60_000;
@@ -95,8 +105,10 @@ const NEW_POSTS_CHECK_MS = 60_000;
  * `paused`: kept loaded but out of sight (the feed stays mounted behind a chat, MainPane.tsx), so
  * the periodic check for new posts waits, and runs as soon as it's back if one came due meanwhile.
  *
- * `snapshot`: the view's last timeline is shown at once, from memory or the device, while the
- * first read runs; that read then replaces it (feedSnapshot.ts).
+ * `snapshot`: the view's last timeline is shown at once, from memory or the device, and only
+ * what's changed is read (feedSnapshot.ts): with a recent list of feeds, no directory or `/state`
+ * reads; with a recent timeline, each feed's newest posts rather than a page of each. `refresh`
+ * reads everything again.
  */
 export function useGlobalFeed(
   enabled: boolean,
@@ -131,6 +143,10 @@ export function useGlobalFeed(
   const [pending, setPending] = useState<GlobalPost[]>([]);
   const [sources, setSources] = useState<FeedSource[]>(() => initial?.sources ?? []);
   const tokensRef = useRef(new Map<string, string>());
+  // Feeds read in this load (whether or not more remains), and when: what the snapshot keeps.
+  const readRoomsRef = useRef(new Set<string>());
+  const readAtRef = useRef(0);
+  const sourcesAtRef = useRef(0);
   const sourcesRef = useRef(new Map<string, FeedSource>());
   // What's shown or waiting, for telling a new post from one already there.
   const knownIdsRef = useRef(new Set<string>());
@@ -175,120 +191,160 @@ export function useGlobalFeed(
     loadedAtRef.current = Date.now();
     tokensRef.current = new Map();
     sourcesRef.current = new Map();
+    readRoomsRef.current = new Set();
+    readAtRef.current = 0;
     knownIdsRef.current = new Set();
     editsRef.current = [];
     setPending([]);
     busyRef.current = true;
     setLoading(true);
     setError(undefined);
-    // Set once the read below has put its own posts in, after which a late snapshot mustn't.
-    let landed = false;
-
-    // Nothing in memory (the app was just opened): the device's copy, if it beats the read.
     const keep = snapshotRef.current?.keep;
-    if (snapshotKey && !snapshotInMemory(snapshotKey)) {
-      void loadSnapshot(snapshotKey).then((kept) => {
-        if (!kept || cancelled || landed) return;
-        applyPostEdits(
-          kept.posts.map((post) => post.event),
-          kept.edits
-        );
-        const keptPosts = keep ? kept.posts.filter(keep) : kept.posts;
-        setPosts((prev) => (prev.length ? prev : keptPosts));
-        setSources((prev) => (prev.length ? prev : kept.sources));
-        setPublicSpaces((prev) => (prev.length ? prev : kept.publicSpaces));
-      });
-    }
+    // The refresh button reads everything again.
+    const fresh = generation > 0;
+
+    /** Every feed to read: this server's directory and each peer's, their Spaces' and profiles'
+     *  state, whoever is followed, and the private Spaces you're in. */
+    const gatherSources = async (): Promise<FeedSource[] | undefined> => {
+      // This server's directory, and each federated instance's (docs/federation.md): a peer's
+      // rooms read like this server's once the token server's bot has joined them, and one it
+      // hasn't joined yet just doesn't load this time.
+      const [ownDirectory, peerDirectory] = await Promise.all([
+        listDirectory(mx),
+        fetchPeers().then((peers) => listPeerDirectories(mx, peers)),
+      ]);
+      if (cancelled) return undefined;
+      const directory = {
+        ...ownDirectory,
+        spaces: [...ownDirectory.spaces, ...peerDirectory.spaces],
+        profiles: [...ownDirectory.profiles, ...peerDirectory.profiles],
+      };
+      setPublicSpaces(directory.spaces.map(({ roomId, name }) => ({ roomId, name })));
+      setDirectoryLoaded(true);
+      const publicIds = new Set(directory.spaces.map((space) => space.roomId));
+
+      // A private Space's feed rooms are members-only (feed.ts), so reading them means joining
+      // them — which a member of the Space may do, and the Space's own Posts page does too.
+      await mapWithConcurrency(privateJoinedSpaces(mx, publicIds), GLOBAL_FEED_CONCURRENCY, (space) =>
+        followSpaceFeeds(mx, space)
+      );
+      if (cancelled) return undefined;
+
+      const [spaceResults, profileResults, own] = await Promise.all([
+        mapWithConcurrency(directory.spaces, GLOBAL_FEED_CONCURRENCY, (space) => loadPublicSpaceSources(mx, space)),
+        mapWithConcurrency(directory.profiles, GLOBAL_FEED_CONCURRENCY, (profile) => loadProfileSource(mx, profile.roomId)),
+        ownProfileSource(mx),
+      ]);
+      if (cancelled) return undefined;
+      // `null` = won't show its state to non-members; `undefined` = the request failed.
+      // Only this server's: a peer's Space the bot hasn't joined yet isn't something to report.
+      setUnreadableSpaces(spaceResults.slice(0, ownDirectory.spaces.length).filter((sources) => !sources).length);
+      setDirectoryTruncated(directory.truncated);
+
+      // People and Spaces asked for by name (followed, or the profile being viewed) that the
+      // directory's capped pages didn't reach — read directly, so they're never missing.
+      const profileOwners = new Set(profileResults.map((source) => source?.owner));
+      const listedIds = new Set(directory.spaces.map((space) => space.roomId));
+      const [pinnedProfiles, pinnedSpaces] = await Promise.all([
+        mapWithConcurrency(
+          pinnedRef.current.users.filter((userId) => !profileOwners.has(userId) && userId !== mx.getUserId()),
+          GLOBAL_FEED_CONCURRENCY,
+          (userId) => loadUserProfileSource(mx, userId)
+        ),
+        mapWithConcurrency(
+          pinnedRef.current.spaces.filter((spaceId) => !listedIds.has(spaceId)),
+          GLOBAL_FEED_CONCURRENCY,
+          (spaceId) => loadListedSpaceSources(mx, spaceId)
+        ),
+      ]);
+      if (cancelled) return undefined;
+      const pinnedSpaceSources = pinnedSpaces.flatMap((list) => list ?? []);
+      const pinnedPublic = pinnedSpaceSources.flatMap((source) =>
+        source.origin.kind === 'space' ? [{ roomId: source.origin.spaceId, name: source.origin.spaceName }] : []
+      );
+      if (pinnedPublic.length) {
+        setPublicSpaces((prev) => [...prev, ...pinnedPublic.filter((space, i, all) => all.findIndex((s) => s.roomId === space.roomId) === i)]);
+      }
+      const allPublicIds = new Set([...publicIds, ...pinnedPublic.map((space) => space.roomId)]);
+
+      // Asked-for sources go first, so the MAX_FEEDS cut never drops them.
+      return dedupeSources([
+        ...(own ? [own] : []),
+        ...pinnedProfiles.filter((source): source is FeedSource => !!source),
+        ...pinnedSpaceSources,
+        ...spaceResults.flatMap((list) => list ?? []),
+        ...profileResults.filter((source): source is FeedSource => !!source),
+        ...privateJoinedSpaceSources(mx, allPublicIds),
+      ]).slice(0, MAX_FEEDS);
+    };
 
     void (async () => {
       try {
-        // This server's directory, and each federated instance's (docs/federation.md): a peer's
-        // rooms read like this server's once the token server's bot has joined them, and one it
-        // hasn't joined yet just doesn't load this time.
-        const [ownDirectory, peerDirectory] = await Promise.all([
-          listDirectory(mx),
-          fetchPeers().then((peers) => listPeerDirectories(mx, peers)),
-        ]);
-        if (cancelled) return;
-        const directory = {
-          ...ownDirectory,
-          spaces: [...ownDirectory.spaces, ...peerDirectory.spaces],
-          profiles: [...ownDirectory.profiles, ...peerDirectory.profiles],
-        };
-        setPublicSpaces(directory.spaces.map(({ roomId, name }) => ({ roomId, name })));
-        setDirectoryLoaded(true);
-        const publicIds = new Set(directory.spaces.map((space) => space.roomId));
-
-        // A private Space's feed rooms are members-only (feed.ts), so reading them means joining
-        // them — which a member of the Space may do, and the Space's own Posts page does too.
-        await mapWithConcurrency(privateJoinedSpaces(mx, publicIds), GLOBAL_FEED_CONCURRENCY, (space) =>
-          followSpaceFeeds(mx, space)
-        );
-        if (cancelled) return;
-
-        const [spaceResults, profileResults, own] = await Promise.all([
-          mapWithConcurrency(directory.spaces, GLOBAL_FEED_CONCURRENCY, (space) => loadPublicSpaceSources(mx, space)),
-          mapWithConcurrency(directory.profiles, GLOBAL_FEED_CONCURRENCY, (profile) => loadProfileSource(mx, profile.roomId)),
-          ownProfileSource(mx),
-        ]);
-        if (cancelled) return;
-        // `null` = won't show its state to non-members; `undefined` = the request failed.
-        // Only this server's: a peer's Space the bot hasn't joined yet isn't something to report.
-        setUnreadableSpaces(spaceResults.slice(0, ownDirectory.spaces.length).filter((sources) => !sources).length);
-        setDirectoryTruncated(directory.truncated);
-
-        // People and Spaces asked for by name (followed, or the profile being viewed) that the
-        // directory's capped pages didn't reach — read directly, so they're never missing.
-        const profileOwners = new Set(profileResults.map((source) => source?.owner));
-        const listedIds = new Set(directory.spaces.map((space) => space.roomId));
-        const [pinnedProfiles, pinnedSpaces] = await Promise.all([
-          mapWithConcurrency(
-            pinnedRef.current.users.filter((userId) => !profileOwners.has(userId) && userId !== mx.getUserId()),
-            GLOBAL_FEED_CONCURRENCY,
-            (userId) => loadUserProfileSource(mx, userId)
-          ),
-          mapWithConcurrency(
-            pinnedRef.current.spaces.filter((spaceId) => !listedIds.has(spaceId)),
-            GLOBAL_FEED_CONCURRENCY,
-            (spaceId) => loadListedSpaceSources(mx, spaceId)
-          ),
-        ]);
-        if (cancelled) return;
-        const pinnedSpaceSources = pinnedSpaces.flatMap((list) => list ?? []);
-        const pinnedPublic = pinnedSpaceSources.flatMap((source) =>
-          source.origin.kind === 'space' ? [{ roomId: source.origin.spaceId, name: source.origin.spaceName }] : []
-        );
-        if (pinnedPublic.length) {
-          setPublicSpaces((prev) => [...prev, ...pinnedPublic.filter((space, i, all) => all.findIndex((s) => s.roomId === space.roomId) === i)]);
+        // What this view showed last: in memory, or (the app was just opened) on the device.
+        let base: FeedSnapshot | undefined;
+        if (snapshotKey && !fresh) {
+          base = initialSnapshot(snapshotRef.current);
+          if (!base) {
+            const kept = await loadSnapshot(snapshotKey);
+            if (cancelled) return;
+            if (kept) {
+              const shown = narrowed(kept, keep);
+              base = shown;
+              editsRef.current.push(...kept.edits);
+              setPosts((prev) => (prev.length ? prev : shown.posts));
+              setSources((prev) => (prev.length ? prev : shown.sources));
+              setPublicSpaces((prev) => (prev.length ? prev : shown.publicSpaces));
+            }
+          }
         }
-        const allPublicIds = new Set([...publicIds, ...pinnedPublic.map((space) => space.roomId)]);
+        const now = Date.now();
 
-        // Asked-for sources go first, so the MAX_FEEDS cut never drops them.
-        const sources = dedupeSources([
-          ...(own ? [own] : []),
-          ...pinnedProfiles.filter((source): source is FeedSource => !!source),
-          ...pinnedSpaceSources,
-          ...spaceResults.flatMap((list) => list ?? []),
-          ...profileResults.filter((source): source is FeedSource => !!source),
-          ...privateJoinedSpaceSources(mx, allPublicIds),
-        ]).slice(0, MAX_FEEDS);
+        let sources: FeedSource[];
+        if (base && now - base.sourcesAt < SOURCES_FRESH_MS) {
+          // The feeds as gathered a moment ago: none of the directory or state reads again.
+          setPublicSpaces(base.publicSpaces);
+          setDirectoryLoaded(true);
+          setUnreadableSpaces(base.unreadable);
+          setDirectoryTruncated(base.truncated);
+          const publicIds = new Set(base.publicSpaces.map((space) => space.roomId));
+          void mapWithConcurrency(privateJoinedSpaces(mx, publicIds), GLOBAL_FEED_CONCURRENCY, (space) => followSpaceFeeds(mx, space));
+          sources = dedupeSources([...base.sources, ...privateJoinedSpaceSources(mx, publicIds)]).slice(0, MAX_FEEDS);
+          sourcesAtRef.current = base.sourcesAt;
+        } else {
+          const gathered = await gatherSources();
+          if (!gathered) return;
+          sources = gathered;
+          sourcesAtRef.current = Date.now();
+        }
         sources.forEach((source) => sourcesRef.current.set(source.roomId, source));
         setSources([...sourcesRef.current.values()]);
 
-        const pages = await mapWithConcurrency(sources, GLOBAL_FEED_CONCURRENCY, (source) => fetchFeedPage(mx, source));
+        // Posts: only the view's own feeds (a profile's person's), each brought up to date from
+        // what was kept when that's recent enough, otherwise read from the top.
+        const update = base && now - base.at < UPDATE_WITHIN_MS ? base : undefined;
+        const justRead = !!update && now - update.at < JUST_READ_MS;
+        const keptByRoom = new Map<string, GlobalPost[]>();
+        update?.posts.forEach((post) => keptByRoom.set(post.source.roomId, [...(keptByRoom.get(post.source.roomId) ?? []), post]));
+        const toRead = keep ? sources.filter(keep) : sources;
+        const reads = await mapWithConcurrency(toRead, GLOBAL_FEED_CONCURRENCY, (source) => {
+          const read = update?.rooms[source.roomId];
+          return updateFeed(mx, source, read ? (keptByRoom.get(source.roomId) ?? []) : undefined, read, justRead);
+        });
         if (cancelled) return;
         let merged: GlobalPost[] = [];
-        pages.forEach((page, index) => {
-          if (!page) return;
-          merged = mergePosts(merged, page.posts);
-          editsRef.current.push(...page.edits);
-          if (page.nextToken) tokensRef.current.set(sources[index].roomId, page.nextToken);
+        reads.forEach((read, index) => {
+          if (!read) return;
+          const { roomId } = toRead[index];
+          readRoomsRef.current.add(roomId);
+          merged = mergePosts(merged, read.posts);
+          editsRef.current.push(...read.edits);
+          if (read.token) tokensRef.current.set(roomId, read.token);
         });
         merged.forEach((post) => knownIdsRef.current.add(post.eventId));
-        landed = true;
+        readAtRef.current = justRead && update ? update.at : Date.now();
         setPosts(withEdits(merged));
         // The pictures the reader is about to scroll to, fetched ahead (low priority).
-        void warmPostMedia(mx, (keep ? merged.filter(keep) : merged).slice(0, WARM_POSTS));
+        void warmPostMedia(mx, merged.slice(0, WARM_POSTS));
         setHasMore(tokensRef.current.size > 0);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Couldn’t load posts');
@@ -339,13 +395,31 @@ export function useGlobalFeed(
 
   // What's shown is kept for next time, once it has settled.
   useEffect(() => {
-    if (!snapshotKey || loading || posts.length === 0) return undefined;
+    if (!snapshotKey || loading || posts.length === 0 || !readAtRef.current) return undefined;
     const timer = setTimeout(() => {
       const keep = snapshotRef.current?.keep;
-      saveSnapshot(snapshotKey, { sources, posts: keep ? posts.filter(keep) : posts, publicSpaces }, editsRef.current);
+      const rooms: Record<string, RoomRead> = {};
+      readRoomsRef.current.forEach((roomId) => {
+        const token = tokensRef.current.get(roomId);
+        rooms[roomId] = token ? { token } : {};
+      });
+      saveSnapshot(
+        snapshotKey,
+        {
+          at: readAtRef.current,
+          sourcesAt: sourcesAtRef.current,
+          sources,
+          posts: keep ? posts.filter((post) => keep(post.source)) : posts,
+          rooms,
+          publicSpaces,
+          truncated: directoryTruncated,
+          unreadable: unreadableSpaces,
+        },
+        editsRef.current
+      );
     }, SNAPSHOT_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [snapshotKey, loading, posts, sources, publicSpaces]);
+  }, [snapshotKey, loading, posts, sources, publicSpaces, directoryTruncated, unreadableSpaces]);
 
   const loadMore = useCallback(() => {
     if (busyRef.current || tokensRef.current.size === 0) return;
@@ -389,6 +463,8 @@ export function useGlobalFeed(
       setSources([...sourcesRef.current.values()]);
       void fetchFeedPage(mx, source)
         .then((page) => {
+          readRoomsRef.current.add(source.roomId);
+          if (page.nextToken) tokensRef.current.set(source.roomId, page.nextToken);
           editsRef.current.push(...page.edits);
           // Arriving from something you did (your first post there, or following someone): shown
           // at once rather than waiting behind the pill.
@@ -417,9 +493,11 @@ export function useGlobalFeed(
         );
         const pages = await mapWithConcurrency(unjoined, GLOBAL_FEED_CONCURRENCY, (source) => fetchNewestPosts(mx, source));
         const fresh: GlobalPost[] = [];
+        const removed = new Set<string>();
         let edited = false;
         pages.forEach((page) => {
           if (!page) return;
+          page.removed.forEach((id) => removed.add(id));
           if (page.edits.length) {
             editsRef.current.push(...page.edits);
             edited = true;
@@ -430,6 +508,10 @@ export function useGlobalFeed(
             fresh.push(post);
           });
         });
+        if (removed.size) {
+          setPosts((prev) => (prev.some((post) => removed.has(post.eventId)) ? prev.filter((post) => !removed.has(post.eventId)) : prev));
+          setPending((prev) => prev.filter((post) => !removed.has(post.eventId)));
+        }
         if (fresh.length) addArrivals(fresh);
         if (edited) setPosts((prev) => (applyPostEdits(prev.map((post) => post.event), editsRef.current) ? [...prev] : prev));
       } finally {

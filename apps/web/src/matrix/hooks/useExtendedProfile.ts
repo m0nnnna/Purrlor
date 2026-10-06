@@ -2,19 +2,22 @@ import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { profileRevisionAtom } from '../../app/state/feed';
 import { useMatrixClient } from '../MatrixClientContext';
-import { getExtendedProfile, type ExtendedProfile } from '../extendedProfile';
+import { getExtendedProfile, keptExtendedProfile, keptExtendedProfileNow, type ExtendedProfile } from '../extendedProfile';
+
+/** A kept profile younger than this is shown without asking again. */
+const FRESH_MS = 5 * 60_000;
 
 /**
  * Fetches a user's bio/banner/animated-avatar-flag on demand — see extendedProfile.ts for why
  * this can't be "live" the way displayname/avatar_url are (no sync delivery for MSC4133 fields).
- * Refetches whenever `userId` changes (e.g. a profile modal switching targets); callers that
- * need a fresh read after the *viewed* user's own edit (there is no such case today — only your
- * own profile is editable) would need their own refresh trigger, not provided here.
+ * What was read last time (extendedProfile.ts keeps it, in memory and on the device) is shown at
+ * once, and asked for again only once it's a few minutes old. Your own changes forget your own
+ * copy, and bump `profileRevisionAtom`, so a profile already on screen shows them.
  */
 export function useExtendedProfile(userId: string | undefined): { profile: ExtendedProfile; loading: boolean } {
   const mx = useMatrixClient();
-  const [profile, setProfile] = useState<ExtendedProfile>({});
-  const [loading, setLoading] = useState(!!userId);
+  const [profile, setProfile] = useState<ExtendedProfile>(() => (userId && keptExtendedProfileNow(userId)) || {});
+  const [loading, setLoading] = useState(!!userId && !keptExtendedProfileNow(userId));
   // Bumped after your own profile changes from elsewhere in the app (pinning a post), so a
   // profile already on screen shows it.
   const revision = useAtomValue(profileRevisionAtom);
@@ -26,13 +29,22 @@ export function useExtendedProfile(userId: string | undefined): { profile: Exten
       return undefined;
     }
     let cancelled = false;
-    setLoading(true);
-    getExtendedProfile(mx, userId).then((result) => {
+    void (async () => {
+      const kept = await keptExtendedProfile(userId);
+      if (cancelled) return;
+      if (kept) {
+        setProfile(kept.profile);
+        setLoading(false);
+        if (Date.now() - kept.at < FRESH_MS) return;
+      } else {
+        setLoading(true);
+      }
+      const result = await getExtendedProfile(mx, userId);
       if (!cancelled) {
         setProfile(result);
         setLoading(false);
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };

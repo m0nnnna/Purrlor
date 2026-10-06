@@ -6,7 +6,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { applyPostEdits, readFeedMarker, readPost } from '../../matrix/feed';
 import { editsFromRaw } from '../../matrix/globalFeed';
 import { isListedInDirectory } from '../../matrix/spaceDirectory';
-import { getExtendedProfile } from '../../matrix/extendedProfile';
+import { getProfileRoomOf } from '../../matrix/extendedProfile';
 import { useOpenFeedRoom } from './useOpenFeedRoom';
 import { fallbackName } from '../../matrix/displayName';
 
@@ -56,7 +56,7 @@ export async function loadOpenPost(mx: MatrixClient, roomId: string, postId: str
  * members. Undefined when it can't be read, isn't a post, or isn't the linked author's.
  */
 export async function loadLinkedPost(mx: MatrixClient, author: string, postId: string, spaceRoomId?: string): Promise<OpenPost | undefined> {
-  const roomId = spaceRoomId ?? (await getExtendedProfile(mx, author)).profileRoom;
+  const roomId = spaceRoomId ?? (await getProfileRoomOf(mx, author));
   if (!roomId) return undefined;
   if (mx.getRoom(roomId)?.getMyMembership() === 'join') return loadOpenPost(mx, roomId, postId);
   if (spaceRoomId) return undefined;

@@ -10,7 +10,7 @@ import {
   type Room,
 } from 'matrix-js-sdk';
 import { editTargetOf, FEED_ROOM_MEMBER_KEY, isPostEvent, listSpaceFeeds, POST_EVENT_TYPE, type PostOrigin } from './feed';
-import { getExtendedProfile } from './extendedProfile';
+import { getProfileRoomOf } from './extendedProfile';
 import { getOwnProfileRoomId, PROFILE_ROOM_TYPE, readProfileFollows, readProfileOwner } from './profileFeed';
 import { isListedInDirectory } from './spaceDirectory';
 import { ensurePeerRoomReadable, fetchPeers, type Peer } from './peers';
@@ -343,15 +343,19 @@ async function isListedOnPeer(mx: MatrixClient, spaceId: string): Promise<boolea
  * A federated instance's person's room this homeserver isn't in yet is joined by the token
  * server's bot first (ensurePeerRoomReadable), when their instance is an approved peer.
  */
-export async function loadUserProfileSource(mx: MatrixClient, userId: string): Promise<FeedSource | undefined> {
-  const { profileRoom } = await getExtendedProfile(mx, userId);
+export async function loadUserProfileSource(mx: MatrixClient, userId: string, { fresh = false } = {}): Promise<FeedSource | undefined> {
+  // Where their posts live, as kept from last time (extendedProfile.ts) when it is: asking their
+  // server is a federation request for a peer's person, and it practically never changes.
+  const profileRoom = await getProfileRoomOf(mx, userId, { fresh });
   if (!profileRoom) return undefined;
   // Someone on another server only through an approved peer, even if this homeserver could read
   // them anyway (a removed peer's rooms stay readable from what it stored).
   const remote = !!mx.getDomain?.() && serverOfUserId(userId) !== mx.getDomain();
-  if (remote && !(await ensurePeerRoomReadable(mx, userId, profileRoom))) return undefined;
-  const source = await loadProfileSource(mx, profileRoom);
-  return source?.owner === userId ? source : undefined;
+  if (remote && !(await ensurePeerRoomReadable(mx, userId, profileRoom))) return fresh ? undefined : loadUserProfileSource(mx, userId, { fresh: true });
+  const source = await loadProfileSource(mx, profileRoom).catch(() => undefined);
+  if (source?.owner === userId) return source;
+  // A kept room that isn't theirs (any more): ask once.
+  return fresh ? undefined : loadUserProfileSource(mx, userId, { fresh: true });
 }
 
 /**
@@ -446,19 +450,25 @@ export async function fetchFeedPage(mx: MatrixClient, source: FeedSource, from?:
 }
 
 /** How many of a feed's newest posts a check for new ones reads. */
-const NEWEST_CHECK_SIZE = 10;
+export const NEWEST_CHECK_SIZE = 10;
 
 /**
  * A feed's newest few posts (and edits), for noticing new ones in a feed this client isn't in —
- * those don't sync, so the global feed asks now and then. Filtered to posts server-side, so a busy
- * run of likes and comments doesn't hide a new post behind them.
+ * those don't sync, so the global feed asks now and then — and for bringing a kept timeline up to
+ * date (feedSnapshot.ts). Filtered to posts server-side, so a busy run of likes and comments
+ * doesn't hide a new post behind them. `removed`: posts among them that have been deleted.
  */
-export async function fetchNewestPosts(mx: MatrixClient, source: FeedSource): Promise<{ posts: GlobalPost[]; edits: MatrixEvent[] }> {
+export async function fetchNewestPosts(
+  mx: MatrixClient,
+  source: FeedSource
+): Promise<{ posts: GlobalPost[]; edits: MatrixEvent[]; removed: string[] }> {
   const res = await mx.http.authedRequest<{ chunk?: Record<string, any>[] }>(
     Method.Get,
     `/rooms/${encodeURIComponent(source.roomId)}/messages`,
     { dir: Direction.Backward, limit: String(NEWEST_CHECK_SIZE), filter: JSON.stringify({ types: [POST_EVENT_TYPE] }) }
   );
   const chunk = res.chunk ?? [];
-  return { posts: postsFromEvents(source, chunk.map((raw) => new MatrixEvent(raw))), edits: editsFromRaw(chunk) };
+  const events = chunk.map((raw) => new MatrixEvent(raw));
+  const removed = events.flatMap((event) => (event.isRedacted() && event.getId() ? [event.getId()!] : []));
+  return { posts: postsFromEvents(source, events), edits: editsFromRaw(chunk), removed };
 }

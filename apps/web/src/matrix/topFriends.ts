@@ -1,5 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk';
-import { getExtendedProfile } from './extendedProfile';
+import { getProfileRoomOf } from './extendedProfile';
 import { readProfileFollows } from './profileFeed';
 
 /**
@@ -16,7 +16,7 @@ const cache = new Map<string, { at: number; follows: Promise<string[] | undefine
 
 /** Who `userId` follows, from their profile room's state. Undefined if they have no profile room. */
 async function readFollowsOf(mx: MatrixClient, userId: string): Promise<string[] | undefined> {
-  const { profileRoom } = await getExtendedProfile(mx, userId).catch(() => ({ profileRoom: undefined }));
+  const profileRoom = await getProfileRoomOf(mx, userId).catch(() => undefined);
   if (!profileRoom) return undefined;
   const room = mx.getRoom(profileRoom);
   if (room?.getMyMembership() === 'join') {

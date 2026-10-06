@@ -45,8 +45,19 @@ describe('getExtendedProfile', () => {
   });
 
   it('returns an empty object for a user with none of these set (or no MSC4133 support)', async () => {
-    const mx = fakeClient(new Error('M_NOT_FOUND'));
+    const mx = fakeClient(Object.assign(new Error('Not found'), { errcode: 'M_NOT_FOUND' }));
     expect(await getExtendedProfile(mx, '@a:example.org')).toEqual({});
+  });
+
+  it('gives what was read last time when their server doesn’t answer, and uses a recent copy without asking', async () => {
+    await getExtendedProfile(fakeClient({ 'xyz.nekous.profile_room': '!p:far.example' }), '@far:far.example');
+    const down = fakeClient(new Error('timeout'));
+    expect((await getExtendedProfile(down, '@far:far.example')).profileRoom).toBe('!p:far.example');
+    expect((await getExtendedProfile(down, '@nobody:far.example')).profileRoom).toBeUndefined();
+
+    const asked = fakeClient({});
+    expect((await getExtendedProfile(asked, '@far:far.example', { maxAgeMs: 60_000 })).profileRoom).toBe('!p:far.example');
+    expect(asked.getExtendedProfile).not.toHaveBeenCalled();
   });
 
   it('ignores wrongly-typed values rather than passing them through', async () => {
