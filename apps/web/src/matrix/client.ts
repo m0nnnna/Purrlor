@@ -5,6 +5,7 @@ import type { Session } from './session';
 import { secretStorageCallbacks } from './secretStorageCallbacks';
 import { setHomeServer } from './homeServer';
 import { installMemberNameFallback } from './displayName';
+import { installDecryptionRetry } from './decryptRetry';
 
 // All four databases below (this app's two, plus the Rust crypto engine's own two — see
 // RUST_CRYPTO_DB_NAMES) are shared/global per browser, not scoped per account or device —
@@ -171,6 +172,8 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   // handle, which depends on knowing this server (matrix/displayName.ts).
   setHomeServer(mx.getDomain());
   installMemberNameFallback();
+  // Before the first sync, so messages it brings in that can't be decrypted yet are retried too.
+  installDecryptionRetry(mx);
   // 30 events per room from sync rather than the SDK's 8: with only 8, a room whose latest events
   // were reactions, edits or state changes opened empty and had to ask for history first.
   await mx.startClient({ lazyLoadMembers: true, threadSupport: true, initialSyncLimit: 30 });
