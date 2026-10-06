@@ -448,6 +448,8 @@ backup_make() {
   cp .env "$work/env"
   if [ -f "$EMAIL_FILE" ]; then cp "$EMAIL_FILE" "$work/matrix-email.env"; fi
   if [ -f .install-summary ]; then cp .install-summary "$work/install-summary"; fi
+  # This server's own Terms of Service: not in git, so nothing else keeps a copy.
+  if [ -f custom/terms.html ]; then cp custom/terms.html "$work/terms.html"; fi
   local services=(token-server push-gateway)
   if has_matrix; then services=(matrix "${services[@]}"); fi
   say "Stopping ${services[*]} briefly for a consistent copy"
@@ -712,6 +714,7 @@ backed up first, so you can come back to it."
   restore_env "$work/env"
   if [ -f "$work/matrix-email.env" ]; then (umask 077 && cp "$work/matrix-email.env" "$EMAIL_FILE"); else rm -f "$EMAIL_FILE"; fi
   if [ -f "$work/install-summary" ]; then (umask 077 && cp "$work/install-summary" .install-summary); fi
+  if [ -f "$work/terms.html" ]; then mkdir -p custom && cp "$work/terms.html" custom/terms.html; fi
   media="$(env_get MATRIX_MEDIA_DIR)"
   if [ -n "$media" ]; then mkdir -p "$media"; fi
   # Containers made again from the restored settings (and so with their mounts), not started yet.

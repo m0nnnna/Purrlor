@@ -16,6 +16,11 @@ backups/
 # nginx config setup.sh writes for a separate nginx server, specific to one install.
 deploy/edge/
 
+# This server's own files (custom/terms.html, its Terms of Service): never in git, so an update
+# can't overwrite them. The README in there is the only tracked file.
+custom/*
+!custom/README.md
+
 # Playwright output (apps/web/e2e).
 apps/web/test-results/
 apps/web/playwright-report/

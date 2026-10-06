@@ -1,152 +1,63 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../components/Modal';
 import './TermsOfService.css';
 
-export const TERMS_EFFECTIVE_DATE = 'October 1, 2026';
+/**
+ * The terms are this server's, not the app's: /terms.html, which each install keeps in
+ * custom/terms.html (deploy/docker-compose.yml mounts it, apps/web/deploy/40-purrlor-config.sh
+ * puts it in place) and updates never replace. The image ships a sample (public/terms.html) for an
+ * install that hasn't written its own yet.
+ */
+const TERMS_URL = '/terms.html';
 
-/** Where copyright complaints and takedown requests go. One place to change it. */
-export const TAKEDOWN_EMAIL = 'abuse@nekoops.net';
+/** The part of the terms page shown in the app: what's inside its <main>, without anything that
+ *  could run or restyle the app. Null when the page has no <main>, which is also what the dev
+ *  server's index.html fallback for a missing file looks like. */
+export function termsContent(html: string): string | null {
+  const main = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
+  if (!main) return null;
+  main.querySelectorAll('script, style, link, iframe, object, embed, form').forEach((el) => el.remove());
+  main.querySelectorAll('*').forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith('on') || /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+    }
+  });
+  return main.innerHTML;
+}
+
+type TermsState = { status: 'loading' } | { status: 'ready'; html: string } | { status: 'missing' };
 
 /** The terms themselves, as shown in the modal. */
 export function TermsOfService() {
-  return (
-    <div className="nu-terms" data-nu-role="terms-of-service">
-      <p className="nu-terms__date">Effective {TERMS_EFFECTIVE_DATE}</p>
-      <p>
-        By creating an account or using Purrlor you agree to these terms. If you don't agree, don't
-        create an account.
-      </p>
+  const [state, setState] = useState<TermsState>({ status: 'loading' });
 
-      <h3>1. Adults only (18+)</h3>
-      <p>
-        Purrlor is for adults. You must be at least 18 years old to create an account or use it. By
-        accepting these terms you confirm that you are 18 or older. Accounts we find belonging to
-        anyone under 18 are removed.
-      </p>
+  useEffect(() => {
+    let cancelled = false;
+    fetch(TERMS_URL, { cache: 'no-cache' })
+      .then((res) => (res.ok ? res.text() : null))
+      .then((html) => {
+        const content = html === null ? null : termsContent(html);
+        if (!cancelled) setState(content === null ? { status: 'missing' } : { status: 'ready', html: content });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'missing' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-      <h3>2. Your data</h3>
-      <h4>End-to-end encrypted</h4>
-      <ul>
-        <li>
-          Messages and files in direct messages, and in channels with end-to-end encryption turned
-          on (new private channels have it by default), are encrypted on your device before they are
-          sent. The server stores only the encrypted copy and can't read it.
-        </li>
-        <li>
-          Media in private Spaces' posts and in "Only me" posts is encrypted in your browser before
-          upload.
-        </li>
-        <li>
-          Your encryption keys live on your devices and in a key backup protected by your recovery
-          key. We never have your recovery key, so if you lose it and every signed-in device, we
-          can't recover your encrypted history.
-        </li>
-      </ul>
-      <h4>Not end-to-end encrypted</h4>
-      <ul>
-        <li>
-          Public channels, channels with encryption turned off, and public posts and their comments.
-        </li>
-        <li>
-          Your profile (display name, avatar, bio, banner, status) and the names and topics of
-          Spaces and channels.
-        </li>
-        <li>
-          Settings and things saved to your account, such as saved messages, reminders and the text
-          of "Only me" posts.
-        </li>
-        <li>
-          Account details and metadata: your username, email address if you give one, who is in
-          which Space or channel, when messages are sent, and your sessions' device names and IP
-          addresses.
-        </li>
-        <li>
-          Voice and video calls are encrypted in transit through our voice server but are not
-          end-to-end encrypted. Calls are not recorded.
-        </li>
-      </ul>
-      <p>
-        Everything is sent over encrypted connections (HTTPS), whether or not it is end-to-end
-        encrypted. Unencrypted content can be read by the server's administrators; they only look at
-        it to run the service, handle reports, or when the law requires it.
+  if (state.status === 'loading') {
+    return <p className="nu-terms nu-terms__date">Loading…</p>;
+  }
+  if (state.status === 'missing') {
+    return (
+      <p className="nu-terms" data-nu-role="terms-of-service">
+        This server's terms couldn't be loaded. Try again later, or <a href={TERMS_URL}>open them on their own page</a>.
       </p>
-      <h4>How it's kept</h4>
-      <ul>
-        <li>
-          Your data is stored on our server until you or a moderator deletes it. Deleting a message
-          removes its content from the server, but anyone who already saw it may have kept a copy.
-        </li>
-        <li>
-          If a conversation includes people on other Matrix servers, those servers keep their own
-          copies, which we can't delete.
-        </li>
-        <li>
-          Background notifications go through your browser's push service (Google, Mozilla or
-          Apple). Notifications for encrypted conversations don't include the message text.
-        </li>
-        <li>
-          When you report a message, its content (decrypted, if it was encrypted) is sent to the
-          moderators who review the report.
-        </li>
-        <li>
-          When the app hits an error, it sends the error to our server so we can fix it: what went
-          wrong and on what kind of page, not who you are or what you were reading. You can turn
-          this off under Account Settings, Privacy.
-        </li>
-        <li>
-          We may disclose data we can read to law enforcement when legally required to.
-        </li>
-      </ul>
-      <h4>Your copy, and leaving</h4>
-      <ul>
-        <li>
-          Account Settings, Your data, downloads a copy of everything you've put here: your
-          profile, page, posts, comments, the messages you sent (decrypted) and the files you
-          uploaded.
-        </li>
-        <li>
-          The same place deletes your account. You're signed out everywhere and can't sign in
-          again, your page is taken down and, if you choose, your posts are deleted. Messages
-          you sent stay with the people who received them.
-        </li>
-      </ul>
-
-      <h3>3. Rules</h3>
-      <ul>
-        <li>
-          <strong>Nothing illegal under United States law.</strong> This includes, but isn't limited
-          to: any sexual content involving minors (reported to the NCMEC and law enforcement),
-          sharing intimate images of someone without their consent, threats of violence, fraud,
-          selling illegal goods or services, and copyright infringement.
-        </li>
-        <li>
-          <strong>18+ content is allowed, but it must be marked with a content warning.</strong> In
-          posts, use the CW button, and tick Sensitive for media. In chat, put a warning before it
-          and hide it in <code>||spoilers||</code>.
-        </li>
-        <li>
-          <strong>Unmarked 18+ content will result in a ban.</strong>
-        </li>
-      </ul>
-
-      <h3>4. Copyright and takedowns</h3>
-      <p>
-        Only upload music, art and other files you made or have the right to share. Music and albums
-        on a profile page are public to anyone on the web when its owner has chosen to show their
-        page to people who aren't signed in. If you believe something here infringes your copyright,
-        email <a href={`mailto:${TAKEDOWN_EMAIL}`}>{TAKEDOWN_EMAIL}</a> with what it is, where it is
-        (a link to the page), and that you're the owner or act for them. We remove infringing content
-        and may suspend accounts that repeatedly upload it.
-      </p>
-
-      <h3>5. Enforcement and changes</h3>
-      <p>
-        Moderators and administrators may remove content and suspend or ban accounts that break these
-        terms. We may update these terms; continuing to use Purrlor after a change means you accept
-        the updated terms.
-      </p>
-    </div>
-  );
+    );
+  }
+  return <div className="nu-terms" data-nu-role="terms-of-service" dangerouslySetInnerHTML={{ __html: state.html }} />;
 }
 
 type TermsNoticeProps = {

@@ -24,5 +24,15 @@ printf '{"homeserver":"%s","livekitUrl":"%s","tokenEndpoint":"%s","pushGateway":
   "$(json "${PURRLOR_PUSH_GATEWAY_URL:-}")" \
   > /usr/share/nginx/html/config.json
 
+# This server's own Terms of Service (custom/terms.html in the install, mounted by
+# deploy/docker-compose.yml) replaces the sample the image ships. Copied on each start, so editing
+# the file and restarting the container is enough.
+if [ -f /etc/purrlor/custom/terms.html ]; then
+  cp /etc/purrlor/custom/terms.html /usr/share/nginx/html/terms.html
+  echo "purrlor: using this server's terms (custom/terms.html)"
+else
+  echo "purrlor: no custom/terms.html — showing the sample Terms of Service"
+fi
+
 echo "purrlor: wrote config.json (homeserver: ${PURRLOR_HOMESERVER_URL:-<not locked>}," \
   "voice: ${PURRLOR_LIVEKIT_URL:-<per space>}, push: ${PURRLOR_PUSH_GATEWAY_URL:-<per account>})"

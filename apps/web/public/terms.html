@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<!--
+  SAMPLE Terms of Service, shipped with Purrlor.
+
+  This is a starting point, not legal advice. A server's operator replaces it with their own copy in
+  custom/terms.html at the top of the install (see "Your Terms of Service" in the README). Updates
+  never touch that file. The app shows what's inside <main> in its Terms of Service window, and the
+  whole page is at https://YOUR_APP_ADDRESS/terms.html for linking to.
+
+  Replace every [BRACKETED] placeholder, delete the sample notice right below <main>, and change
+  what doesn't match how your server is run (age limit, rules, where you are, what you log).
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terms of Service</title>
+    <style>
+      body { margin: 0; padding: 24px 16px; font: 15px/1.55 system-ui, sans-serif; background: #0d0a13; color: #d9d3e3; }
+      main { max-width: 720px; margin: 0 auto; }
+      h1, h3, h4, strong { color: #fff; }
+      a { color: #c9a2ff; }
+      @media (prefers-color-scheme: light) { body { background: #fff; color: #333; } h1, h3, h4, strong { color: #000; } a { color: #6b2fc0; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><strong>This server is still using the sample terms that come with Purrlor. Its operator hasn't written their own yet.</strong></p>
+
+      <p>Effective [EFFECTIVE DATE]</p>
+      <p>
+        By creating an account on [SERVER NAME] or using it you agree to these terms. If you don't
+        agree, don't create an account.
+      </p>
+
+      <h3>1. Who can use it</h3>
+      <p>
+        You must be at least [MINIMUM AGE] years old to create an account or use [SERVER NAME]. By
+        accepting these terms you confirm that you are. Accounts we find belonging to anyone younger
+        are removed.
+      </p>
+
+      <h3>2. Your data</h3>
+      <h4>End-to-end encrypted</h4>
+      <ul>
+        <li>
+          Messages and files in direct messages, and in channels with end-to-end encryption turned
+          on (new private channels have it by default), are encrypted on your device before they are
+          sent. The server stores only the encrypted copy and can't read it.
+        </li>
+        <li>
+          Media in private Spaces' posts and in "Only me" posts is encrypted in your browser before
+          upload.
+        </li>
+        <li>
+          Your encryption keys live on your devices and in a key backup protected by your recovery
+          key. We never have your recovery key, so if you lose it and every signed-in device, we
+          can't recover your encrypted history.
+        </li>
+      </ul>
+      <h4>Not end-to-end encrypted</h4>
+      <ul>
+        <li>Public channels, channels with encryption turned off, and public posts and their comments.</li>
+        <li>
+          Your profile (display name, avatar, bio, banner, status) and the names and topics of
+          Spaces and channels.
+        </li>
+        <li>
+          Settings and things saved to your account, such as saved messages, reminders and the text
+          of "Only me" posts.
+        </li>
+        <li>
+          Account details and metadata: your username, email address if you give one, who is in
+          which Space or channel, when messages are sent, and your sessions' device names and IP
+          addresses.
+        </li>
+        <li>
+          Voice and video calls are encrypted in transit through the voice server but are not
+          end-to-end encrypted. Calls are not recorded.
+        </li>
+      </ul>
+      <p>
+        Everything is sent over encrypted connections (HTTPS), whether or not it is end-to-end
+        encrypted. Unencrypted content can be read by the server's administrators; they only look at
+        it to run the service, handle reports, or when the law requires it.
+      </p>
+      <h4>How it's kept</h4>
+      <ul>
+        <li>
+          Your data is stored on our server until you or a moderator deletes it. Deleting a message
+          removes its content from the server, but anyone who already saw it may have kept a copy.
+        </li>
+        <li>
+          If a conversation includes people on other Matrix servers, those servers keep their own
+          copies, which we can't delete.
+        </li>
+        <li>
+          Background notifications go through your browser's push service (Google, Mozilla or
+          Apple). Notifications for encrypted conversations don't include the message text.
+        </li>
+        <li>
+          When you report a message, its content (decrypted, if it was encrypted) is sent to the
+          moderators who review the report.
+        </li>
+        <li>
+          When the app hits an error, it sends the error to our server so we can fix it: what went
+          wrong and on what kind of page, not who you are or what you were reading. You can turn
+          this off under Account Settings, Privacy.
+        </li>
+        <li>We may disclose data we can read to law enforcement when legally required to.</li>
+      </ul>
+      <h4>Your copy, and leaving</h4>
+      <ul>
+        <li>
+          Account Settings, Your data, downloads a copy of everything you've put here: your
+          profile, page, posts, comments, the messages you sent (decrypted) and the files you
+          uploaded.
+        </li>
+        <li>
+          The same place deletes your account. You're signed out everywhere and can't sign in
+          again, your page is taken down and, if you choose, your posts are deleted. Messages
+          you sent stay with the people who received them.
+        </li>
+      </ul>
+
+      <h3>3. Rules</h3>
+      <ul>
+        <li>
+          <strong>Nothing illegal under the laws of [JURISDICTION].</strong> This includes, but isn't
+          limited to: any sexual content involving minors, sharing intimate images of someone without
+          their consent, threats of violence, fraud, selling illegal goods or services, and
+          copyright infringement.
+        </li>
+        <li><strong>[YOUR SERVER'S OWN RULES: what content is allowed, how it must be marked, and so on.]</strong></li>
+      </ul>
+
+      <h3>4. Copyright and takedowns</h3>
+      <p>
+        Only upload music, art and other files you made or have the right to share. Music and albums
+        on a profile page are public to anyone on the web when its owner has chosen to show their
+        page to people who aren't signed in. If you believe something here infringes your copyright,
+        email <a href="mailto:[CONTACT EMAIL]">[CONTACT EMAIL]</a> with what it is, where it is (a
+        link to the page), and that you're the owner or act for them. We remove infringing content
+        and may suspend accounts that repeatedly upload it.
+      </p>
+
+      <h3>5. Enforcement and changes</h3>
+      <p>
+        Moderators and administrators may remove content and suspend or ban accounts that break these
+        terms. We may update these terms; continuing to use [SERVER NAME] after a change means you
+        accept the updated terms.
+      </p>
+    </main>
+  </body>
+</html>

@@ -1594,6 +1594,17 @@ echo "  If your provider has its own firewall (AWS security groups, Hetzner/Orac
 echo "  rules...), open these there too: ${FIREWALL_PORTS[*]}"
 
 # ---------------------------------------------------------------------------
+# Terms of Service
+# ---------------------------------------------------------------------------
+
+# This server's own terms, which the app shows on the login and register screens. A copy of the
+# sample to edit; updates never touch it (README, "Your Terms of Service").
+mkdir -p "$REPO_ROOT/custom"
+if [ ! -f "$REPO_ROOT/custom/terms.html" ]; then
+  cp "$REPO_ROOT/apps/web/public/terms.html" "$REPO_ROOT/custom/terms.html"
+fi
+
+# ---------------------------------------------------------------------------
 # Bring the stack up
 # ---------------------------------------------------------------------------
 
@@ -1849,6 +1860,9 @@ $LOGIN_LINE
 
 Voice/video and notifications are already set up for every space created here — nothing to
 configure in the app.
+
+Your Terms of Service: still the sample. Write your own in $REPO_ROOT/custom/terms.html,
+then run:  purrlor restart web   (updates never replace that file)
 
 $EDGE_NOTE
 

@@ -45,9 +45,24 @@ describe('LoginScreen', () => {
     render(<LoginScreen onLoggedIn={vi.fn()} onSwitchToRegister={vi.fn()} />);
 
     expect(screen.getByText(/By making an account you agree to our/)).toBeTruthy();
+    const fetchTerms = vi.fn(async () => new Response('<html><body><main><h3>1. Be nice</h3><script>bad()</script></main></body></html>'));
+    vi.stubGlobal('fetch', fetchTerms);
     fireEvent.click(screen.getByRole('button', { name: 'Terms of Service' }));
 
-    expect(screen.getByText(/You must be at least 18 years old/)).toBeTruthy();
-    expect(screen.getByText(/must be marked with a content warning/)).toBeTruthy();
+    expect(await screen.findByText('1. Be nice')).toBeTruthy();
+    expect(fetchTerms).toHaveBeenCalledWith('/terms.html', { cache: 'no-cache' });
+    expect(document.querySelector('[data-nu-role="terms-of-service"] script')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("says so when the server's terms can't be loaded", async () => {
+    await withConfig({ homeserver: '' });
+    render(<LoginScreen onLoggedIn={vi.fn()} onSwitchToRegister={vi.fn()} />);
+    // The dev server's answer for a missing file: the app's own index.html, which has no <main>.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html><body><div id="root"></div></body></html>')));
+    fireEvent.click(screen.getByRole('button', { name: 'Terms of Service' }));
+
+    expect(await screen.findByText(/terms couldn't be loaded/)).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });

@@ -206,7 +206,7 @@ export function RegisterScreen({ onSwitchToLogin, onRegistered }: RegisterScreen
             {error}
           </p>
         )}
-        <TermsNotice lead="You must be 18 or older. By creating an account you confirm your age and agree to our" />
+        <TermsNotice lead="By creating an account you agree to this server's" />
         <button className="nu-login__submit" type="submit" disabled={submitting}>
           {phase === 'creating-account' && 'Creating your account…'}
           {phase === 'setting-up-encryption' && 'Setting up encryption…'}

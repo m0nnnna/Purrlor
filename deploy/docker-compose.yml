@@ -213,6 +213,10 @@ services:
       - PURRLOR_LIVEKIT_URL=${PURRLOR_LIVEKIT_URL:-}
       - PURRLOR_TOKEN_ENDPOINT=${PURRLOR_TOKEN_ENDPOINT:-}
       - PURRLOR_PUSH_GATEWAY_URL=${PURRLOR_PUSH_GATEWAY_URL:-}
+    volumes:
+      # This server's own files that replace the app's samples, kept out of git so an update never
+      # overwrites them: custom/terms.html, the Terms of Service (README, "Your Terms of Service").
+      - ../custom:/etc/purrlor/custom:ro
     depends_on:
       - token-server
       - push-gateway

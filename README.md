@@ -388,6 +388,26 @@ The installer adds a `purrlor` command:
 | `purrlor open-signups` / `close-signups` | Allows or stops new sign-ups |
 | `purrlor emotes setup` | Creates the global emote library, owned by the admin (once; the installer already does it) |
 
+### Your Terms of Service
+
+The login and register screens link to your server's Terms of Service. Purrlor ships only a
+sample ([`apps/web/public/terms.html`](apps/web/public/terms.html)), with placeholders such as
+`[SERVER NAME]` and a note at the top saying it's the sample. Your own terms go in
+`custom/terms.html` in the install folder (the installer starts it as a copy of the sample). Git
+ignores that folder, so `purrlor update` never replaces your terms.
+
+To write or change them:
+
+1. Edit `custom/terms.html` (e.g. `/opt/purrlor/custom/terms.html`). It's a plain HTML page: the
+   app shows what's inside `<main>`, and the whole page is at `https://app.<your domain>/terms.html`
+   for linking to. Replace every `[PLACEHOLDER]`, delete the sample note, and update the effective
+   date.
+2. Run `purrlor restart web`. The new terms show straight away, with no rebuild.
+
+If the file is missing, the app shows the sample. If you're upgrading an install from before
+this, create `custom/terms.html` before running `purrlor update`, or your server will show the
+sample terms.
+
 ### Other setups
 
 The installer also handles, when you say so:
