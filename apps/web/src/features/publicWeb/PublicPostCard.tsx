@@ -45,7 +45,7 @@ function PublicMediaItem({ attachment, onOpen }: { attachment: PublicAttachment;
   return (
     <div className="nu-post-media__item" style={style}>
       <button type="button" className="nu-public__media-button" onClick={() => onOpen(src)} aria-label="Open picture">
-        <img className="nu-post-media__image" src={thumb ?? src} alt="" loading="lazy" />
+        <img className="nu-post-media__img" src={thumb ?? src} alt="" loading="lazy" />
       </button>
     </div>
   );
@@ -74,7 +74,8 @@ function PublicMedia({ attachments, sensitive }: { attachments: PublicAttachment
     );
   }
   return (
-    <div className={attachments.length > 1 ? 'nu-post-media nu-post-media--grid' : 'nu-post-media'}>
+    // The same classes as the app's own (feed/PostMedia.tsx), so a picture is sized to its box.
+    <div className={`nu-post-media nu-post-media--count-${attachments.length}`}>
       {attachments.map((attachment, index) => (
         <PublicMediaItem key={index} attachment={attachment} onOpen={setOpen} />
       ))}

@@ -182,7 +182,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-4);
-  animation: nu-rise-in 0.35s ease-out 0.1s both;
+  /* `backwards`, not `both`: a transform left on this after the animation would trap anything
+     fixed inside it (a picture opened full screen) in this column. */
+  animation: nu-rise-in 0.35s ease-out 0.1s backwards;
 }
 
 .nu-login__feed-header {
@@ -212,8 +214,7 @@
 }
 
 .nu-login__feed .nu-post {
-  background: color-mix(in srgb, var(--nu-color-bg-primary) 88%, transparent);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--nu-color-bg-primary) 94%, transparent);
 }
 
 @media (min-width: 960px) {
