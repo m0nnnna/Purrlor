@@ -3,6 +3,9 @@ import { needsMediaAuthentication } from './mediaAuth';
 import { mediaWorkerReady } from './mediaWorker';
 import { INLINE_IMAGE_BOX, inlineThumbnailSize } from './hooks/useAttachmentUrl';
 import { thumbnailHttpUrl } from './thumbnails';
+import { readPost } from './feed';
+import { POST_MEDIA_PX } from './postMedia';
+import type { GlobalPost } from './globalFeed';
 
 /**
  * Puts a room's recent images and its senders' avatars in the device's media cache (public/sw.js)
@@ -20,7 +23,8 @@ import { thumbnailHttpUrl } from './thumbnails';
 const IMAGES_PER_ROOM = 12;
 /** Avatars per room, of the newest senders. */
 const AVATARS_PER_ROOM = 12;
-/** The timeline's avatar (MessageTimeline.tsx: size 40), as Avatar.tsx asks for it. */
+/** The timeline's avatar (MessageTimeline.tsx, and a post's in PostCard.tsx: size 40), as
+ *  Avatar.tsx asks for it. */
 const AVATAR_PX = 80;
 /** Requests at once, across every room, so warming never crowds out what's on screen. */
 const CONCURRENCY = 3;
@@ -81,5 +85,33 @@ export async function warmRoomMedia(mx: MatrixClient, room: Room): Promise<void>
       enqueue(thumbnailHttpUrl(mx, avatar, AVATAR_PX, AVATAR_PX, useAuth));
     }
   }
+  pump();
+}
+
+/**
+ * The same for posts (the feed, a profile): the newest posts' pictures, as PostMedia.tsx asks for
+ * them, and their authors' avatars. A peer's posts most of all: their media crosses federation the
+ * first time. Unencrypted pictures only, as above; nothing behind a content warning or marked
+ * sensitive, which stays covered until the reader asks.
+ */
+export async function warmPostMedia(mx: MatrixClient, posts: GlobalPost[]): Promise<void> {
+  if (!posts.length || !(await mediaWorkerReady())) return;
+  const useAuth = await needsMediaAuthentication(mx);
+  posts.forEach(({ event, source }) => {
+    const content = readPost(event);
+    if (content && !content.warning && !content.sensitive) {
+      content.attachments?.forEach((attachment) => {
+        if (attachment.kind !== 'image' || !attachment.url) return;
+        const { mimetype, w, h } = attachment.info;
+        const thumb = inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX);
+        enqueue(
+          thumb
+            ? mx.mxcUrlToHttp(attachment.url, thumb.width, thumb.height, thumb.method, undefined, undefined, useAuth)
+            : mx.mxcUrlToHttp(attachment.url, undefined, undefined, undefined, undefined, undefined, useAuth)
+        );
+      });
+    }
+    if (source.ownerAvatarUrl) enqueue(thumbnailHttpUrl(mx, source.ownerAvatarUrl, AVATAR_PX, AVATAR_PX, useAuth));
+  });
   pump();
 }

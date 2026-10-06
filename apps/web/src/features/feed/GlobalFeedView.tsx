@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useFeedBackground } from '../../matrix/feedBackground';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
+import { MAIN_FEED_SNAPSHOT } from '../../matrix/feedSnapshot';
 import { OnlineCount } from '../online/OnlineCount';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
@@ -37,6 +38,8 @@ const TITLES: Record<SocialView, { title: string; icon: IconName }> = {
  *  Without a cap, a search for something that isn't there would read every feed to its start. */
 const SEARCH_AUTO_PAGES = 4;
 
+const FEED_SNAPSHOT = { key: MAIN_FEED_SNAPSHOT };
+
 /**
  * The social side's main page. **Everyone** is posts from public places only — people's Global
  * posts and public Spaces, including ones you haven't joined. **Following** is the people and whole
@@ -59,7 +62,8 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
   // Whoever you follow is read directly, even past the directory caps. Loaded once this view
   // mounts, which is the first time the feed is opened; after that it stays mounted (hidden behind
   // chats, MainPane.tsx), so coming back is instant rather than reading every source again.
-  const feed = useGlobalFeed(true, follows, { paused: hidden });
+  // The timeline last shown is there at once, even in a new session, while it's read again.
+  const feed = useGlobalFeed(true, follows, { paused: hidden, snapshot: FEED_SNAPSHOT });
   const joinedSpaces = useSpaces();
   const targets = useComposerTargets(feed.publicSpaceIds);
   const [managing, setManaging] = useState(false);

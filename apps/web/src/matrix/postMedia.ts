@@ -48,6 +48,10 @@ export function attachmentMxc(attachment: PostAttachment): string {
 
 export const MAX_ATTACHMENTS = 4;
 
+/** About the widest a post's image is drawn, for its thumbnail (PostMedia.tsx; mediaWarm.ts asks
+ *  for the same one ahead of time). */
+export const POST_MEDIA_PX = 600;
+
 /** Everything a post will accept, keyed to how it renders. */
 const ACCEPTED: Record<string, PostMediaKind> = {
   'image/jpeg': 'image',

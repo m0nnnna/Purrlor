@@ -22,6 +22,7 @@ import {
   type ReplyTarget,
 } from '../postInteractions';
 import type { PostContent } from '../feed';
+import { getCached, putCached } from '../deviceCache';
 
 /** Every card on a page asks at once; this keeps it to a few requests in flight, the same budget
  *  the global feed uses for its own reads. */
@@ -61,6 +62,17 @@ type State = {
   commentStats: Record<string, CommentStats>;
 };
 
+/**
+ * What each post's likes and comments were when last read, so a card drawn again (the feed opened
+ * again, scrolled back to, the app opened again) shows them on its first paint instead of zeros
+ * that jump a moment later. Every card still reads them again behind that. In memory for the
+ * session; on the device (deviceCache.ts) for a day. A post's likes and comments are as readable
+ * as the post, and only what came back readable is counted (summarizeRelations).
+ */
+const known = new Map<string, State>();
+const KEPT_MS = 24 * 60 * 60_000;
+const keptKey = (postId: string) => `post-stats:${postId}`;
+
 const EMPTY: State = {
   likeCount: 0,
   likesTruncated: false,
@@ -80,8 +92,10 @@ const EMPTY: State = {
  */
 export function usePostInteractions(roomId: string, postId: string, ownerId: string, postTs: number) {
   const mx = useMatrixClient();
-  const [state, setState] = useState<State>(EMPTY);
+  const [state, setState] = useState<State>(() => known.get(postId) ?? EMPTY);
   const [loaded, setLoaded] = useState(false);
+  // Whether the server's answer is in yet: until it is, a copy from the device may stand in.
+  const answered = useRef(false);
   const [busy, setBusy] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const alive = useRef(true);
@@ -103,6 +117,7 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
         reposts || commentLikes
           ? summarizeCommentStats([...(commentLikes ?? []), ...(reposts?.events ?? [])], postId, mx.getUserId() ?? '')
           : undefined;
+      answered.current = true;
       setState((prev) => ({
         commentStats: commentStats ?? prev.commentStats,
         ...likes,
@@ -122,12 +137,30 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
   useEffect(() => {
     alive.current = true;
     pagedBack.current = false;
-    setState(EMPTY);
+    answered.current = false;
+    let current = true;
+    const inMemory = known.get(postId);
+    setState(inMemory ?? EMPTY);
+    if (!inMemory) {
+      void getCached<State>(keptKey(postId)).then((kept) => {
+        if (kept && current && !answered.current) setState(kept);
+      });
+    }
     void reload();
     return () => {
+      current = false;
       alive.current = false;
     };
-  }, [reload]);
+  }, [postId, reload]);
+
+  // Kept once the server has answered, and again after each change.
+  useEffect(() => {
+    if (!loaded || !answered.current) return;
+    // A like still on its way isn't one to show next time.
+    if (state.myLikeId === 'pending' || Object.values(state.commentStats).some((stats) => stats.myLikeId === 'pending')) return;
+    known.set(postId, state);
+    void putCached(keptKey(postId), state, KEPT_MS);
+  }, [postId, loaded, state]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;

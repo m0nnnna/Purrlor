@@ -23,7 +23,10 @@ function openDb(): Promise<IDBDatabase | null> {
       try {
         const req = indexedDB.open(DB_NAME, 1);
         req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+          resolve(req.result);
+          sweepExpired(req.result);
+        };
         req.onerror = () => resolve(null);
         req.onblocked = () => resolve(null);
       } catch {
@@ -44,6 +47,27 @@ function request<T>(db: IDBDatabase, mode: IDBTransactionMode, run: (store: IDBO
       resolve(undefined);
     }
   });
+}
+
+/**
+ * Deletes what has expired, once per session when the store opens: an entry is otherwise only
+ * dropped when it's asked for again, and most (a post's likes and comments, a profile visited
+ * once) never are.
+ */
+function sweepExpired(db: IDBDatabase): void {
+  try {
+    const now = Date.now();
+    const req = db.transaction(STORE, 'readwrite').objectStore(STORE).openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) return;
+      const expires = (cursor.value as Entry | undefined)?.expires;
+      if (typeof expires === 'number' && expires < now) cursor.delete();
+      cursor.continue();
+    };
+  } catch {
+    // Nothing to sweep, or no room to: the next session tries again.
+  }
 }
 
 /** A value kept with `putCached`, or undefined when there's none or it has expired. Never throws. */

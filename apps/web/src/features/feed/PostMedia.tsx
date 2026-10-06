@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon';
 import { usePauseWhenOffscreen } from '../../components/usePauseWhenOffscreen';
 import { inlineThumbnailSize, useAttachmentUrl } from '../../matrix/hooks/useAttachmentUrl';
 import { AttachmentLightbox } from '../messaging/AttachmentLightbox';
-import { attachmentMxc, type PostAttachment } from '../../matrix/postMedia';
+import { attachmentMxc, POST_MEDIA_PX, type PostAttachment } from '../../matrix/postMedia';
 import { TaggedImageOverlay } from './ImageTags';
 import './PostMedia.css';
 
@@ -11,9 +11,6 @@ function ratioStyle(attachment: PostAttachment): CSSProperties | undefined {
   const { w, h } = attachment.info;
   return w && h ? { aspectRatio: `${w} / ${h}` } : undefined;
 }
-
-/** About the widest a post's image is drawn, for its thumbnail. */
-const POST_MEDIA_PX = 600;
 
 function MediaItem({ attachment, single }: { attachment: PostAttachment; single: boolean }) {
   // An encrypted attachment is fetched and decrypted here with the key from the post itself.

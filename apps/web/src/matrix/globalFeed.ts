@@ -15,6 +15,7 @@ import { getOwnProfileRoomId, PROFILE_ROOM_TYPE, readProfileFollows, readProfile
 import { isListedInDirectory } from './spaceDirectory';
 import { ensurePeerRoomReadable, fetchPeers, type Peer } from './peers';
 import { serverOfUserId } from './homeServer';
+import { getCached, putCached } from './deviceCache';
 
 /**
  * The global feed's reading side: every place a post can come from, gathered without joining
@@ -267,37 +268,58 @@ export async function listDirectory(
 
 /** How long a peer's directory is reused before it's read again. */
 const PEER_DIRECTORY_TTL_MS = 5 * 60_000;
-const peerDirectories = new Map<string, { at: number; promise: Promise<{ spaces: PublicSpace[]; profiles: DirectoryProfile[] }> }>();
+/** How long a copy kept on the device may still be shown while a fresh one is read. */
+const PEER_DIRECTORY_STALE_MS = 24 * 60 * 60_000;
+type PeerDirectory = { spaces: PublicSpace[]; profiles: DirectoryProfile[] };
+const peerDirectories = new Map<string, { at: number; promise: Promise<PeerDirectory> }>();
+
+async function readPeerDirectory(mx: MatrixClient, server: string): Promise<PeerDirectory> {
+  const spaces: PublicSpace[] = [];
+  const profiles: DirectoryProfile[] = [];
+  let since: string | undefined;
+  for (let page = 0; page < MAX_DIRECTORY_PAGES; page += 1) {
+    const response = await mx.publicRooms({
+      server,
+      limit: DIRECTORY_PAGE_SIZE,
+      since,
+      filter: { room_types: [RoomType.Space, PROFILE_ROOM_TYPE as RoomType] },
+    });
+    response.chunk.forEach((entry) => {
+      const space = toPublicSpace(entry);
+      if (space) spaces.push({ ...space, server });
+      const profile = toDirectoryProfile(entry);
+      if (profile) profiles.push({ ...profile, server });
+    });
+    since = response.next_batch;
+    if (!since || (spaces.length >= MAX_PUBLIC_SPACES && profiles.length >= MAX_PROFILES)) break;
+  }
+  return { spaces: spaces.slice(0, MAX_PUBLIC_SPACES), profiles: profiles.slice(0, MAX_PROFILES) };
+}
 
 /**
  * One federated instance's public Spaces and profile feeds, from its room directory read over
  * federation (docs/federation.md), under the same caps as this server's own. Each is tagged with
  * the peer's server name. Reused for five minutes; a peer that doesn't answer has none.
+ *
+ * It's the slowest read the feed makes (several pages, each crossing federation), and a directory
+ * changes slowly, so it's also kept on the device (deviceCache.ts): a copy up to a day old is used
+ * at once, and a fresh one read behind it for next time. Only peers that are still approved are
+ * asked for (listPeerDirectories), so a removed peer's kept copy is never used.
  */
-export function listPeerDirectory(mx: MatrixClient, server: string): Promise<{ spaces: PublicSpace[]; profiles: DirectoryProfile[] }> {
+export function listPeerDirectory(mx: MatrixClient, server: string): Promise<PeerDirectory> {
   const known = peerDirectories.get(server);
   if (known && Date.now() - known.at < PEER_DIRECTORY_TTL_MS) return known.promise;
+  const key = `peer-directory:${server}`;
+  const fresh = () =>
+    readPeerDirectory(mx, server).then((directory) => {
+      void putCached(key, { at: Date.now(), directory }, PEER_DIRECTORY_STALE_MS);
+      return directory;
+    });
   const promise = (async () => {
-    const spaces: PublicSpace[] = [];
-    const profiles: DirectoryProfile[] = [];
-    let since: string | undefined;
-    for (let page = 0; page < MAX_DIRECTORY_PAGES; page += 1) {
-      const response = await mx.publicRooms({
-        server,
-        limit: DIRECTORY_PAGE_SIZE,
-        since,
-        filter: { room_types: [RoomType.Space, PROFILE_ROOM_TYPE as RoomType] },
-      });
-      response.chunk.forEach((entry) => {
-        const space = toPublicSpace(entry);
-        if (space) spaces.push({ ...space, server });
-        const profile = toDirectoryProfile(entry);
-        if (profile) profiles.push({ ...profile, server });
-      });
-      since = response.next_batch;
-      if (!since || (spaces.length >= MAX_PUBLIC_SPACES && profiles.length >= MAX_PROFILES)) break;
-    }
-    return { spaces: spaces.slice(0, MAX_PUBLIC_SPACES), profiles: profiles.slice(0, MAX_PROFILES) };
+    const kept = await getCached<{ at: number; directory: PeerDirectory }>(key);
+    if (!kept) return fresh();
+    if (Date.now() - kept.at >= PEER_DIRECTORY_TTL_MS) void fresh().catch(() => undefined);
+    return kept.directory;
   })().catch(() => ({ spaces: [], profiles: [] }));
   peerDirectories.set(server, { at: Date.now(), promise });
   return promise;

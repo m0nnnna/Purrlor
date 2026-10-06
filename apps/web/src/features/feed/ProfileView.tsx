@@ -7,7 +7,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { openDirectMessage } from '../../matrix/directMessages';
 import { setFollowing } from '../../matrix/follows';
 import { readPost } from '../../matrix/feed';
-import { filterPosts } from '../../matrix/globalFeed';
+import { filterPosts, type GlobalPost } from '../../matrix/globalFeed';
 import { useExtendedProfile } from '../../matrix/hooks/useExtendedProfile';
 import { useFollows } from '../../matrix/hooks/useFollows';
 import { useGlobalFeed } from '../../matrix/hooks/useGlobalFeed';
@@ -55,7 +55,9 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const isMe = userId === myUserId;
   const setProfileUserId = useSetAtom(profileUserIdAtom);
   // This person's profile feed is read directly, even past the directory caps.
-  const feed = useGlobalFeed(true, { users: [userId], spaces: [] });
+  // Their posts as last shown (or as the feed has them) are there at once while they're read again.
+  const [snapshot] = useState(() => ({ key: `profile:${userId}`, keep: (post: GlobalPost) => post.source.owner === userId }));
+  const feed = useGlobalFeed(true, { users: [userId], spaces: [] }, { snapshot });
   const follows = useFollows();
   const targets = useComposerTargets(feed.publicSpaceIds);
   const { profile: extended } = useExtendedProfile(userId);
@@ -392,7 +394,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       </>
                     )}
 
-                    {tab !== 'likes' && feed.loading && <PostSkeletons count={2} />}
+                    {tab !== 'likes' && feed.loading && posts.length === 0 && <PostSkeletons count={2} />}
                     {tab !== 'likes' && (feed.loading || feed.loadingMore) && (
                       <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
                     )}

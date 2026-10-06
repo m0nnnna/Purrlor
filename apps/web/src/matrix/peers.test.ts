@@ -7,6 +7,7 @@ import { publicPagePath } from './publicWeb';
 import { browsePublicSpaces, joinPublicRoom } from './directory';
 import { listPeerDirectory, loadUserProfileSource } from './globalFeed';
 
+vi.mock('./deviceCache', () => ({ getCached: vi.fn(async () => undefined), putCached: vi.fn(async () => undefined) }));
 vi.mock('./openIdToken', () => ({ getOpenIdTokenCached: async () => ({ access_token: 'tok', matrix_server_name: 'purr.example' }) }));
 
 const PEERS = { peers: [{ serverName: 'cats.example', name: 'Cats', url: 'https://cats.example' }] };
@@ -184,5 +185,26 @@ describe('peers’ directories', () => {
     expect(publicRooms).toHaveBeenCalledWith(expect.objectContaining({ server: 'cats.example' }));
     await joinPublicRoom(mx, '!s:cats.example', 'cats.example');
     expect(joinRoom).toHaveBeenCalledWith('!s:cats.example', { viaServers: ['cats.example'] });
+  });
+});
+
+describe('a peer’s directory kept on the device', () => {
+  const kept = new Map<string, unknown>();
+  beforeEach(() => kept.clear());
+
+  it('shows a kept copy at once and reads a fresh one behind it once it’s old', async () => {
+    const { getCached, putCached } = await import('./deviceCache');
+    vi.mocked(getCached).mockImplementation(async (key: string) => kept.get(key) as never);
+    vi.mocked(putCached).mockImplementation(async (key: string, value: unknown) => void kept.set(key, value));
+    const old = { spaces: [], profiles: [{ roomId: '!old:dogs.example', name: 'Old', server: 'dogs.example' }] };
+    kept.set('peer-directory:dogs.example', { at: Date.now() - 60 * 60_000, directory: old });
+    const publicRooms = vi.fn().mockResolvedValue({
+      chunk: [{ room_id: '!new:dogs.example', name: 'New', room_type: 'xyz.nekous.profile', world_readable: true, num_joined_members: 1, guest_can_join: false }],
+    });
+    const dir = await listPeerDirectory({ publicRooms } as unknown as MatrixClient, 'dogs.example');
+    expect(dir).toEqual(old);
+    await vi.waitFor(() =>
+      expect((kept.get('peer-directory:dogs.example') as { directory: typeof old }).directory.profiles[0].roomId).toBe('!new:dogs.example')
+    );
   });
 });

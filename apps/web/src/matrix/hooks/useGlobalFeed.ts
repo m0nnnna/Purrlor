@@ -24,6 +24,8 @@ import {
   type GlobalPost,
 } from '../globalFeed';
 import { fetchPeers } from '../peers';
+import { loadSnapshot, MAIN_FEED_SNAPSHOT, saveSnapshot, snapshotInMemory, type FeedSnapshot } from '../feedSnapshot';
+import { warmPostMedia } from '../mediaWarm';
 
 export type GlobalFeed = {
   /** Every post from every readable source. Views narrow it with `filterPosts`. */
@@ -57,6 +59,28 @@ export type GlobalFeed = {
 export type Pinned = { users: string[]; spaces: string[] };
 const NOTHING_PINNED: Pinned = { users: [], spaces: [] };
 
+/**
+ * Where a view keeps the timeline it last showed (feedSnapshot.ts), and which posts are its own:
+ * a profile keeps only that person's. A view with none of its own yet starts from the main feed's,
+ * narrowed to `keep`.
+ */
+export type SnapshotOptions = { key: string; keep?: (post: GlobalPost) => boolean };
+
+function initialSnapshot(snapshot: SnapshotOptions | undefined): FeedSnapshot | undefined {
+  if (!snapshot) return undefined;
+  const own = snapshotInMemory(snapshot.key);
+  if (own) return own;
+  const main = snapshot.keep && snapshotInMemory(MAIN_FEED_SNAPSHOT);
+  if (!main || !snapshot.keep) return undefined;
+  const posts = main.posts.filter(snapshot.keep);
+  return posts.length ? { ...main, posts } : undefined;
+}
+
+/** How long the timeline waits to settle before it's kept again. */
+const SNAPSHOT_SAVE_DELAY_MS = 1500;
+/** Posts near the top whose pictures are fetched ahead of the reader (mediaWarm.ts). */
+const WARM_POSTS = 20;
+
 /** How often feeds this client isn't in are asked for new posts. */
 const NEW_POSTS_CHECK_MS = 60_000;
 
@@ -70,8 +94,15 @@ const NEW_POSTS_CHECK_MS = 60_000;
  *
  * `paused`: kept loaded but out of sight (the feed stays mounted behind a chat, MainPane.tsx), so
  * the periodic check for new posts waits, and runs as soon as it's back if one came due meanwhile.
+ *
+ * `snapshot`: the view's last timeline is shown at once, from memory or the device, while the
+ * first read runs; that read then replaces it (feedSnapshot.ts).
  */
-export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PINNED, { paused = false } = {}): GlobalFeed {
+export function useGlobalFeed(
+  enabled: boolean,
+  pinnedInput: Pinned = NOTHING_PINNED,
+  { paused = false, snapshot }: { paused?: boolean; snapshot?: SnapshotOptions } = {}
+): GlobalFeed {
   const mx = useMatrixClient();
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
@@ -84,17 +115,21 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
     return { users, spaces };
   }, [pinnedKey]);
   const [directoryTruncated, setDirectoryTruncated] = useState(false);
-  const [posts, setPosts] = useState<GlobalPost[]>([]);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const snapshotKey = snapshot?.key;
+  const [initial] = useState(() => initialSnapshot(snapshot));
+  const [posts, setPosts] = useState<GlobalPost[]>(() => initial?.posts ?? []);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [publicSpaces, setPublicSpaces] = useState<{ roomId: string; name: string }[]>([]);
+  const [publicSpaces, setPublicSpaces] = useState<{ roomId: string; name: string }[]>(() => initial?.publicSpaces ?? []);
   const [directoryLoaded, setDirectoryLoaded] = useState(false);
   const [unreadableSpaces, setUnreadableSpaces] = useState(0);
   const [error, setError] = useState<string>();
   const [generation, setGeneration] = useState(0);
   const [pending, setPending] = useState<GlobalPost[]>([]);
-  const [sources, setSources] = useState<FeedSource[]>([]);
+  const [sources, setSources] = useState<FeedSource[]>(() => initial?.sources ?? []);
   const tokensRef = useRef(new Map<string, string>());
   const sourcesRef = useRef(new Map<string, FeedSource>());
   // What's shown or waiting, for telling a new post from one already there.
@@ -146,6 +181,24 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
     busyRef.current = true;
     setLoading(true);
     setError(undefined);
+    // Set once the read below has put its own posts in, after which a late snapshot mustn't.
+    let landed = false;
+
+    // Nothing in memory (the app was just opened): the device's copy, if it beats the read.
+    const keep = snapshotRef.current?.keep;
+    if (snapshotKey && !snapshotInMemory(snapshotKey)) {
+      void loadSnapshot(snapshotKey).then((kept) => {
+        if (!kept || cancelled || landed) return;
+        applyPostEdits(
+          kept.posts.map((post) => post.event),
+          kept.edits
+        );
+        const keptPosts = keep ? kept.posts.filter(keep) : kept.posts;
+        setPosts((prev) => (prev.length ? prev : keptPosts));
+        setSources((prev) => (prev.length ? prev : kept.sources));
+        setPublicSpaces((prev) => (prev.length ? prev : kept.publicSpaces));
+      });
+    }
 
     void (async () => {
       try {
@@ -232,7 +285,10 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
           if (page.nextToken) tokensRef.current.set(sources[index].roomId, page.nextToken);
         });
         merged.forEach((post) => knownIdsRef.current.add(post.eventId));
+        landed = true;
         setPosts(withEdits(merged));
+        // The pictures the reader is about to scroll to, fetched ahead (low priority).
+        void warmPostMedia(mx, (keep ? merged.filter(keep) : merged).slice(0, WARM_POSTS));
         setHasMore(tokensRef.current.size > 0);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Couldn’t load posts');
@@ -279,7 +335,17 @@ export function useGlobalFeed(enabled: boolean, pinnedInput: Pinned = NOTHING_PI
       mx.removeListener(RoomEvent.Timeline, onTimeline);
       mx.removeListener(RoomEvent.Redaction, onRedaction);
     };
-  }, [mx, enabled, generation, withEdits, addArrivals]);
+  }, [mx, enabled, generation, withEdits, addArrivals, snapshotKey]);
+
+  // What's shown is kept for next time, once it has settled.
+  useEffect(() => {
+    if (!snapshotKey || loading || posts.length === 0) return undefined;
+    const timer = setTimeout(() => {
+      const keep = snapshotRef.current?.keep;
+      saveSnapshot(snapshotKey, { sources, posts: keep ? posts.filter(keep) : posts, publicSpaces }, editsRef.current);
+    }, SNAPSHOT_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [snapshotKey, loading, posts, sources, publicSpaces]);
 
   const loadMore = useCallback(() => {
     if (busyRef.current || tokensRef.current.size === 0) return;
