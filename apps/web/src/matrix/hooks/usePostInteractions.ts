@@ -93,8 +93,11 @@ const EMPTY: State = {
  * costs the same up front. In a feed room you've joined, a new like or comment re-reads the newest
  * page and merges it in, keeping anything older already loaded. A feed you haven't joined is a
  * snapshot, like its posts.
+ *
+ * `fresh` (a post's own page): the kept copy still shows at once, but the server is always asked
+ * too. That's where a notification of a new comment leads, and the kept copy can predate it.
  */
-export function usePostInteractions(roomId: string, postId: string, ownerId: string, postTs: number) {
+export function usePostInteractions(roomId: string, postId: string, ownerId: string, postTs: number, { fresh = false } = {}) {
   const mx = useMatrixClient();
   const [state, setState] = useState<State>(() => known.get(postId)?.state ?? EMPTY);
   const [loaded, setLoaded] = useState(false);
@@ -148,12 +151,21 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
     let current = true;
     const use = (kept: Kept) => {
       setState(kept.state);
-      if (Date.now() - kept.at >= FRESH_MS) return false;
+      if (fresh || Date.now() - kept.at >= FRESH_MS || changedSince(kept.at)) return false;
       answered.current = true;
       answeredAt.current = kept.at;
       setLoaded(true);
       return true;
     };
+    // Live updates only reach a card while it's on screen: a like or comment that came in through
+    // sync while it wasn't (the one a notification is about, say) would be missing from a kept
+    // copy that's otherwise still fresh. In a feed room you're in, that shows in its timeline.
+    const changedSince = (at: number) =>
+      !!mx
+        .getRoom(roomId)
+        ?.getLiveTimeline()
+        .getEvents()
+        .some((event) => event.getTs() > at && (event.getRelation()?.event_id === postId || event.getType() === EventType.RoomRedaction));
     const inMemory = known.get(postId);
     setState(EMPTY);
     if (inMemory) {
@@ -168,6 +180,8 @@ export function usePostInteractions(roomId: string, postId: string, ownerId: str
       current = false;
       alive.current = false;
     };
+    // `fresh` is fixed for a card's life; `mx` and `roomId` change only with `reload`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId, reload]);
 
   // Kept once the server has answered, and again after each change.

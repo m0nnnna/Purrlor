@@ -100,7 +100,7 @@ export function InteractivePost({
   // ID in when it's confirmed (useGlobalFeed.ts), and these work again.
   const confirming = postId.startsWith('~');
   // Only a feed's owner posts in it, so the post's author is the feed's owner.
-  const interactions = usePostInteractions(roomId, postId, card.author.userId, card.ts);
+  const interactions = usePostInteractions(roomId, postId, card.author.userId, card.ts, { fresh: mode === 'page' });
   const setOpenPost = useSetAtom(openPostAtom);
   const onPage = mode === 'page';
   const [open, setOpen] = useState(onPage);
