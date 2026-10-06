@@ -1,6 +1,7 @@
 import type { MatrixClient, Room } from 'matrix-js-sdk';
 import { SPACE_NEWS_EVENT } from './spaceNews';
 import { isRemoteUser } from './homeServer';
+import type { MentionGroup } from './messageFormatting';
 
 /**
  * Named roles over Matrix's raw power levels. Matrix has no role objects of its own, only an
@@ -77,6 +78,23 @@ export function readSpaceRoles(space: Room | null | undefined): RoleLevel[] {
 export function roleFor(powerLevel: number, roles: RoleLevel[] = ROLE_LEVELS): RoleLevel {
   const sorted = [...roles].sort((a, b) => b.value - a.value);
   return sorted.find((role) => powerLevel >= role.value) ?? sorted[sorted.length - 1];
+}
+
+/**
+ * The roles that can be @-mentioned in a room, each with who holds it: "@Moderators" (or
+ * "@Moderator") mentions everyone at that tier, the same people the member list groups under it.
+ * Member is left out (that's `@everyone`, which takes the power to mention the room), and so is a
+ * role nobody here holds. Pure.
+ */
+export function roleMentionGroups(members: { userId: string; powerLevel: number }[], roles: RoleLevel[]): MentionGroup[] {
+  return roles
+    .filter((role) => role.id !== 'member')
+    .map((role) => ({
+      id: role.id,
+      names: [...new Set([role.pluralLabel, role.label])],
+      userIds: members.filter((member) => roleFor(member.powerLevel, roles).id === role.id).map((member) => member.userId),
+    }))
+    .filter((group) => group.userIds.length > 0);
 }
 
 /** The custom roles as stored, for saving an edited list. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMessageFormatting, parseFormattedBodyEmotes } from './messageFormatting';
+import { buildMessageFormatting, parseFormattedBodyEmotes, type MentionGroup } from './messageFormatting';
 import type { Emote } from './emotes';
 
 const EMOTES: Emote[] = [{ shortcode: 'blob', mxcUrl: 'mxc://example.org/blob' }];
@@ -172,5 +172,48 @@ describe('parseFormattedBodyEmotes', () => {
     // The shortcode charset this app allows never actually includes "&", but a foreign client's
     // pack isn't bound by that — decoding still shouldn't crash, and the colons still get trimmed.
     expect(parseFormattedBodyEmotes(html)).toEqual([{ shortcode: '&cat&', mxcUrl: 'mxc://example.org/x' }]);
+  });
+});
+
+describe('@everyone and role mentions', () => {
+  const MODS: MentionGroup = { id: 'moderator', names: ['Moderators', 'Moderator'], userIds: ['@a:x', '@b:x'] };
+
+  it.each(['@everyone', '@everynyan', '@Everyone', '@room'])('treats %s as a mass-mention when permitted', (word) => {
+    const result = buildMessageFormatting(`${word} dinner`, [], [], true);
+    expect(result.mentionsRoom).toBe(true);
+    expect(result.formattedBody).toBe(`<strong>${word}</strong> dinner`);
+  });
+
+  it('needs the power to mention the room for @everyone too', () => {
+    expect(buildMessageFormatting('@everyone dinner', [], [], false).mentionsRoom).toBe(false);
+  });
+
+  it('does not take @everyoneelse or a user ID for @everyone', () => {
+    expect(buildMessageFormatting('@everyoneelse hi', [], [], true).mentionsRoom).toBe(false);
+    expect(buildMessageFormatting('@everyone:cats.example hi', [], [], true).mentionsRoom).toBe(false);
+  });
+
+  it('mentions everyone holding a role, by either of its names', () => {
+    for (const text of ['@Moderators help', 'help @moderator']) {
+      const result = buildMessageFormatting(text, [], [], false, [MODS]);
+      expect(result.mentionedUserIds).toEqual(['@a:x', '@b:x']);
+      expect(result.formattedBody).toContain('<strong>');
+    }
+  });
+
+  it('merges a role mention with a person mentioned by name', () => {
+    const result = buildMessageFormatting('@Moderators and @Cy', [], [{ userId: '@c:x', displayName: 'Cy' }], false, [MODS]);
+    expect(result.mentionedUserIds).toEqual(['@a:x', '@b:x', '@c:x']);
+  });
+
+  it('does not mention a role inside a code span', () => {
+    const result = buildMessageFormatting('`@Moderators`', [], [], false, [MODS]);
+    expect(result.mentionedUserIds).toEqual([]);
+  });
+
+  it('ignores a role nobody holds', () => {
+    const result = buildMessageFormatting('@Helpers', [], [], false, [{ id: 'custom:h', names: ['Helpers'], userIds: [] }]);
+    expect(result.mentionedUserIds).toEqual([]);
+    expect(result.formattedBody).toBeUndefined();
   });
 });

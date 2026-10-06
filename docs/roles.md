@@ -81,6 +81,15 @@ The sync raises each to moderator (50) in that channel, or keeps their Space lev
 and never demotes them there. Taking someone off the list lets the next pass take the level back.
 They also count as moderators for a moderators-only channel's members.
 
+## Mentioning a role
+
+In a channel, `@Moderators` (or `@Moderator`, any case) mentions everyone holding that role there:
+the same people the member list groups under it, sent as ordinary `m.mentions.user_ids`, since
+Matrix has no role mentions of its own. Anyone can mention a role, and the composer offers each role
+someone holds (`roleMentionGroups` in `roles.ts`). Member isn't one: that's `@everyone`, which (like
+`@everynyan` and `@room`) is `m.mentions.room` and takes the room's `notifications.room` level (50 by
+default). Only `@room` also notifies older clients that predate `m.mentions`.
+
 ## Known limits
 
 - One role per person, as above.
@@ -88,3 +97,5 @@ They also count as moderators for a moderators-only channel's members.
   whatever the last Purrlor pass left.
 - Changes land when an admin or moderator able to make them has Purrlor open (the same as the rest
   of the role sync).
+- A role mention is a mention of the people holding it when it was sent; someone given the role
+  later isn't notified by an earlier one. Other Matrix apps show it as plain text.

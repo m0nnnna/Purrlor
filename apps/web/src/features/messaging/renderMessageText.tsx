@@ -3,11 +3,14 @@ import type { RoomMember } from 'matrix-js-sdk';
 import { mergeByShortcode, type Emote } from '../../matrix/emotes';
 import { HASHTAG_PATTERN, normalizeTag } from '../../matrix/hashtags';
 import {
+  findGroupMentions,
   findMentions,
   mentionCandidatesFor,
   mentionText,
   parseFormattedBodyEmotes,
   parseFormattedBodyMentions,
+  ROOM_MENTION_PATTERN,
+  type MentionGroup,
 } from '../../matrix/messageFormatting';
 import { CodeBlock } from './CodeBlock';
 import { EmoteImage } from './EmoteImage';
@@ -22,10 +25,9 @@ const SHORTCODE_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 // else here) before the single-line CODE_PATTERN gets a chance at it, so a ``` fence's content
 // never also gets inline-code/bold/italic treatment applied inside it.
 const FENCE_PATTERN = /```(\w*)\n?([\s\S]*?)```/g;
-// Rendered purely from the literal text, independent of whether the sender's own client actually
-// had permission to set `m.mentions.room` — this is cosmetic highlighting, not a claim about
-// whether it actually notified anyone.
-const ROOM_MENTION_PATTERN = /@room\b/g;
+// `@room` / `@everyone` / `@everynyan` (ROOM_MENTION_PATTERN) is rendered purely from the literal
+// text, independent of whether the sender's own client actually had permission to set
+// `m.mentions.room` — this is cosmetic highlighting, not a claim about whether it notified anyone.
 
 // Order doesn't actually matter for priority here — see the comment below on how overlap
 // resolution (by match *index*, not array order) is what makes e.g. `**bold**` win over a
@@ -101,6 +103,9 @@ export function renderMessageText(
     /** The global library's hidden mxc URLs (useHiddenLibraryImages) — filters formattedBody's
      *  own pairs the same way visibleLibraryImages already filters `emotes`. */
     hiddenMxcUrls?: Set<string>;
+    /** The roles that can be @-mentioned here (roles.ts's roleMentionGroups): `@Moderators`
+     *  lights up, as a mention of you when you hold it. */
+    mentionGroups?: MentionGroup[];
   } = {}
 ): ReactNode {
   const matches: Match[] = [];
@@ -158,6 +163,19 @@ export function renderMessageText(
       node: (
         <span key={key++} className="nu-mention nu-mention--room">
           {match[0]}
+        </span>
+      ),
+    });
+  }
+
+  for (const found of findGroupMentions(text, options.mentionGroups ?? [])) {
+    const mine = !!myUserId && found.group.userIds.includes(myUserId);
+    matches.push({
+      index: found.index,
+      length: found.length,
+      node: (
+        <span key={key++} className={mine ? 'nu-mention nu-mention--me' : 'nu-mention'}>
+          {text.slice(found.index, found.index + found.length)}
         </span>
       ),
     });

@@ -19,6 +19,8 @@ import { useRoomEmotes } from '../../matrix/hooks/useRoomEmotes';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { canMentionRoom } from '../../matrix/permissions';
+import { roleMentionGroups } from '../../matrix/roles';
+import { useRoomRoles } from '../../matrix/hooks/useSpaceRoles';
 import { slowmodeWaitMs } from '../../matrix/channelPermissions';
 import { blockedWordForOwnMessage } from '../../matrix/automod';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
@@ -91,7 +93,12 @@ export function Composer({
   const embeds = useComposerEmbeds(text, !isCommandDraft && (!encrypted || embedSettings.encrypted), encrypted);
   const lastTypingSentAtRef = useRef(0);
   const people = useMemo(() => membersAsPeople(members), [members]);
-  const mention = useMentionAutocomplete({ text, setText, textareaRef, people });
+  const roles = useRoomRoles(roomId);
+  const mentionGroups = useMemo(() => roleMentionGroups(members, roles), [members, roles]);
+  // Recomputed with `members`, which changes with the room's power levels too.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `members` is what says the levels changed
+  const roomMentionAllowed = useMemo(() => (room ? canMentionRoom(room, mx.getUserId() ?? '') : false), [room, mx, members]);
+  const mention = useMentionAutocomplete({ text, setText, textareaRef, people, groups: mentionGroups, canMentionRoom: roomMentionAllowed });
   const shortcodeAutocomplete = useShortcodeAutocomplete({ text, setText, textareaRef, emotes });
   const permissions = useChannelPermissions(room);
   const slowmodeWait = useSlowmodeWait(room, permissions.slowmodeSeconds);
@@ -214,12 +221,12 @@ export function Composer({
         } else {
           const effectiveBody = parsed?.type === 'escaped' ? parsed.text : body;
           const mentionCandidates = mention.candidates();
-          const roomMentionAllowed = room ? canMentionRoom(room, mx.getUserId() ?? '') : false;
           const { formattedBody, mentionedUserIds, mentionsRoom } = buildMessageFormatting(
             effectiveBody,
             emotes,
             mentionCandidates,
-            roomMentionAllowed
+            room ? canMentionRoom(room, mx.getUserId() ?? '') : false,
+            mentionGroups
           );
           const relatesTo = replyTo && !fileToSend ? buildReplyRelation(replyTo) : undefined;
           const linkEmbeds = await embeds.prepare(effectiveBody);

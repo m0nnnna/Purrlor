@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom, useSetAtom } from 'jotai';
 import { Avatar, nameHue } from '../../components/Avatar';
@@ -30,7 +30,8 @@ import { parsePollStart } from '../../matrix/polls';
 import { removeReaction, sendReaction } from '../../matrix/reactions';
 import { redactMessage } from '../../matrix/redaction';
 import { getReplyEventId, type ReplyTarget } from '../../matrix/replies';
-import { roleFor, type RoleLevel } from '../../matrix/roles';
+import { roleFor, roleMentionGroups, type RoleLevel } from '../../matrix/roles';
+import type { MentionGroup } from '../../matrix/messageFormatting';
 import { useSpaceRoles } from '../../matrix/hooks/useSpaceRoles';
 import { saveMessage, unsaveMessage } from '../../matrix/savedMessages';
 import { UserProfileModal } from '../profile/UserProfileModal';
@@ -262,6 +263,7 @@ const MessageRow = memo(function MessageRow({
   members,
   webhookBotId,
   roles,
+  mentionGroups,
 }: {
   mx: MatrixClient;
   room: Room;
@@ -288,6 +290,8 @@ const MessageRow = memo(function MessageRow({
   webhookBotId: string | undefined;
   /** The Space's roles, its own included (roles.ts). */
   roles: RoleLevel[];
+  /** The roles that can be @-mentioned here, with who holds each (roleMentionGroups). */
+  mentionGroups: MentionGroup[];
 }) {
   const sender = event.sender;
   const webhook = webhookProfile(event, webhookBotId);
@@ -537,6 +541,7 @@ const MessageRow = memo(function MessageRow({
             {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined, {
               formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
               hiddenMxcUrls,
+              mentionGroups,
             })}
           </div>
         ) : (
@@ -545,6 +550,7 @@ const MessageRow = memo(function MessageRow({
               {renderMessageText(String(content.body ?? ''), emotes, members, myUserId ?? undefined, {
                 formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
                 hiddenMxcUrls,
+                mentionGroups,
               })}
             </CollapsibleText>
             {firstUrl && <LinkPreviewCard url={firstUrl} />}
@@ -773,6 +779,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const parentSpace = mx.getRoom(findParentSpaceId(mx, roomId) ?? '');
   const webhookBotId = parentSpace ? readVoiceServerConfig(mx, parentSpace)?.botUserId : undefined;
   const roles = useSpaceRoles(parentSpace);
+  const mentionGroups = useMemo(() => roleMentionGroups(members, roles), [members, roles]);
   const savedEventIds = new Set(savedMessages.filter((item) => item.roomId === roomId).map((item) => item.eventId));
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null);
   const [pendingJump, setPendingJump] = useAtom(pendingJumpTargetAtom);
@@ -1203,6 +1210,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
               members={members}
               webhookBotId={webhookBotId}
               roles={roles}
+              mentionGroups={mentionGroups}
             />
             </Fragment>
           );

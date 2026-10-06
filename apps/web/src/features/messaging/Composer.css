@@ -98,6 +98,24 @@
   font-size: var(--nu-font-size-sm);
 }
 
+.nu-composer__mention-many {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.nu-composer__mention-hint {
+  margin-left: auto;
+  color: var(--nu-color-text-muted);
+}
+
 .nu-composer__mention-item--active,
 .nu-composer__mention-item:hover {
   background: var(--nu-color-bg-tertiary);

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { MatrixEvent, Room, RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
 import { Modal } from '../../components/Modal';
@@ -8,6 +9,9 @@ import { useThreadEvents } from '../../matrix/hooks/useThreads';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { Composer } from './Composer';
 import { renderMessageText } from './renderMessageText';
+import { roleMentionGroups } from '../../matrix/roles';
+import { useRoomRoles } from '../../matrix/hooks/useSpaceRoles';
+import type { MentionGroup } from '../../matrix/messageFormatting';
 import './ThreadPanel.css';
 import { CollapsibleText } from './CollapsibleText';
 
@@ -15,11 +19,13 @@ function ThreadEventRow({
   event,
   emotes,
   members,
+  mentionGroups,
   myUserId,
 }: {
   event: MatrixEvent;
   emotes: Emote[];
   members: RoomMember[];
+  mentionGroups: MentionGroup[];
   myUserId?: string;
 }) {
   const sender = event.sender;
@@ -40,6 +46,7 @@ function ThreadEventRow({
           {renderMessageText(String(content.body ?? ''), emotes, members, myUserId, {
             formattedBody: typeof content.formatted_body === 'string' ? content.formatted_body : undefined,
             hiddenMxcUrls,
+            mentionGroups,
           })}
         </CollapsibleText>
       </div>
@@ -68,6 +75,8 @@ export function ThreadPanel({
 }) {
   const mx = useMatrixClient();
   const members = useRoomMembers(room.roomId);
+  const roles = useRoomRoles(room.roomId);
+  const mentionGroups = useMemo(() => roleMentionGroups(members, roles), [members, roles]);
   const rootEventId = rootEvent.getId() ?? null;
   // Thread.events includes the root event itself as its first entry (it's the thread's own
   // opening message) — already shown above via `rootEvent`, so exclude it here to avoid
@@ -77,7 +86,7 @@ export function ThreadPanel({
   return (
     <Modal title="Thread" onClose={onClose} wide>
       <div className="nu-thread-panel">
-        <ThreadEventRow event={rootEvent} emotes={emotes} members={members} myUserId={mx.getUserId() ?? undefined} />
+        <ThreadEventRow event={rootEvent} emotes={emotes} members={members} mentionGroups={mentionGroups} myUserId={mx.getUserId() ?? undefined} />
         <div className="nu-thread-panel__divider">
           {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
         </div>
@@ -89,6 +98,7 @@ export function ThreadPanel({
               event={event}
               emotes={emotes}
               members={members}
+              mentionGroups={mentionGroups}
               myUserId={mx.getUserId() ?? undefined}
             />
           ))}

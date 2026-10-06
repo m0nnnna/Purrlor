@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
+import type { MentionGroup } from '../../matrix/messageFormatting';
 
 // Deliberately no emote-rendering cases here: EmoteImage pulls in useMediaUrl -> useMatrixClient,
 // which would need a real (or heavily faked) MatrixClient just to render a plain <img>. The
@@ -152,5 +153,22 @@ describe('renderMessageText', () => {
       const { container } = renderText(text);
       expect(container.querySelector('a.nu-message-link')).toHaveAttribute('href', 'https://example.com');
     });
+  });
+});
+
+describe('renderMessageText: @everyone and roles', () => {
+  it.each(['@everyone', '@everynyan'])('highlights %s like @room', (word) => {
+    const { container } = renderText(`${word} dinner`);
+    expect(container.querySelector('.nu-mention--room')).toHaveTextContent(word);
+  });
+
+  it('highlights a role mention, as yours when you hold the role', () => {
+    const groups: MentionGroup[] = [{ id: 'moderator', names: ['Moderators', 'Moderator'], userIds: ['@me:x'] }];
+    const mine = render(<div>{renderMessageText('@Moderators help', [], [], '@me:x', { mentionGroups: groups })}</div>);
+    expect(mine.container.querySelector('.nu-mention--me')).toHaveTextContent('@Moderators');
+    const theirs = render(<div>{renderMessageText('@moderator help', [], [], '@you:x', { mentionGroups: groups })}</div>);
+    const span = theirs.container.querySelector('.nu-mention');
+    expect(span).toHaveTextContent('@moderator');
+    expect(span).not.toHaveClass('nu-mention--me');
   });
 });

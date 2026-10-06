@@ -20,9 +20,19 @@ const ITALIC_UNDERSCORE_PATTERN = /_(?!\s)([^_\n]+?)(?<!\s)_/g;
 // MSC3952's `m.mentions.room` is the modern notify signal, but legacy clients still notify off
 // this literal text in the plain `body` (the old `@room` push-rule condition) — keeping it in
 // body as typed is what makes this interoperate with clients that predate intentional mentions.
-const ROOM_MENTION_PATTERN = /@room\b/g;
+// `@everyone` (what Discord people type) and `@everynyan` (for fun) are the same mass-mention;
+// only `@room` also notifies those legacy clients, the others rely on `m.mentions.room`.
+// Not part of a longer word or a user ID: `@roomy` and `@everyone:cats.example` are people.
+export const ROOM_MENTION_PATTERN = /(?<![\p{L}\p{N}_])@(?:room|everyone|everynyan)(?![\p{L}\p{N}_]|:[\p{L}\p{N}])/giu;
+
+/** The mass-mentions, in the order the composer's autocomplete offers them. */
+export const ROOM_MENTIONS = ['everyone', 'everynyan', 'room'] as const;
 
 export type MentionCandidate = { userId: string; displayName: string };
+
+/** A role mentioned by name, "@Moderators": a mention of everyone holding it (roles.ts's
+ *  roleMentionGroups). `names` are the ways to write it, without the "@". */
+export type MentionGroup = { id: string; names: string[]; userIds: string[] };
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,7 +42,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-type Replacement = { index: number; length: number; html: string; mentionedUserId?: string };
+type Replacement = { index: number; length: number; html: string; mentionedUserIds?: string[] };
 
 /**
  * A single combined pass over the composer's plain text that finds `:shortcode:` emotes
@@ -54,7 +64,8 @@ export function buildMessageFormatting(
   text: string,
   emotes: Emote[],
   mentions: MentionCandidate[],
-  canMentionRoom = false
+  canMentionRoom = false,
+  groups: MentionGroup[] = []
 ): { formattedBody?: string; mentionedUserIds: string[]; mentionsRoom: boolean } {
   const replacements: Replacement[] = [];
   // Unlike a @DisplayName mention, typing "@room" is never an accident someone would want
@@ -87,7 +98,19 @@ export function buildMessageFormatting(
       index: found.index,
       length: found.length,
       html: `<a href="https://matrix.to/#/${found.userId}">${escapeHtml(text.slice(found.index, found.index + found.length))}</a>`,
-      mentionedUserId: found.userId,
+      mentionedUserIds: [found.userId],
+    });
+  }
+
+  // A role mention notifies each person holding it, as an ordinary user mention: Matrix has no
+  // role mentions of its own. Pushed after the people, so a person who happens to share a role's
+  // name keeps the mention (the sort below is stable).
+  for (const found of findGroupMentions(text, groups)) {
+    replacements.push({
+      index: found.index,
+      length: found.length,
+      html: `<strong>${escapeHtml(text.slice(found.index, found.index + found.length))}</strong>`,
+      mentionedUserIds: found.group.userIds,
     });
   }
 
@@ -118,22 +141,45 @@ export function buildMessageFormatting(
     }
   }
 
-  const mentionedUserIds = [...new Set(replacements.map((r) => r.mentionedUserId).filter((id): id is string => !!id))];
-  if (replacements.length === 0) return { mentionedUserIds, mentionsRoom };
+  if (replacements.length === 0) return { mentionedUserIds: [], mentionsRoom };
 
   replacements.sort((a, b) => a.index - b.index);
 
   let html = '';
   let lastIndex = 0;
+  const mentioned = new Set<string>();
   for (const replacement of replacements) {
     if (replacement.index < lastIndex) continue; // overlapping match — keep the earlier one
+    // Only a mention that survived the overlap counts: `@Mods` inside a code span isn't one.
+    for (const userId of replacement.mentionedUserIds ?? []) mentioned.add(userId);
     html += escapeHtml(text.slice(lastIndex, replacement.index));
     html += replacement.html;
     lastIndex = replacement.index + replacement.length;
   }
   html += escapeHtml(text.slice(lastIndex));
 
-  return { formattedBody: html, mentionedUserIds, mentionsRoom };
+  return { formattedBody: html, mentionedUserIds: [...mentioned], mentionsRoom };
+}
+
+/** Where `text` mentions any of `groups` by one of its names, ignoring case. Same word edges as a
+ *  person's mention (findMentions). A group nobody holds is never a mention. */
+export function findGroupMentions(text: string, groups: MentionGroup[]): { index: number; length: number; group: MentionGroup }[] {
+  const byName = new Map<string, MentionGroup>();
+  for (const group of groups) {
+    if (group.userIds.length === 0) continue;
+    for (const name of group.names) {
+      const key = `@${name}`.toLowerCase();
+      if (name && !byName.has(key)) byName.set(key, group);
+    }
+  }
+  if (byName.size === 0 || !text.includes('@')) return [];
+  const alternatives = [...byName.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
+  const pattern = new RegExp(`${MENTION_START}(?:${alternatives.join('|')})${MENTION_END}`, 'giu');
+  return [...text.matchAll(pattern)].map((match) => ({
+    index: match.index,
+    length: match[0].length,
+    group: byName.get(match[0].toLowerCase()) as MentionGroup,
+  }));
 }
 
 // Matches only the exact shape this app's own `buildMessageFormatting` above writes, and the one

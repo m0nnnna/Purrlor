@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ROLE_LEVELS, capabilityLevel, handleFor, lowestRoleLevel, parseCustomRoles, roleFor, toStoredRoles, withCapability } from './roles';
+import {
+  ROLE_LEVELS,
+  capabilityLevel,
+  handleFor,
+  lowestRoleLevel,
+  parseCustomRoles,
+  roleFor,
+  roleMentionGroups,
+  toStoredRoles,
+  withCapability,
+} from './roles';
 
 describe('roleFor', () => {
   it('maps power levels to the highest role they reach', () => {
@@ -70,5 +80,27 @@ describe('capabilities', () => {
     const next = withCapability({ events: { 'm.room.name': 50 }, kick: 50 }, 'pin', 25);
     expect(next).toEqual({ events: { 'm.room.name': 50, 'm.room.pinned_events': 25 }, kick: 50 });
     expect((withCapability(next, 'redact', 25) as { redact?: number }).redact).toBe(25);
+  });
+});
+
+describe('roleMentionGroups', () => {
+  const roles = [...ROLE_LEVELS, { id: 'custom:h', label: 'Helper', pluralLabel: 'Helper', value: 25, custom: true }].sort(
+    (a, b) => b.value - a.value
+  );
+  const members = [
+    { userId: '@admin:x', powerLevel: 100 },
+    { userId: '@mod:x', powerLevel: 50 },
+    { userId: '@senior:x', powerLevel: 60 },
+    { userId: '@helper:x', powerLevel: 25 },
+    { userId: '@cat:x', powerLevel: 0 },
+  ];
+
+  it('groups people by the role they hold, leaving out Member and empty roles', () => {
+    expect(roleMentionGroups(members, roles)).toEqual([
+      { id: 'admin', names: ['Admins', 'Admin'], userIds: ['@admin:x'] },
+      { id: 'moderator', names: ['Moderators', 'Moderator'], userIds: ['@mod:x', '@senior:x'] },
+      { id: 'custom:h', names: ['Helper'], userIds: ['@helper:x'] },
+    ]);
+    expect(roleMentionGroups([{ userId: '@cat:x', powerLevel: 0 }], roles)).toEqual([]);
   });
 });

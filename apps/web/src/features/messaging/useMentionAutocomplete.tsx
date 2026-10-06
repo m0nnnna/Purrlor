@@ -1,13 +1,23 @@
 import { useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { RoomMember } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
-import { mentionCandidatesFor, mentionText, type MentionCandidate } from '../../matrix/messageFormatting';
+import {
+  mentionCandidatesFor,
+  mentionText,
+  ROOM_MENTIONS,
+  type MentionCandidate,
+  type MentionGroup,
+} from '../../matrix/messageFormatting';
 import './Composer.css';
 
 const MAX_MENTION_SUGGESTIONS = 8;
 
 /** Someone who can be mentioned. */
 export type MentionPerson = { userId: string; name: string; avatarUrl?: string | null };
+/** A row in the dropdown: a person, or a mention of many (`@everyone`, a role). */
+type Suggestion =
+  | { kind: 'person'; key: string; name: string; person: MentionPerson }
+  | { kind: 'many'; key: string; name: string; hint: string };
 /** "@" at the start or after whitespace, then whatever's been typed since, up to the cursor. */
 const MENTION_TRIGGER_PATTERN = /(?:^|\s)@([^\s@]*)$/;
 
@@ -17,27 +27,54 @@ const MENTION_TRIGGER_PATTERN = /(?:^|\s)@([^\s@]*)$/;
  * A name picked from the dropdown, or anyone's name, handle or user ID typed out in full after an
  * "@", is a real mention (`candidates()`): buildMessageFormatting turns it into a pill and an
  * `m.mentions` entry, which is what notifies them. An "@word" that is nobody here stays text.
+ *
+ * The chat composer also offers mentions of many: `@everyone` (and `@everynyan`, `@room`) for
+ * whoever may notify the whole room, and each role someone here holds, `@Moderators`.
  */
 export function useMentionAutocomplete({
   text,
   setText,
   textareaRef,
   people,
+  groups = [],
+  canMentionRoom = false,
 }: {
   text: string;
   setText: (value: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   people: MentionPerson[];
+  /** The roles that can be mentioned here (roles.ts's roleMentionGroups); none outside a channel. */
+  groups?: MentionGroup[];
+  /** Whether `@everyone` / `@everynyan` / `@room` are offered (permissions.ts's canMentionRoom). */
+  canMentionRoom?: boolean;
 }) {
   const [query, setQuery] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   // Display name -> user ID for every mention actually inserted via the dropdown this draft.
   const pickedRef = useRef<Map<string, string>>(new Map());
 
-  const matches =
-    query === null
-      ? []
-      : people.filter((m) => m.name.toLowerCase().includes(query.toLowerCase())).slice(0, MAX_MENTION_SUGGESTIONS);
+  const matches: Suggestion[] = [];
+  if (query !== null) {
+    const q = query.toLowerCase();
+    const many: Suggestion[] = [
+      ...(canMentionRoom
+        ? ROOM_MENTIONS.map((name) => ({ kind: 'many' as const, key: `room:${name}`, name, hint: 'Notify everyone here' }))
+        : []),
+      ...groups.map((group) => ({
+        kind: 'many' as const,
+        key: `group:${group.id}`,
+        name: group.names[0],
+        hint: group.userIds.length === 1 ? '1 person' : `${group.userIds.length} people`,
+      })),
+    ].filter((s) => s.name.toLowerCase().includes(q));
+    const persons: Suggestion[] = people
+      .filter((m) => m.name.toLowerCase().includes(q))
+      .map((person) => ({ kind: 'person', key: person.userId, name: person.name, person }));
+    // Typing the start of "everyone" or a role's name puts it first; otherwise people come first.
+    const leading = q ? many.filter((s) => s.name.toLowerCase().startsWith(q)) : [];
+    matches.push(...leading, ...persons, ...many.filter((s) => !leading.includes(s)));
+    matches.splice(MAX_MENTION_SUGGESTIONS);
+  }
 
   /** Call on every change, with the new value and where the cursor is. */
   const update = (value: string, cursor: number) => {
@@ -46,7 +83,7 @@ export function useMentionAutocomplete({
     setIndex(0);
   };
 
-  const select = (member: MentionPerson) => {
+  const select = (suggestion: Suggestion) => {
     const textarea = textareaRef.current;
     const cursor = textarea?.selectionStart ?? text.length;
     const match = MENTION_TRIGGER_PATTERN.exec(text.slice(0, cursor));
@@ -55,8 +92,8 @@ export function useMentionAutocomplete({
     const atIndex = cursor - match[1].length - 1;
     const before = text.slice(0, atIndex);
     const after = text.slice(cursor);
-    const inserted = `${mentionText(member.name)} `;
-    pickedRef.current.set(member.name, member.userId);
+    const inserted = `${mentionText(suggestion.name)} `;
+    if (suggestion.kind === 'person') pickedRef.current.set(suggestion.name, suggestion.person.userId);
     setText(`${before}${inserted}${after}`);
     setQuery(null);
     requestAnimationFrame(() => {
@@ -111,19 +148,31 @@ export function useMentionAutocomplete({
   const dropdown =
     query !== null && matches.length > 0 ? (
       <div className="nu-composer__mentions" data-nu-role="composer-mentions">
-        {matches.map((member, i) => (
+        {matches.map((suggestion, i) => (
           <button
-            key={member.userId}
+            key={suggestion.key}
             type="button"
             className={i === index ? 'nu-composer__mention-item nu-composer__mention-item--active' : 'nu-composer__mention-item'}
             data-nu-role="composer-mention-item"
             onMouseDown={(evt) => {
               evt.preventDefault(); // keep textarea focus so select can read its selection
-              select(member);
+              select(suggestion);
             }}
           >
-            <Avatar name={member.name} mxcUrl={member.avatarUrl ?? null} size={18} />
-            <span>{member.name}</span>
+            {suggestion.kind === 'person' ? (
+              <>
+                <Avatar name={suggestion.name} mxcUrl={suggestion.person.avatarUrl ?? null} size={18} />
+                <span>{suggestion.name}</span>
+              </>
+            ) : (
+              <>
+                <span className="nu-composer__mention-many" aria-hidden="true">
+                  @
+                </span>
+                <span>{mentionText(suggestion.name)}</span>
+                <span className="nu-composer__mention-hint">{suggestion.hint}</span>
+              </>
+            )}
           </button>
         ))}
       </div>
