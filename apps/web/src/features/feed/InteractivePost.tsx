@@ -44,6 +44,9 @@ import { useMyPinnedPost } from './usePinnedPost';
 /** A timeline shows at most this many of a post's newest comments; the rest are on its page. */
 export const INLINE_COMMENT_LIMIT = 3;
 
+/** Why an action on a post you just made waits a moment (see `confirming` below). */
+const STILL_POSTING = 'Still posting — try again in a moment.';
+
 type InteractivePostProps = Omit<ComponentProps<typeof PostCard>, 'actions' | 'footer'> & {
   /** The feed room the post lives in, and its event ID — where likes and comments go. */
   roomId: string;
@@ -91,6 +94,11 @@ export function InteractivePost({
   ...card
 }: InteractivePostProps) {
   const mx = useMatrixClient();
+  // A post you just made has a temporary "~" ID until the server confirms it (a moment). Anything
+  // that points at it — an edit, a delete, a like, a comment, a pin — waits for the real one:
+  // matrix-js-sdk throws on a temporary ID ("Cannot call getPendingEvents…"). The feed swaps the
+  // ID in when it's confirmed (useGlobalFeed.ts), and these work again.
+  const confirming = postId.startsWith('~');
   // Only a feed's owner posts in it, so the post's author is the feed's owner.
   const interactions = usePostInteractions(roomId, postId, card.author.userId, card.ts);
   const setOpenPost = useSetAtom(openPostAtom);
@@ -170,6 +178,10 @@ export function InteractivePost({
     evt.preventDefault();
     const body = draft.trim();
     if (savingEdit || isOverLimit(body) || (!body && !content.attachments?.length && !content.repostOf)) return;
+    if (confirming) {
+      setError(STILL_POSTING);
+      return;
+    }
     setSavingEdit(true);
     setError(undefined);
     try {
@@ -258,6 +270,10 @@ export function InteractivePost({
 
   const handleDelete = async () => {
     if (!onDelete) return;
+    if (confirming) {
+      setNotice(STILL_POSTING);
+      return;
+    }
     const ok = await confirm({
       title: 'Delete post',
       message: 'Delete this post for everyone? Its likes and comments go with it. This can’t be undone.',
@@ -275,6 +291,10 @@ export function InteractivePost({
   const handleLike = async () => {
     if (!canInteract) {
       setNotice(cannotInteractReason);
+      return;
+    }
+    if (confirming) {
+      setNotice(STILL_POSTING);
       return;
     }
     setError(undefined);
@@ -302,6 +322,10 @@ export function InteractivePost({
   // may go (the post's own Space). Quote is the dialog, for adding words or picking a place.
   const handleRepost = async () => {
     if (!repost || reposting) return;
+    if (confirming) {
+      setNotice(STILL_POSTING);
+      return;
+    }
     const target = repost.targets.find((t) => t.id === GLOBAL_TARGET_ID) ?? repost.targets[0];
     if (!target) return;
     setReposting(true);
@@ -438,6 +462,10 @@ export function InteractivePost({
   };
 
   const handlePin = async () => {
+    if (confirming) {
+      setNotice(STILL_POSTING);
+      return;
+    }
     setError(undefined);
     try {
       await pin(isPinned ? null : { roomId, eventId: postId });
@@ -662,7 +690,11 @@ export function InteractivePost({
               onOpenProfile={card.onOpenProfile}
               emotes={card.emotes}
               members={card.members}
-              onAdd={interactions.addComment}
+              onAdd={
+                confirming
+                  ? () => Promise.reject(new Error(STILL_POSTING))
+                  : interactions.addComment
+              }
               onDelete={interactions.removeComment}
               hasOlder={!!interactions.older}
               loadingOlder={interactions.loadingOlder}

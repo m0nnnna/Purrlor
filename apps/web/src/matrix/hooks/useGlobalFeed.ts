@@ -384,12 +384,32 @@ export function useGlobalFeed(
       setPosts((prev) => prev.filter((post) => post.eventId !== redacted));
       setPending((prev) => prev.filter((post) => post.eventId !== redacted));
     };
+    // Your own new post arrives with a temporary "~" ID, and the server's confirmation changes
+    // that event's ID in place, with no new Timeline event. The post here keeps its ID as a
+    // string, so it's swapped too: liking, commenting on, editing or deleting a post by its
+    // temporary ID throws in matrix-js-sdk ("Cannot call getPendingEvents…").
+    const onLocalEcho = (event: MatrixEvent, _room: Room, oldEventId?: string) => {
+      const eventId = event.getId();
+      if (!oldEventId || !eventId || oldEventId === eventId) return;
+      knownIdsRef.current.add(eventId);
+      const swap = (list: GlobalPost[]) => {
+        if (!list.some((post) => post.eventId === oldEventId)) return list;
+        // Without the confirmed copy, in case it also came in on its own.
+        return list
+          .filter((post) => post.eventId !== eventId)
+          .map((post) => (post.eventId === oldEventId ? { ...post, eventId } : post));
+      };
+      setPosts(swap);
+      setPending(swap);
+    };
     mx.on(RoomEvent.Timeline, onTimeline);
     mx.on(RoomEvent.Redaction, onRedaction);
+    mx.on(RoomEvent.LocalEchoUpdated, onLocalEcho);
     return () => {
       cancelled = true;
       mx.removeListener(RoomEvent.Timeline, onTimeline);
       mx.removeListener(RoomEvent.Redaction, onRedaction);
+      mx.removeListener(RoomEvent.LocalEchoUpdated, onLocalEcho);
     };
   }, [mx, enabled, generation, withEdits, addArrivals, snapshotKey]);
 
