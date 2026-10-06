@@ -12,6 +12,7 @@ import { EmbedList } from '../messaging/EmbedCard';
 import type { StoredEmbed } from '../../matrix/embeds';
 import { useEmbedSettings } from '../../matrix/embedSettings';
 import { extractFirstUrl, renderMessageText } from '../messaging/renderMessageText';
+import { renderPostMarkdown } from './renderPostMarkdown';
 import { formatPostTime } from './formatPostTime';
 import { PostMedia } from './PostMedia';
 import { useOpenHashtag } from './useOpenHashtag';
@@ -164,7 +165,9 @@ function RepostQuote({
       </header>
       <WarningGate warning={repost.warning}>
         {repost.body && (
-          <div className="nu-post__text">{renderMessageText(repost.body, [], [], myUserId, { onHashtag: openHashtag })}</div>
+          <div className="nu-post__text">
+            {renderPostMarkdown(repost.body, (text) => renderMessageText(text, [], [], myUserId, { onHashtag: openHashtag }))}
+          </div>
         )}
         {repost.attachments && <PostMedia attachments={repost.attachments} sensitive={repost.sensitive} />}
         <PostLinkPreview content={repost} eventKey={`repost|${repost.eventId}`} />
@@ -251,11 +254,13 @@ export function PostCard({
             {content.body && (
               // No keyboard handler needed here: the time button is the keyboard route to the same page.
               <div className={onOpen ? 'nu-post__text nu-post__text--openable' : 'nu-post__text'} onClick={openFromText}>
-                {renderMessageText(content.body, emotes, members, myUserId, {
-                  onHashtag: openHashtag,
-                  formattedBody: content.formatted_body,
-                  hiddenMxcUrls,
-                })}
+                {renderPostMarkdown(content.body, (text) =>
+                  renderMessageText(text, emotes, members, myUserId, {
+                    onHashtag: openHashtag,
+                    formattedBody: content.formatted_body,
+                    hiddenMxcUrls,
+                  })
+                )}
               </div>
             )}
             {content.attachments && <PostMedia attachments={content.attachments} sensitive={content.sensitive} />}

@@ -2,6 +2,7 @@ import { EmbedDisplaySetting } from './EmbedSettings';
 import { FeedBackgroundSetting } from './FeedBackgroundSetting';
 import { useState, type ChangeEvent } from 'react';
 import { getStoredThemeCss, saveThemeCss } from './theme';
+import { FOXY_CSS } from './themes/foxy';
 import { HALLOWEEN_CSS } from './themes/halloween';
 import './AppearanceSettings.css';
 
@@ -49,6 +50,11 @@ const THEME_PRESETS: { name: string; swatch: [string, string]; css: string }[] =
     name: 'Lola',
     swatch: ['#0a0508', '#ff1f8f'],
     css: `:root {\n  --nu-color-bg-app: #0a0508;\n  --nu-color-bg-primary: #120a10;\n  --nu-color-bg-secondary: #180e15;\n  --nu-color-bg-tertiary: #24141e;\n  --nu-color-bg-elevated: #2e1a27;\n\n  --nu-color-text-primary: #fff3f8;\n  --nu-color-text-secondary: #e2a8c4;\n  --nu-color-text-muted: #8f6577;\n  --nu-color-text-link: #ff7ab8;\n\n  --nu-color-accent: #ff1f8f;\n  --nu-color-accent-hover: #ff4aa8;\n  --nu-color-accent-2: #ff8ec4;\n  --nu-color-accent-2-hover: #ffb3d9;\n  --nu-color-on-accent: #fff3f8;\n\n  --nu-color-danger: #ff2d55;\n  --nu-color-danger-2: #ff5c7a;\n\n  --nu-color-border: #3a1f2c;\n  --nu-color-backdrop: rgba(0, 0, 0, 0.75);\n  --nu-color-backdrop-strong: rgba(0, 0, 0, 0.92);\n}`,
+  },
+  {
+    name: 'Foxy',
+    swatch: ['#fffaf5', '#e8590c'],
+    css: FOXY_CSS,
   },
   {
     name: 'Halloween',

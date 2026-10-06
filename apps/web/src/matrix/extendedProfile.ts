@@ -26,6 +26,8 @@ const PROFILE_KEYS = {
   profileRoom: 'xyz.nekous.profile_room',
   // Your word for "typing" in the typing indicator — "Alice is yelling…" (typingVerb.ts).
   typingVerb: 'xyz.nekous.typing_verb',
+  // The color your name shows in chat, `#rrggbb` (nameColor.ts). Unset: a hue picked from your name.
+  nameColor: 'xyz.nekous.name_color',
   // The post pinned to the top of your profile: `{ room_id, event_id }`. Only a post anyone can
   // read (Global, or a public Space) can be pinned, since the profile is public.
   pinnedPost: 'xyz.nekous.pinned_post',
@@ -44,6 +46,7 @@ export type ExtendedProfile = {
   avatarAnimated?: boolean;
   profileRoom?: string;
   typingVerb?: string;
+  nameColor?: string;
   pinnedPost?: PinnedPostRef;
 };
 
@@ -116,6 +119,7 @@ export async function getExtendedProfile(mx: MatrixClient, userId: string, { max
       avatarAnimated: raw[PROFILE_KEYS.avatarAnimated] === true,
       profileRoom: typeof raw[PROFILE_KEYS.profileRoom] === 'string' ? (raw[PROFILE_KEYS.profileRoom] as string) : undefined,
       typingVerb: typeof raw[PROFILE_KEYS.typingVerb] === 'string' ? (raw[PROFILE_KEYS.typingVerb] as string) : undefined,
+      nameColor: typeof raw[PROFILE_KEYS.nameColor] === 'string' ? (raw[PROFILE_KEYS.nameColor] as string) : undefined,
       pinnedPost: readPinnedPost(raw[PROFILE_KEYS.pinnedPost]),
     };
     remember(userId, profile);
@@ -155,7 +159,7 @@ export async function getProfileRoomOf(mx: MatrixClient, userId: string, { fresh
  *  exist wherever a bulk merge doesn't. */
 export async function updateExtendedProfile(
   mx: MatrixClient,
-  patch: { bio?: string | null; bannerUrl?: string | null; typingVerb?: string | null }
+  patch: { bio?: string | null; bannerUrl?: string | null; typingVerb?: string | null; nameColor?: string | null }
 ): Promise<void> {
   const writes: Promise<void>[] = [];
 
@@ -179,6 +183,14 @@ export async function updateExtendedProfile(
       patch.typingVerb
         ? mx.setExtendedProfileProperty(PROFILE_KEYS.typingVerb, patch.typingVerb)
         : mx.deleteExtendedProfileProperty(PROFILE_KEYS.typingVerb).catch(() => {})
+    );
+  }
+
+  if (patch.nameColor !== undefined) {
+    writes.push(
+      patch.nameColor
+        ? mx.setExtendedProfileProperty(PROFILE_KEYS.nameColor, patch.nameColor)
+        : mx.deleteExtendedProfileProperty(PROFILE_KEYS.nameColor).catch(() => {})
     );
   }
 

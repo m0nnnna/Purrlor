@@ -41,6 +41,10 @@
   /* Which way the browser's own controls lean — checkboxes, <select> menus, date pickers,
      scrollbars. Every preset is dark; a light custom theme sets this to `light`. */
   --nu-color-scheme: dark;
+  /* How far a person's name color (their chosen one, or the hue picked from their name) is mixed
+     toward the text color before it's drawn. Those colors are pale, for dark backgrounds; a light
+     theme (Foxy) raises this so they darken enough to read. */
+  --nu-name-ink-mix: 0%;
 
   /* Role colors — a member's name in the timeline and member list takes their role's color, and
      the member list groups people under these roles (see matrix/roles.ts). */

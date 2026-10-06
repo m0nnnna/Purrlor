@@ -161,3 +161,72 @@
   color: var(--nu-color-text-secondary);
   text-align: center;
 }
+
+/* The Global feed's newest posts beside the form (LoginFeedPreview.tsx), so a visitor can see
+   what the place is like before signing up. Only when there are posts: otherwise the form stays
+   alone in the middle, as before. On a phone they follow the form down the page. */
+.nu-login:has(.nu-login__feed) {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--nu-space-6);
+}
+
+.nu-login:has(.nu-login__feed) .nu-login__form {
+  margin: 0;
+  flex: none;
+}
+
+.nu-login__feed {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+  animation: nu-rise-in 0.35s ease-out 0.1s both;
+}
+
+.nu-login__feed-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nu-space-2);
+}
+
+.nu-login__feed-title {
+  margin: 0;
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: var(--nu-font-size-lg);
+}
+
+.nu-login__feed-all {
+  color: var(--nu-color-text-link);
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+}
+
+.nu-login__feed-more {
+  align-self: center;
+  text-decoration: none;
+}
+
+.nu-login__feed .nu-post {
+  background: color-mix(in srgb, var(--nu-color-bg-primary) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+@media (min-width: 960px) {
+  .nu-login:has(.nu-login__feed) {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: calc(var(--nu-space-6) * 2);
+  }
+
+  /* The form stays in view while the posts scroll past. */
+  .nu-login:has(.nu-login__feed) .nu-login__form {
+    position: sticky;
+    top: var(--nu-space-6);
+  }
+}

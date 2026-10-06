@@ -19,6 +19,7 @@ import {
 import { handleFor } from '../../matrix/roles';
 import { formatPostTime } from '../feed/formatPostTime';
 import { renderMessageText } from '../messaging/renderMessageText';
+import { renderPostMarkdown } from '../feed/renderPostMarkdown';
 import '../feed/FeedView.css';
 import '../feed/PostMedia.css';
 import './PublicWeb.css';
@@ -123,7 +124,7 @@ function RepostQuote({ repost, authors }: { repost: PublicRepost; authors: Recor
         <AuthorLink userId={repost.author} />
         <time className="nu-post__time">{formatPostTime(repost.ts)}</time>
       </header>
-      {repost.body && <div className="nu-post__text">{renderMessageText(repost.body, toEmotes(repost.emotes))}</div>}
+      {repost.body && <div className="nu-post__text">{renderPostMarkdown(repost.body, (text) => renderMessageText(text, toEmotes(repost.emotes)))}</div>}
       {repost.attachments && <PublicMedia attachments={repost.attachments} />}
     </blockquote>
   );
@@ -169,7 +170,7 @@ export function PublicPostCard({
           {post.edited && <span className="nu-post__time">(edited)</span>}
         </header>
         <WarningGate warning={post.warning}>
-          {post.body && <div className="nu-post__text">{renderMessageText(post.body, toEmotes(post.emotes))}</div>}
+          {post.body && <div className="nu-post__text">{renderPostMarkdown(post.body, (text) => renderMessageText(text, toEmotes(post.emotes)))}</div>}
           {post.attachments && <PublicMedia attachments={post.attachments} sensitive={post.sensitive} />}
           {post.embeds && <EmbedList embeds={post.embeds.map(storedFromPublic)} eventKey={post.eventId} />}
         </WarningGate>

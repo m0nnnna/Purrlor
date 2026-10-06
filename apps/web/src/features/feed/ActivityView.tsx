@@ -50,6 +50,8 @@ const VERBS: Record<ActivityKind, string> = {
 function plainSnippet(body: string): string {
   return body
     .replace(/\|\|[\s\S]*?\|\|/g, '▒▒▒')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s()<>"]+)\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
     .replace(/(\*\*|__|~~|`)/g, '')
     .trim();
 }
