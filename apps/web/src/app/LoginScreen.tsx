@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { ACCOUNT_DELETED_FLAG } from './YourDataSettings';
 import { loginWithPassword } from '../matrix/login';
 import { enterDemoMode } from '../demo/demoMode';
 import { getRuntimeConfig, homeserverDisplayName } from './runtimeConfig';
 import { TermsNotice } from './TermsOfService';
+import { LoginFeedPreview } from '../features/publicWeb/LoginFeedPreview';
 import './LoginScreen.css';
 
 type LoginScreenProps = {
@@ -18,6 +19,7 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const usernameRef = useRef<HTMLInputElement>(null);
   // Just deleted an account (YourDataSettings): say so once, then forget it.
   const [accountDeleted] = useState(() => {
     try {
@@ -71,6 +73,7 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
         <label className="nu-login__field">
           Username
           <input
+            ref={usernameRef}
             className="nu-login__input"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -109,6 +112,12 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
         </button>
         <TermsNotice lead="By making an account you agree to our" />
       </form>
+      <LoginFeedPreview
+        onSignIn={() => {
+          usernameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          usernameRef.current?.focus({ preventScroll: true });
+        }}
+      />
     </div>
   );
 }

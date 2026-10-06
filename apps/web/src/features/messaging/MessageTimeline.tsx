@@ -57,6 +57,7 @@ import { VoiceMessage } from './VoiceMessage';
 import { initialRenderWindow, sliceRenderWindow, windowReaching } from './timelineWindow';
 import './MessageTimeline.css';
 import { fallbackName } from '../../matrix/displayName';
+import { nameColorStyle, useNameColor } from '../../matrix/nameColor';
 
 const HISTORY_PAGE_SIZE = 30;
 /** The most a history page grows to when pages keep coming back without messages (loadMore). */
@@ -298,6 +299,7 @@ const MessageRow = memo(function MessageRow({
   const senderName = webhook?.name ?? sender?.name ?? fallbackName(event.getSender() ?? '?');
   const role = roleFor(webhook ? 0 : (sender?.powerLevel ?? 0), roles);
   const senderRole = role.custom ? 'custom' : role.id;
+  const nameColor = useNameColor(webhook ? undefined : (event.getSender() ?? undefined));
   // event.getContent() already returns the latest m.replace edit's content automatically —
   // matrix-js-sdk aggregates edits onto the original event the same way it aggregates
   // reactions/thread relations (see room.relations, useReactions.ts/useThreads.ts). We just
@@ -432,13 +434,14 @@ const MessageRow = memo(function MessageRow({
                   type="button"
                   className={`nu-timeline__message-sender nu-timeline__message-sender--${senderRole}`}
                   data-nu-role="timeline-message-sender"
-                  // Staff take their role's color (CSS); everyone else gets a stable per-name
-                  // hue matching their fallback avatar, so a busy channel is easy to scan.
+                  // Staff take their role's color (CSS); everyone else the color they chose
+                  // (nameColor.ts), or a stable per-name hue matching their fallback avatar, so a
+                  // busy channel is easy to scan.
                   style={
                     senderRole === 'member'
-                      ? { color: `hsl(${nameHue(senderName)}, 70%, 78%)` }
+                      ? { color: nameColorStyle(nameColor ?? `hsl(${nameHue(senderName)}, 70%, 78%)`) }
                       : role.color
-                        ? { color: role.color }
+                        ? { color: nameColorStyle(role.color) }
                         : undefined
                   }
                   onClick={() => setShowProfile(true)}

@@ -21,6 +21,9 @@ import { SpoilerText } from './SpoilerText';
 // before the URL started) is excluded from the match — same convention Element/Discord use.
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"]+[^\s<>".,!?;:')\]]/g;
 const SHORTCODE_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
+// A Markdown link, `[label](https://…)`: web links only, and the label is plain text. It starts
+// at the `[`, before the URL inside it, so it claims that URL (see the overlap rule below).
+const MARKDOWN_LINK_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^\s()<>"]+)\)/g;
 // Matched (and its span fully claimed via the same index-based overlap resolution as everything
 // else here) before the single-line CODE_PATTERN gets a chance at it, so a ``` fence's content
 // never also gets inline-code/bold/italic treatment applied inside it.
@@ -73,7 +76,7 @@ function pushPatternMatches(matches: Match[], text: string, pattern: RegExp, bui
  * literal `@room` mass-mention (highlighted regardless of whether the sender actually had
  * permission to trigger it — this only reflects the text, not whether it notified anyone), and
  * basic Markdown (`**bold**`, `*italic*`/`_italic_`, `` `code` ``, `~~strikethrough~~`,
- * `||spoiler||`, and a `` ```lang\ncode\n``` `` fenced block, syntax-highlighted client-side for a
+ * `||spoiler||`, `[label](https://…)` links, and a `` ```lang\ncode\n``` `` fenced block, syntax-highlighted client-side for a
  * handful of common languages — see CodeBlock.tsx) — the same plain-text convention Element's own
  * composer relies on (it puts the Markdown source in `body` and a rendered version in
  * `formatted_body`), so this renders consistently no matter which client sent it. All of these
@@ -141,6 +144,20 @@ export function renderMessageText(
         emote,
       });
     }
+  }
+
+  for (const match of text.matchAll(MARKDOWN_LINK_PATTERN)) {
+    const url = match[2];
+    matches.push({
+      index: match.index,
+      length: match[0].length,
+      node: (
+        // The address as a tooltip: a label can say anything, so where it goes stays one hover away.
+        <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className="nu-message-link" title={url}>
+          {match[1]}
+        </a>
+      ),
+    });
   }
 
   for (const match of text.matchAll(URL_PATTERN)) {

@@ -16,6 +16,8 @@ import {
   type UserPresence,
 } from '../matrix/account';
 import { updateExtendedProfile } from '../matrix/extendedProfile';
+import { NAME_COLOR_PRESETS, nameColorStyle, rememberNameColor, sanitizeNameColor } from '../matrix/nameColor';
+import { nameHue } from '../components/Avatar';
 import {
   DEFAULT_TYPING_VERB,
   describeTyping,
@@ -58,6 +60,8 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
   const [bioTouched, setBioTouched] = useState(false);
   const [typingVerb, setTypingVerb] = useState('');
   const [typingVerbTouched, setTypingVerbTouched] = useState(false);
+  const [nameColor, setNameColor] = useState('');
+  const [nameColorTouched, setNameColorTouched] = useState(false);
   const [presence, setPresence] = useState<UserPresence>(() => (ownPresence.presence as UserPresence) || 'online');
   const [statusMsg, setStatusMsg] = useState(() => ownPresence.statusMsg ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +77,16 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!typingVerbTouched && extendedProfile.typingVerb) setTypingVerb(sanitizeTypingVerb(extendedProfile.typingVerb));
   }, [extendedProfile.typingVerb, typingVerbTouched]);
+  useEffect(() => {
+    if (!nameColorTouched && extendedProfile.nameColor) setNameColor(sanitizeNameColor(extendedProfile.nameColor));
+  }, [extendedProfile.nameColor, nameColorTouched]);
+
+  const chooseNameColor = (color: string) => {
+    setNameColor(color);
+    setNameColorTouched(true);
+  };
+  const previewName = name.trim() || profile.displayName || 'You';
+  const customNameColor = nameColor && !(NAME_COLOR_PRESETS as readonly string[]).includes(nameColor);
 
   const handleEnableNotifications = async () => {
     setNotificationStatus(await requestNotificationPermission());
@@ -100,6 +114,11 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
         const stored = cleanVerb === DEFAULT_TYPING_VERB ? '' : cleanVerb;
         tasks.push(
           updateExtendedProfile(mx, { typingVerb: stored || null }).then(() => rememberTypingVerb(profile.userId, stored))
+        );
+      }
+      if (nameColorTouched && nameColor !== sanitizeNameColor(extendedProfile.nameColor)) {
+        tasks.push(
+          updateExtendedProfile(mx, { nameColor: nameColor || null }).then(() => rememberNameColor(profile.userId, nameColor))
         );
       }
       const trimmedStatus = statusMsg.trim();
@@ -205,6 +224,61 @@ export function AccountGeneralSettings({ onClose }: { onClose: () => void }) {
           Others see: {describeTyping([{ name: name.trim() || profile.displayName || 'You', verb: sanitizeTypingVerb(typingVerb) }])}
         </span>
       </label>
+      <div className="nu-field" data-nu-role="account-settings-name-color">
+        Name color
+        <div className="nu-account-settings__name-colors" role="radiogroup" aria-label="Name color">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!nameColor}
+            className="nu-account-settings__name-color nu-account-settings__name-color--auto"
+            data-nu-role="account-settings-name-color-auto"
+            title="Automatic (picked from your name)"
+            aria-label="Automatic"
+            style={{ ['--nu-swatch' as string]: `hsl(${nameHue(previewName)}, 70%, 78%)` }}
+            onClick={() => chooseNameColor('')}
+          >
+            A
+          </button>
+          {NAME_COLOR_PRESETS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              role="radio"
+              aria-checked={nameColor === color}
+              className="nu-account-settings__name-color"
+              data-nu-role="account-settings-name-color-preset"
+              title={color}
+              aria-label={color}
+              style={{ ['--nu-swatch' as string]: color }}
+              onClick={() => chooseNameColor(color)}
+            />
+          ))}
+          <label
+            className={
+              customNameColor
+                ? 'nu-account-settings__name-color nu-account-settings__name-color--custom nu-account-settings__name-color--selected'
+                : 'nu-account-settings__name-color nu-account-settings__name-color--custom'
+            }
+            title="Pick any color"
+            style={customNameColor ? { ['--nu-swatch' as string]: nameColor } : undefined}
+          >
+            <span aria-hidden="true">+</span>
+            <input
+              type="color"
+              data-nu-role="account-settings-name-color-custom"
+              aria-label="Pick any color"
+              value={nameColor || '#ffffff'}
+              onChange={(e) => chooseNameColor(sanitizeNameColor(e.target.value))}
+            />
+          </label>
+        </div>
+        <span className="nu-field__hint" data-nu-role="account-settings-name-color-preview">
+          In chat:{' '}
+          <strong style={{ color: nameColorStyle(nameColor || `hsl(${nameHue(previewName)}, 70%, 78%)`) }}>{previewName}</strong>
+          {' '}· a role's color still shows instead, if you have one.
+        </span>
+      </div>
       <label className="nu-field">
         Status
         <select

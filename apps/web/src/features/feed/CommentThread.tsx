@@ -16,6 +16,7 @@ import { useMentionAutocomplete, type MentionPerson } from '../messaging/useMent
 import { CharCounter, isOverLimit } from './CharCounter';
 import { formatPostTime } from './formatPostTime';
 import { PostMedia } from './PostMedia';
+import { renderPostMarkdown } from './renderPostMarkdown';
 import { StagedMediaPreviews, useStagedMedia } from './useStagedMedia';
 import './CommentThread.css';
 
@@ -143,10 +144,12 @@ function CommentItem({
         {comment.replyTo && <ReplyingToLabel userId={comment.replyTo.sender} members={members} role="post-comment-reply-label" />}
         {comment.content.body && (
           <div className="nu-post__text">
-            {renderMessageText(comment.content.body, emotes, members, myUserId, {
-              formattedBody: comment.content.formatted_body,
-              hiddenMxcUrls,
-            })}
+            {renderPostMarkdown(comment.content.body, (text) =>
+              renderMessageText(text, emotes, members, myUserId, {
+                formattedBody: comment.content.formatted_body,
+                hiddenMxcUrls,
+              })
+            )}
           </div>
         )}
         {comment.content.attachments && <PostMedia attachments={comment.content.attachments} />}

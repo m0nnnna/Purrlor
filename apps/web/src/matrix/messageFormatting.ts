@@ -12,6 +12,7 @@ const SHORTCODE_PATTERN = /:([a-zA-Z0-9_+-]+):/g;
 // formatting applied inside it.
 const FENCE_PATTERN = /```(\w*)\n?([\s\S]*?)```/g;
 const CODE_PATTERN = /`([^`\n]+)`/g;
+const LINK_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^\s()<>"]+)\)/g;
 const BOLD_PATTERN = /\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g;
 const STRIKE_PATTERN = /~~(?!\s)([^~\n]+?)(?<!\s)~~/g;
 const SPOILER_PATTERN = /\|\|(?!\s)([^|\n]+?)(?<!\s)\|\|/g;
@@ -124,6 +125,14 @@ export function buildMessageFormatting(
       // markup) — a receiving client applies its own syntax highlighting from the language-x
       // class, same convention Element and most other Matrix clients follow.
       html: `<pre><code${langAttr}>${escapeHtml(match[2])}</code></pre>`,
+    });
+  }
+
+  for (const match of text.matchAll(LINK_PATTERN)) {
+    replacements.push({
+      index: match.index,
+      length: match[0].length,
+      html: `<a href="${escapeHtml(match[2]).replace(/"/g, '&quot;')}">${escapeHtml(match[1])}</a>`,
     });
   }
 

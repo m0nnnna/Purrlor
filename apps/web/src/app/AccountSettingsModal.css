@@ -37,6 +37,64 @@
   gap: var(--nu-space-2);
 }
 
+/* Name color (nameColor.ts): a row of swatches, "A" for automatic, "+" for any color. */
+.nu-account-settings__name-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nu-space-2);
+}
+
+.nu-account-settings__name-color {
+  appearance: none;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--nu-radius-full);
+  background: var(--nu-swatch, var(--nu-color-bg-tertiary));
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--nu-color-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nu-color-bg-app);
+  font: inherit;
+  font-size: var(--nu-font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nu-account-settings__name-color[aria-checked='true'],
+.nu-account-settings__name-color--selected {
+  box-shadow: 0 0 0 2px var(--nu-color-text-primary);
+}
+
+.nu-account-settings__name-color:focus-visible,
+.nu-account-settings__name-color--custom:focus-within {
+  outline: 2px solid var(--nu-color-accent);
+  outline-offset: 2px;
+}
+
+.nu-account-settings__name-color--custom {
+  background: var(--nu-swatch, var(--nu-color-bg-tertiary));
+  color: var(--nu-color-text-primary);
+}
+
+.nu-account-settings__name-color--selected {
+  color: var(--nu-color-bg-app);
+}
+
+/* The native picker covers the swatch, invisible, so a tap anywhere on it opens the picker. */
+.nu-account-settings__name-color--custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 /* Reminders (RemindersSettings.tsx) */
 .nu-reminders-settings {
   display: flex;

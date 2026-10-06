@@ -50,7 +50,8 @@ at. The one thing it can't show you is the inside of a connected call.
 | `--nu-color-accent` / `-accent-hover` | Primary action color (gradient's first stop) |
 | `--nu-color-accent-2` / `-accent-2-hover` | Gradient's second stop — buttons, active rows, and gradient text are two-tone, not flat, so this is the other half of that gradient |
 | `--nu-color-on-accent` | Text/icons drawn on top of accent/danger/success/warning — a button's label, a badge's count. One token so a theme that picks a light/pastel accent only has to repoint this once, not hunt down every button that happens to sit on that color |
-| `--nu-color-scheme` | `dark` or `light`: which way the browser's own controls lean (checkboxes, `<select>` menus, date pickers, scrollbars). Every preset is `dark`; a light custom theme sets `light`. Native checkboxes and sliders also take `--nu-color-accent` |
+| `--nu-color-scheme` | `dark` or `light`: which way the browser's own controls lean (checkboxes, `<select>` menus, date pickers, scrollbars). Every preset but Foxy is `dark`; a light theme sets `light`. Native checkboxes and sliders also take `--nu-color-accent` |
+| `--nu-name-ink-mix` | How far a person's name color in chat (their chosen one, a custom role's, or the hue picked from their name) is mixed toward `--nu-color-text-primary`. `0%` on the dark themes, where those pale colors read as they are; a light theme raises it (Foxy: `55%`) so they darken enough to read |
 | `--nu-color-danger` / `-danger-2` / `-success` / `-warning` | Status colors (`-danger-2` is danger's gradient second stop, same idea as `-accent-2`) |
 | `--nu-color-role-admin` / `-role-moderator` | Name color (timeline and member list) and group swatch for members with that role — see `matrix/roles.ts` for the power-level tiers |
 | `--nu-color-border` | Hairline borders/dividers |
