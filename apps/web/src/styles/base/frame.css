@@ -427,3 +427,62 @@ html[data-nu-effects='safe'] .nu-profile-page__particle {
   animation: none !important;
   top: var(--nu-particle-rest, 50%);
 }
+
+/* ---- Window headers, the mockup's way: title, a console subtitle, a rule running out to the
+   buttons, which are icons only (their names are in their tooltips and aria-labels). ---- */
+
+.nu-main-pane__header-name {
+  flex: 0 1 auto;
+}
+
+.nu-main-pane__header-actions {
+  margin-left: auto;
+}
+
+.nu-main-pane__header-sub {
+  flex: none;
+  font-family: var(--nu-font-label);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nu-color-text-muted);
+  white-space: nowrap;
+}
+
+.nu-main-pane__header-rule {
+  flex: 1;
+  min-width: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--nu-color-border-strong), transparent);
+}
+
+@media (min-width: 1281px) {
+  .nu-main-pane__header-action-label {
+    display: var(--nu-header-label-display, none);
+  }
+}
+
+@media (max-width: 640px) {
+  .nu-main-pane__header-sub,
+  .nu-main-pane__header-rule {
+    display: none;
+  }
+}
+
+/* The composer's prompt in console capitals. */
+.nu-composer__input::placeholder {
+  font-family: var(--nu-font-label);
+  text-transform: var(--nu-label-transform);
+  letter-spacing: 0.12em;
+}
+
+/* A section label that isn't a collapsible category gets the frame's square bullet. */
+.nu-channel-list__section-header::before {
+  content: '';
+  display: var(--nu-label-bullet-display, inline-block);
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--nu-color-accent);
+}

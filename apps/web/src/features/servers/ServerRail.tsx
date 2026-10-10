@@ -10,7 +10,6 @@ import {
   selectedSpaceViewAtom,
   socialViewAtom,
 } from '../../app/state/selection';
-import { Icon } from '../../components/Icon';
 import { UnreadBadge } from '../../components/UnreadBadge';
 import { DiscoverModal } from '../discover/DiscoverModal';
 import { InvitesModal } from '../invites/InvitesModal';
@@ -29,6 +28,7 @@ import { CreateSpaceModal } from './CreateSpaceModal';
 import { locateInList, usePointerDrag } from '../../components/usePointerDrag';
 import { moveSpace } from '../../matrix/spaceOrder';
 import { RailClock } from '../../app/StatusClock';
+import { nameHue } from '../../components/Avatar';
 import './ServerRail.css';
 
 /** The selected tile's cat ears — drawn on every tile, shown only on the active one (CSS),
@@ -42,6 +42,43 @@ function CatEars() {
       <path className="nu-server-rail__ear-inner" d="M33.4 14 37.7 7.5 39.5 14z" />
     </svg>
   );
+}
+
+/** The rail's line icons, drawn the Ultimit way: square joins, one stroke weight. */
+const RAIL_ICONS = {
+  home: 'M3 11l9-7 9 7v9H3zM9 20v-6h6v6',
+  feed: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9',
+  notify: 'M6 16V10a6 6 0 0 1 12 0v6l2 2H4zM10 21h4',
+  invites: 'M3 6h18v12H3zM3 6l9 7 9-7',
+  discover: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM15.5 8.5l-2 5-5 2 2-5z',
+  create: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 8.5v7M8.5 12h7',
+} as const;
+
+function RailIcon({ name }: { name: keyof typeof RAIL_ICONS }) {
+  return (
+    <svg className="nu-server-rail__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="miter" aria-hidden="true" focusable="false">
+      <path d={RAIL_ICONS[name]} />
+    </svg>
+  );
+}
+
+/** Purrlor's emblem at the top of the rail: a cat's head inside a hexagon, in the rail's line. */
+function Emblem() {
+  return (
+    <svg className="nu-server-rail__emblem" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" focusable="false">
+      <polygon points="24,4 41.3,14 41.3,34 24,44 6.7,34 6.7,14" />
+      <path d="M15 31V17l5 4h8l5-4v14l-5 4h-8z" />
+      <path d="M20 27h2M26 27h2" />
+    </svg>
+  );
+}
+
+/** A Space's initials for its hexagon: the first letters of its first two words, or its first two letters. */
+export function spaceInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  const initials = words.length > 1 ? Array.from(words[0])[0] + Array.from(words[1])[0] : Array.from(words[0]).slice(0, 2).join('');
+  return initials.toUpperCase();
 }
 
 /** A Space's tile can be dragged to another place in the rail (usePointerDrag, matrix/spaceOrder.ts). */
@@ -70,7 +107,6 @@ function ServerRailItem({ space, active, onSelect, drag }: { space: Room; active
       type="button"
       className={className}
       data-nu-role="server-rail-item"
-      data-nu-label={space.name}
       title={space.name}
       aria-label={space.name}
       aria-current={active ? 'page' : undefined}
@@ -80,14 +116,18 @@ function ServerRailItem({ space, active, onSelect, drag }: { space: Room; active
         if (!drag || drag.clickAllowed()) onSelect();
       }}
     >
-      <CatEars />
-      {src ? (
-        <img className="nu-server-rail__item-image" src={src} alt="" />
-      ) : (
-        (space.name || '?').slice(0, 1).toUpperCase()
-      )}
-      <span className="nu-server-rail__item-badge">
-        <UnreadBadge total={unread.total} highlight={unread.highlight} />
+      <span className="nu-server-rail__icon">
+        <CatEars />
+        {/* A hexagon: its picture, or its initials on a color picked from its name. */}
+        <span className="nu-server-rail__hex" style={{ ['--nu-hex-hue' as string]: nameHue(space.name || '?') }}>
+          {src ? <img className="nu-server-rail__item-image" src={src} alt="" /> : spaceInitials(space.name || '?')}
+        </span>
+        <span className="nu-server-rail__item-badge">
+          <UnreadBadge total={unread.total} highlight={unread.highlight} />
+        </span>
+      </span>
+      <span className="nu-server-rail__label" aria-hidden="true">
+        {space.name}
       </span>
     </button>
   );
@@ -106,14 +146,20 @@ function DirectMessageRailItem({ room, count, onSelect }: { room: Room; count: n
       type="button"
       className="nu-server-rail__item nu-server-rail__item--dm nu-server-rail__item--unread"
       data-nu-role="server-rail-dm"
-      data-nu-label={room.name}
       title={label}
       aria-label={label}
       onClick={onSelect}
     >
-      {src ? <img className="nu-server-rail__item-image" src={src} alt="" /> : (room.name || '?').slice(0, 1).toUpperCase()}
-      <span className="nu-server-rail__item-badge">
-        <UnreadBadge total={count} highlight={count} />
+      <span className="nu-server-rail__icon">
+        <span className="nu-server-rail__person" style={{ ['--nu-hex-hue' as string]: nameHue(room.name || '?') }}>
+          {src ? <img className="nu-server-rail__item-image" src={src} alt="" /> : (room.name || '?').slice(0, 1).toUpperCase()}
+        </span>
+        <span className="nu-server-rail__item-badge">
+          <UnreadBadge total={count} highlight={count} />
+        </span>
+      </span>
+      <span className="nu-server-rail__label" aria-hidden="true">
+        {room.name}
       </span>
     </button>
   );
@@ -215,6 +261,7 @@ export function ServerRail() {
 
   return (
     <nav className="nu-server-rail" data-nu-role="server-rail">
+      <Emblem />
       <button
         type="button"
         className={
@@ -228,15 +275,18 @@ export function ServerRail() {
             .join(' ')
         }
         data-nu-role="server-rail-home"
-        data-nu-label="Home"
         title="Direct Messages"
         aria-label={dmCountTotal > 0 ? `Direct Messages, ${dmCountTotal} unread` : 'Direct Messages'}
         onClick={() => selectSpace(null)}
       >
-        <CatEars />
-        <Icon name="paw" size={24} />
-        <span className="nu-server-rail__item-badge">
-          <UnreadBadge total={dmCountTotal || dmUnread.total} highlight={dmCountTotal} />
+        <span className="nu-server-rail__icon">
+          <RailIcon name="home" />
+          <span className="nu-server-rail__item-badge">
+            <UnreadBadge total={dmCountTotal || dmUnread.total} highlight={dmCountTotal} />
+          </span>
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Home
         </span>
       </button>
       {unreadDms.map((room) => (
@@ -247,24 +297,6 @@ export function ServerRail() {
           onSelect={() => openDirectMessage(room.roomId)}
         />
       ))}
-      <button
-        type="button"
-        className={
-          globalFeedOpen && !onNotifications
-            ? 'nu-server-rail__item nu-server-rail__item--global-feed nu-server-rail__item--active'
-            : 'nu-server-rail__item nu-server-rail__item--global-feed'
-        }
-        data-nu-role="server-rail-global-feed"
-        data-nu-label="Feed"
-        title="Global feed"
-        aria-label="Global feed"
-        aria-current={globalFeedOpen && !onNotifications ? 'page' : undefined}
-        onClick={() => openSocial(socialView === 'notifications' ? 'everyone' : socialView)}
-      >
-        <CatEars />
-        <Icon name="globe" size={22} />
-      </button>
-      <div className="nu-server-rail__divider" />
       <div
         className={spaceDrag.dragging ? 'nu-server-rail__list nu-server-rail__list--dragging' : 'nu-server-rail__list'}
         data-nu-role="server-rail-list"
@@ -291,6 +323,26 @@ export function ServerRail() {
         </div>
       )}
       <div className="nu-server-rail__divider" />
+      <button
+        type="button"
+        className={
+          globalFeedOpen && !onNotifications
+            ? 'nu-server-rail__item nu-server-rail__item--global-feed nu-server-rail__item--active'
+            : 'nu-server-rail__item nu-server-rail__item--global-feed'
+        }
+        data-nu-role="server-rail-global-feed"
+        title="Global feed"
+        aria-label="Global feed"
+        aria-current={globalFeedOpen && !onNotifications ? 'page' : undefined}
+        onClick={() => openSocial(socialView === 'notifications' ? 'everyone' : socialView)}
+      >
+        <span className="nu-server-rail__icon">
+          <RailIcon name="feed" />
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Feed
+        </span>
+      </button>
       {/* Everything that's about you, in one place: mentions anywhere, and what people did with
           your posts and profile (the social side's Notifications page). */}
       <button
@@ -301,54 +353,74 @@ export function ServerRail() {
             : 'nu-server-rail__item nu-server-rail__item--notifications'
         }
         data-nu-role="server-rail-notifications"
-        data-nu-label="Notify"
         title="Notifications"
         aria-label={unreadNotifications > 0 ? `Notifications, ${unreadNotifications} new` : 'Notifications'}
         aria-current={onNotifications ? 'page' : undefined}
         onClick={() => openSocial('notifications')}
       >
-        <Icon name="bell" size={20} />
-        <span className="nu-server-rail__item-badge">
-          <UnreadBadge total={unreadNotifications} highlight={unreadNotifications} />
+        <span className="nu-server-rail__icon">
+          <RailIcon name="notify" />
+          <span className="nu-server-rail__item-badge">
+            <UnreadBadge total={unreadNotifications} highlight={unreadNotifications} />
+          </span>
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Notify
         </span>
       </button>
       <button
         type="button"
         className="nu-server-rail__item nu-server-rail__item--invites"
         data-nu-role="server-rail-invites"
-        data-nu-label="Invites"
         title="Invites"
         aria-label="Invites"
         onClick={() => setShowInvites(true)}
       >
-        <Icon name="mail" size={20} />
-        <span className="nu-server-rail__item-badge">
-          <UnreadBadge total={invites.length} highlight={invites.length} />
+        <span className="nu-server-rail__icon">
+          <RailIcon name="invites" />
+          <span className="nu-server-rail__item-badge">
+            <UnreadBadge total={invites.length} highlight={invites.length} />
+          </span>
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Invites
         </span>
       </button>
       <button
         type="button"
         className="nu-server-rail__item nu-server-rail__item--discover"
         data-nu-role="server-rail-discover"
-        data-nu-label="Discover"
         title="Discover public spaces and channels"
         aria-label="Discover"
         onClick={() => setShowDiscover(true)}
       >
-        <Icon name="compass" size={20} />
+        <span className="nu-server-rail__icon">
+          <RailIcon name="discover" />
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Discover
+        </span>
       </button>
       <button
         type="button"
         className="nu-server-rail__item nu-server-rail__item--add"
         data-nu-role="server-rail-add"
-        data-nu-label="Create"
         title="Create a Space"
         aria-label="Create a Space"
         onClick={() => setShowCreateSpace(true)}
       >
-        <Icon name="plus" size={20} />
+        <span className="nu-server-rail__icon">
+          <RailIcon name="create" />
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Create
+        </span>
       </button>
       <RailClock />
+      {/* The mockup's version line, running up the rail: the app and the server you're on. */}
+      <div className="nu-server-rail__ver" aria-hidden="true">
+        PURRLOR · {(mx.getDomain() ?? '').toUpperCase()}
+      </div>
       {showCreateSpace && (
         <CreateSpaceModal
           onClose={() => setShowCreateSpace(false)}

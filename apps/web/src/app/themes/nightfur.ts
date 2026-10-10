@@ -75,6 +75,9 @@ export const NIGHTFUR_CSS = `/* Nightfur: the previous default look. */
 
   --nu-width-server-rail: 72px;
   --nu-rail-label-display: none;
-  --nu-rail-row-gap: var(--nu-space-4);
+  --nu-rail-row-gap: var(--nu-space-1);
+  --nu-rail-ears-display: block;
+  --nu-header-label-display: inline;
+  --nu-label-bullet-display: none;
 }
 `;

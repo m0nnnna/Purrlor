@@ -251,6 +251,11 @@ function MainPaneContent() {
             <Icon name="lock" size={14} />
           </span>
         )}
+        {/* The window's subtitle and the rule that runs out to its buttons (the Ultimit frame). */}
+        <span className="nu-main-pane__header-sub" data-nu-role="main-pane-sub">
+          {room.getJoinedMemberCount() === 1 ? '1 member' : `${room.getJoinedMemberCount()} members`}
+        </span>
+        <span className="nu-main-pane__header-rule" aria-hidden="true" />
         <div className="nu-main-pane__header-actions">
           <HeaderAction icon="pin" label="Pinned" role="main-pane-pins" onClick={() => setShowPinned(true)}>
             {pinnedIds.length > 0 && <span className="nu-main-pane__header-count">{pinnedIds.length}</span>}

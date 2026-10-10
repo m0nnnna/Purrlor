@@ -1,3 +1,9 @@
+/*
+ * The server rail, as on the Ultimit desktop's icon rail (github.com/m0nnnna/ultimit,
+ * docs/design/mockup.html): Purrlor's emblem at the top, then line icons and Space hexagons, each
+ * with its name in small spaced capitals under it, and an accent bar against the rail's edge for
+ * where you are. No tiles: the rail is one strip of glass.
+ */
 .nu-server-rail {
   background: var(--nu-color-rail);
   border-right: 1px solid var(--nu-color-border);
@@ -6,95 +12,59 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* The bottom padding leaves room for the last tile's label, which hangs below it. */
-  padding: var(--nu-space-5) 0 calc(var(--nu-space-4) + 16px);
-  /* Room under each tile for its label (::after, below). */
-  gap: var(--nu-rail-row-gap, 26px);
-  /* The ears (below) sit at z-index -1 so they tuck *behind* their tile's top edge; this keeps
-     them above the rail's own background instead of disappearing under it. */
+  gap: var(--nu-rail-row-gap, 2px);
+  padding: var(--nu-space-4) 0 var(--nu-space-4);
+  min-height: 0;
+  overflow: hidden;
+  /* The ears (below, for themes that show them) sit at z-index -1 behind their hexagon; this keeps
+     them above the rail's own background. */
   isolation: isolate;
 }
 
+.nu-server-rail__emblem {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--nu-space-4);
+  color: var(--nu-color-text-primary);
+}
+
+/* One entry: its icon, and its name under it. */
 .nu-server-rail__item {
   position: relative;
   flex: none;
   appearance: none;
   border: none;
-  padding: 0;
-  font: inherit;
-  color: var(--nu-color-text-secondary);
-  width: 46px;
-  height: 46px;
-  border-radius: var(--nu-radius-tile);
-  background: var(--nu-color-bg-tertiary);
-  /* A hairline edge, so a tile reads as a framed square on the glass rail. */
-  box-shadow: inset 0 0 0 1px var(--nu-color-border);
+  background: none;
+  width: calc(var(--nu-width-server-rail) - 12px);
+  min-height: 44px;
+  padding: 9px 0 7px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: var(--nu-font-size-lg);
+  gap: 6px;
+  font: inherit;
+  color: var(--nu-color-text-primary);
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.2s ease;
+  border-radius: var(--nu-radius-md);
+  transition: background 0.15s ease;
 }
 
 .nu-server-rail__item:hover {
-  background: var(--nu-color-bg-elevated);
-  color: var(--nu-color-text-primary);
+  background: var(--nu-color-hover);
 }
 
-/* The Ultimit rail's labels: each tile's name in small spaced capitals under it (data-nu-label,
-   ServerRail.tsx). Drawn, not read: the tile's aria-label already names it. A theme hides them
-   with `--nu-rail-label-display: none` (and can close up --nu-rail-row-gap). */
-.nu-server-rail__item[data-nu-label]::after {
-  content: attr(data-nu-label);
-  display: var(--nu-rail-label-display, block);
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 50%;
-  width: calc(var(--nu-width-server-rail) - 8px);
-  transform: translateX(-50%);
-  font-family: var(--nu-font-body);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  text-align: center;
-  color: var(--nu-color-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
-.nu-server-rail__item--active[data-nu-label]::after,
-.nu-server-rail__item:hover[data-nu-label]::after {
-  color: var(--nu-color-text-primary);
-}
-
-.nu-server-rail__item-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-}
-
-/* Left-edge indicator bar, Discord's convention: a short nub for "unread", taller on hover,
-   full height for the selected space. Sits in the rail's margin, outside the tile, against the
-   rail's edge. */
+/* The bar against the rail's left edge: a short nub for "unread", a long accent bar for where you
+   are. */
 .nu-server-rail__item::before {
   content: '';
   position: absolute;
-  left: calc((46px - var(--nu-width-server-rail)) / 2);
+  left: -6px;
   top: 50%;
   width: 3px;
   height: 0;
-  border-radius: 0 var(--nu-radius-dot) var(--nu-radius-dot) 0;
   background: var(--nu-color-text-primary);
+  border-radius: 0 var(--nu-radius-dot) var(--nu-radius-dot) 0;
   transform: translateY(-50%);
   transition: height 0.2s ease;
 }
@@ -103,37 +73,115 @@
   height: 8px;
 }
 
-/* An unread DM under Home (DirectMessageRailItem): round like a person, not squared like a Space,
-   and it slides in when the message arrives. */
-.nu-server-rail__item--dm {
-  border-radius: var(--nu-radius-avatar);
-  animation: nu-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.nu-server-rail__item:hover::before {
-  height: 18px;
-}
-
 .nu-server-rail__item--active::before {
-  height: 32px;
+  height: calc(100% - 24px);
   background: var(--nu-color-accent);
 }
 
-.nu-server-rail__item--active {
-  color: var(--nu-color-text-primary);
-  box-shadow:
-    0 0 0 1px var(--nu-color-accent),
-    0 0 0 4px color-mix(in srgb, var(--nu-color-accent) 16%, transparent);
+.nu-server-rail__icon {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
 }
 
-/* The cat ears: the one flourish in the whole shell. Only the selected tile shows them, and they
-   spring up from behind it on selection (nu-ears-up in tokens.css). */
-.nu-server-rail__ears {
+.nu-server-rail__glyph {
+  width: 26px;
+  height: 26px;
+}
+
+/* A Space: a hexagon, its picture or its initials on a color picked from its name. */
+.nu-server-rail__hex,
+.nu-server-rail__person {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: hsl(var(--nu-hex-hue, 210) 70% 80%);
+  color: #07090b;
+  font-family: var(--nu-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.nu-server-rail__hex {
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+}
+
+/* A person (an unread DM) is cut like an avatar, not a hexagon. */
+.nu-server-rail__person {
+  border-radius: var(--nu-radius-avatar);
+  clip-path: var(--nu-clip-avatar);
+  animation: nu-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.nu-server-rail__item--active .nu-server-rail__hex {
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}
+
+.nu-server-rail__item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-server-rail__label {
+  display: var(--nu-rail-label-display, block);
+  max-width: calc(var(--nu-width-server-rail) - 12px);
+  padding: 0 2px;
+  font-family: var(--nu-font-body);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The count: a square in the accent, up against the icon's corner. */
+.nu-server-rail__item-badge {
   position: absolute;
-  left: -1px;
-  top: -12px;
-  width: 48px;
+  top: -6px;
+  right: -10px;
+  line-height: 0;
+}
+
+.nu-server-rail__item-badge:empty {
+  display: none;
+}
+
+.nu-server-rail__item-badge .nu-unread-badge--highlight {
+  min-width: 16px;
   height: 14px;
+  padding: 0 3px;
+  border-radius: var(--nu-radius-dot);
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  font-family: var(--nu-font-label);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* A plain unread dot is already told by the bar at the edge: only the count sits on the icon. */
+.nu-server-rail__item-badge:has(.nu-unread-badge--dot) {
+  display: none;
+}
+
+/* The cat ears of the old rail: off in this look, kept for themes that want them back on the
+   selected Space (Nightfur, Halloween) with --nu-rail-ears-display: block. */
+.nu-server-rail__ears {
+  display: var(--nu-rail-ears-display, none);
+  position: absolute;
+  left: -4px;
+  top: -9px;
+  width: 38px;
+  height: 11px;
   z-index: -1;
   opacity: 0;
   transform: translateY(9px);
@@ -154,105 +202,28 @@
   fill: var(--nu-color-accent-2);
 }
 
-.nu-server-rail__item-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  border: 3px solid var(--nu-color-bg-app);
-  border-radius: var(--nu-radius-dot);
-  line-height: 0;
-}
-
-.nu-server-rail__item-badge:empty {
-  display: none;
-}
-
-/* A plain unread dot is already told by the left-edge pill — only the numbered mention badge
-   needs to sit on the tile itself. */
-.nu-server-rail__item-badge:has(.nu-unread-badge--dot) {
-  display: none;
-}
-
-/* Global feed: same dark tile as Home, the globe in sakura so the two top tiles read apart. */
-.nu-server-rail__item--global-feed {
-  color: var(--nu-color-accent-2);
-}
-
-.nu-server-rail__item--global-feed.nu-server-rail__item--active {
-  background: var(--nu-color-accent-2);
-  color: var(--nu-color-on-accent);
-}
-
-/* Home: the paw is the brand mark, drawn in gold on a dark tile; selected, it inverts. */
-.nu-server-rail__item--home {
-  color: var(--nu-color-accent);
-}
-
-.nu-server-rail__item--home.nu-server-rail__item--active {
-  background: var(--nu-color-accent);
-  color: var(--nu-color-on-accent);
-}
-
-.nu-server-rail__item--notifications,
-.nu-server-rail__item--invites,
-.nu-server-rail__item--discover,
-.nu-server-rail__item--add {
-  background: transparent;
-  color: var(--nu-color-text-muted);
-  box-shadow: inset 0 0 0 1px var(--nu-color-border);
-}
-
-.nu-server-rail__item--notifications:hover,
-.nu-server-rail__item--invites:hover,
-.nu-server-rail__item--discover:hover {
-  background: var(--nu-color-bg-tertiary);
-  color: var(--nu-color-text-primary);
-}
-
-.nu-server-rail__item--add:hover {
-  background: color-mix(in srgb, var(--nu-color-accent) 14%, transparent);
-  color: var(--nu-color-accent);
-  box-shadow: inset 0 0 0 1px var(--nu-color-accent);
-}
-
-/* Notifications is a page, not a dialog, so it shows where you are like the tiles above. */
-.nu-server-rail__item--notifications.nu-server-rail__item--active {
-  background: var(--nu-color-bg-tertiary);
-  color: var(--nu-color-accent);
-  box-shadow: inset 0 0 0 1px var(--nu-color-accent);
-}
-
-/* The other utility tiles never show a selected state, so they don't need the indicator pill. */
-.nu-server-rail__item--notifications::before,
-.nu-server-rail__item--invites::before,
-.nu-server-rail__item--discover::before,
-.nu-server-rail__item--add::before {
-  display: none;
-}
-
 .nu-server-rail__divider {
   flex: none;
   width: 40px;
   height: 1px;
-  /* Pulled up into the label gap above it, so it sits between rows rather than under a label. */
-  margin: -8px 0 -10px;
+  margin: var(--nu-space-2) 0;
   background: var(--nu-color-border);
-  border-radius: var(--nu-radius-full);
 }
 
+/* The Spaces: the part of the rail that grows and scrolls. */
 .nu-server-rail__list {
-  flex: 1;
+  position: relative;
+  flex: 1 1 0;
   min-height: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--nu-rail-row-gap, 26px);
+  gap: var(--nu-rail-row-gap, 2px);
   overflow-y: auto;
   scrollbar-width: none;
-  /* Room above the first tile for its ears, and below the last for its label, which this scroll
-     container's edges would otherwise clip. */
-  padding: 12px 0 18px;
+  /* Room for the bar at the rail's edge, and for ears above the first Space. */
+  padding: 4px 0;
   isolation: isolate;
 }
 
@@ -260,12 +231,47 @@
   display: none;
 }
 
-
-/* Dragging a Space to another place (components/usePointerDrag.ts). */
-.nu-server-rail__list {
-  position: relative;
+/* The version line, running up the rail's foot. First to give way when the rail is short. */
+.nu-server-rail__ver {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin-top: var(--nu-space-3);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--nu-font-label);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--nu-color-text-muted);
 }
 
+/* RailClock (app/StatusClock.tsx): the time, small, near the foot of the rail. Only where the big
+   clock above the member list isn't showing (styles/base/frame.css decides). */
+.nu-rail-clock {
+  flex: none;
+  margin-top: var(--nu-space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--nu-font-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--nu-color-text-primary);
+  line-height: 1.15;
+}
+
+.nu-rail-clock__time {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.nu-rail-clock__ampm {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--nu-color-text-muted);
+}
+
+/* Dragging a Space to another place (components/usePointerDrag.ts). */
 .nu-server-rail__item--draggable {
   -webkit-user-select: none;
   user-select: none;
@@ -290,7 +296,6 @@
   width: 48px;
   height: 3px;
   margin: -1.5px 0 0 -24px;
-  border-radius: 2px;
   background: var(--nu-color-accent);
   box-shadow: 0 0 6px var(--nu-color-accent);
   pointer-events: none;
@@ -314,44 +319,25 @@
   pointer-events: none;
 }
 
-/* RailClock (app/StatusClock.tsx): the time, small, at the foot of the rail. Only where the big
-   clock above the member list isn't showing (styles/base/frame.css decides). */
-.nu-rail-clock {
-  flex: none;
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-family: var(--nu-font-label);
-  font-variant-numeric: tabular-nums;
-  color: var(--nu-color-text-primary);
-  line-height: 1.15;
-}
-
-.nu-rail-clock__time {
-  font-size: 15px;
-  letter-spacing: 0.04em;
-}
-
-.nu-rail-clock__ampm {
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  color: var(--nu-color-text-muted);
-}
-
 /* A short window can't fit a labelled rail: the Spaces list would shrink to a tile or two. There
-   the labels go and the rows close up, so every Space stays in reach. */
+   the labels and the version line go and the rows close up, so every Space stays in reach. */
 @media (max-height: 820px) {
   .nu-server-rail {
     --nu-rail-label-display: none;
-    --nu-rail-row-gap: var(--nu-space-4);
   }
 
-  .nu-server-rail__divider {
-    margin: 0;
+  .nu-server-rail__item {
+    min-height: 44px;
+    padding: 7px 0;
   }
 
-  .nu-server-rail {
-    padding-bottom: var(--nu-space-4);
+  .nu-server-rail__emblem {
+    width: 32px;
+    height: 32px;
+    margin-bottom: var(--nu-space-2);
+  }
+
+  .nu-server-rail__ver {
+    display: none;
   }
 }
