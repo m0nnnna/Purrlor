@@ -9,6 +9,8 @@
   justify-content: center;
   padding: var(--nu-space-6) var(--nu-space-4);
   box-sizing: border-box;
+  /* Behind the shard wallpaper (components/Wallpaper.tsx); this night sky only shows for a theme
+     that hides it. */
   background-color: var(--nu-color-bg-app);
   background-image:
     radial-gradient(ellipse 70% 45% at 10% -5%, color-mix(in srgb, var(--nu-color-accent-2) 14%, transparent), transparent 70%),
@@ -25,9 +27,10 @@
   position: relative;
   width: min(400px, 100%);
   margin: auto;
-  background: color-mix(in srgb, var(--nu-color-bg-primary) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--nu-color-border);
+  background: var(--nu-color-panel);
+  backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  border: 1px solid var(--nu-color-border-strong);
   border-radius: var(--nu-radius-lg);
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--nu-color-text-primary) 6%, transparent) inset,
@@ -36,7 +39,31 @@
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-4);
-  animation: nu-rise-in 0.35s ease-out both;
+  animation: nu-window-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* The frame's corner brackets, as on the app's panels (styles/base/frame.css). */
+.nu-login__form::before,
+.nu-login__form::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.nu-login__form::before {
+  left: -1px;
+  top: -1px;
+  border-left: 2px solid var(--nu-frame-bracket);
+  border-top: 2px solid var(--nu-frame-bracket);
+}
+
+.nu-login__form::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--nu-frame-bracket);
+  border-bottom: 2px solid var(--nu-frame-bracket);
 }
 
 .nu-login__mascot {
@@ -51,8 +78,9 @@
   margin: 0 0 var(--nu-space-1);
   font-family: var(--nu-font-display);
   font-weight: 400;
-  font-size: 28px;
-  line-height: 1.1;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
   text-align: center;
 }
 
@@ -108,12 +136,14 @@
   color: var(--nu-color-on-accent);
   border: none;
   border-radius: var(--nu-radius-md);
+  clip-path: var(--nu-clip-cut);
   padding: 13px var(--nu-space-4);
   font-family: inherit;
-  font-size: var(--nu-font-size-md);
-  font-weight: 700;
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+  text-transform: var(--nu-label-transform);
+  letter-spacing: var(--nu-label-tracking);
   cursor: pointer;
-  box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--nu-color-accent) 60%, transparent);
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -121,8 +151,11 @@
 
 .nu-login__submit:hover:not(:disabled) {
   background: var(--nu-gradient-accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 32px -8px color-mix(in srgb, var(--nu-color-accent) 75%, transparent);
+}
+
+.nu-login__submit:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -5px;
 }
 
 .nu-login__submit:disabled {
@@ -178,6 +211,8 @@
 }
 
 .nu-login__feed {
+  /* Positioned, so it paints over the fixed wallpaper. */
+  position: relative;
   width: min(560px, 100%);
   display: flex;
   flex-direction: column;

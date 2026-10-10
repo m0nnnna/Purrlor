@@ -1,6 +1,9 @@
 .nu-avatar {
   flex: none;
-  border-radius: var(--nu-radius-full);
+  /* Square with two corners cut (the Ultimit frame); a theme gets circles back with
+     --nu-radius-avatar: 9999px and --nu-clip-avatar: none. */
+  border-radius: var(--nu-radius-avatar);
+  clip-path: var(--nu-clip-avatar);
   object-fit: cover;
   display: flex;
   align-items: center;
@@ -17,9 +20,9 @@
     hsl(var(--nu-avatar-hue, 320) 90% 78%),
     hsl(calc(var(--nu-avatar-hue, 320) + 40) 85% 55%)
   );
-  color: rgba(0, 0, 0, 0.55);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  font-weight: 800;
+  color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-weight: 700;
 }
 
 .nu-avatar-wrapper {
@@ -34,7 +37,7 @@
   bottom: -1px;
   width: 10px;
   height: 10px;
-  border-radius: var(--nu-radius-full);
+  border-radius: var(--nu-radius-dot);
   border: 2px solid var(--nu-color-bg-primary);
 }
 

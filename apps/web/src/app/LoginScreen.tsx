@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { Wallpaper } from '../components/Wallpaper';
 import { ACCOUNT_DELETED_FLAG } from './YourDataSettings';
 import { loginWithPassword } from '../matrix/login';
 import { enterDemoMode } from '../demo/demoMode';
@@ -47,6 +48,7 @@ export function LoginScreen({ onLoggedIn, onSwitchToRegister }: LoginScreenProps
 
   return (
     <div className="nu-login" data-nu-role="login-screen">
+      <Wallpaper />
       <form className="nu-login__form" onSubmit={handleSubmit}>
         <img className="nu-login__mascot" src="/icon-192.png" alt="" />
         <h1 className="nu-login__title">Purrlor</h1>

@@ -4,68 +4,107 @@
  * radius/font value directly. See docs/theming.md for the documented contract; update that file
  * in the same change that adds or renames a token here.
  *
- * Palette: "Nightfur" — a cat out after dark. Ink-violet surfaces (never flat black), lilac-grey
- * text, and one glowing catseye gold as the accent, with sakura pink held back for the things
- * that are about *you* (mentions, moderator roles). The old glossy "Y2K Chatroom" look is still
- * one click away as a preset under Appearance settings (see app/AppearanceSettings.tsx).
+ * Palette: "Mine", the Ultimit desktop's default skin (github.com/m0nnnna/ultimit,
+ * docs/design/mockup.html): black glass over a crystal-shard wallpaper, white shards, a pale ice
+ * accent and square, bracketed panels. Its other skins (Amber, Silver, Verdant) and the previous
+ * default, "Nightfur", are presets under Appearance settings (app/themes/ultimit.ts and
+ * app/themes/nightfur.ts). The frame itself (the wallpaper, the gaps between panels, the glass, the
+ * corner brackets, the clipped buttons) is all tokens too, in the "Frame" group below, so a theme
+ * can turn any of it off.
  */
 :root {
   /* Color */
-  --nu-color-bg-app: #0d0a13;
-  --nu-color-bg-primary: #14101c;
-  --nu-color-bg-secondary: #1a1524;
-  --nu-color-bg-tertiary: #241e31;
-  --nu-color-bg-elevated: #2d2640;
+  --nu-color-bg-app: #050607;
+  --nu-color-bg-primary: #0d0f12;
+  --nu-color-bg-secondary: #101317;
+  --nu-color-bg-tertiary: #171b20;
+  --nu-color-bg-elevated: #1f242b;
 
-  --nu-color-text-primary: #f4effa;
-  --nu-color-text-secondary: #bdb1d0;
-  --nu-color-text-muted: #7f7394;
-  --nu-color-text-link: #ffcb7a;
+  --nu-color-text-primary: #eef1f4;
+  --nu-color-text-secondary: #b9c0c9;
+  --nu-color-text-muted: #8d949e;
+  --nu-color-text-link: #d4ebff;
 
-  /* Catseye gold. */
-  --nu-color-accent: #ffb547;
-  --nu-color-accent-hover: #ffc56e;
-  /* Sakura — the secondary accent: mentions of you, the moderator role, and the second stop of
-     any two-tone gradient. Kept as its own token (not baked into a gradient literal) so a custom
-     theme can repoint every gradient by overriding two flat colors. */
-  --nu-color-accent-2: #ff7ab6;
-  --nu-color-accent-2-hover: #ff97c6;
-  --nu-color-danger: #ff5c6c;
-  --nu-color-danger-2: #ff8a5c;
-  --nu-color-success: #4ade9b;
-  --nu-color-warning: #ffd166;
+  /* Ice: the one accent, as on the Ultimit desktop. */
+  --nu-color-accent: #d4ebff;
+  --nu-color-accent-hover: #e9f5ff;
+  /* The secondary accent: mentions of you, the moderator role, and the second stop of any two-tone
+     gradient. Kept as its own token (not baked into a gradient literal) so a custom theme can
+     repoint every gradient by overriding two flat colors. A warm gold here, so "about you" still
+     stands out from the ice. */
+  --nu-color-accent-2: #ffd98f;
+  --nu-color-accent-2-hover: #ffe5b0;
+  --nu-color-danger: #ff8a8a;
+  --nu-color-danger-2: #ffb08a;
+  --nu-color-success: #8fe3b0;
+  --nu-color-warning: #ffd98f;
   /* Text/icon color drawn on top of any of the solid colors above (accent/danger/success/
-     warning) — a button's label, a badge's count. Gold is a light color, so this is dark ink
-     rather than white; a theme with a deep accent repoints this one token back to white. */
-  --nu-color-on-accent: #1a1206;
+     warning) — a button's label, a badge's count. The ice is light, so this is dark ink rather
+     than white; a theme with a deep accent repoints this one token back to white. */
+  --nu-color-on-accent: #07090b;
   /* Which way the browser's own controls lean — checkboxes, <select> menus, date pickers,
-     scrollbars. Every preset is dark; a light custom theme sets this to `light`. */
+     scrollbars. A light theme (Silver, Foxy) sets this to `light`. */
   --nu-color-scheme: dark;
   /* How far a person's name color (their chosen one, or the hue picked from their name) is mixed
      toward the text color before it's drawn. Those colors are pale, for dark backgrounds; a light
-     theme (Foxy) raises this so they darken enough to read. */
+     theme (Foxy, Silver) raises this so they darken enough to read. */
   --nu-name-ink-mix: 0%;
 
   /* Role colors — a member's name in the timeline and member list takes their role's color, and
      the member list groups people under these roles (see matrix/roles.ts). */
-  --nu-color-role-admin: #ffb547;
-  --nu-color-role-moderator: #ff7ab6;
+  --nu-color-role-admin: #ffd98f;
+  --nu-color-role-moderator: #c9b8ff;
 
-  --nu-color-border: #2b2439;
+  --nu-color-border: rgba(235, 240, 245, 0.16);
+  /* The stronger hairline: the focused panel's edge, a field being typed in, a secondary button. */
+  --nu-color-border-strong: rgba(235, 240, 245, 0.48);
   /* Dimming behind any full-screen overlay — modals, the recovery-key prompt. */
-  --nu-color-backdrop: rgba(6, 4, 10, 0.72);
+  --nu-color-backdrop: rgba(0, 0, 0, 0.62);
   /* Darker variant for the image lightbox specifically: a photo viewer conventionally goes
      near-black so the image itself is what stands out. */
-  --nu-color-backdrop-strong: rgba(6, 4, 10, 0.92);
+  --nu-color-backdrop-strong: rgba(0, 0, 0, 0.92);
 
   /* Gradients — built from the color tokens above so overriding the flat accent/danger colors in
-     a custom theme repaints these too. Nightfur keeps them nearly flat (gold into lighter gold);
-     the Y2K preset repoints them at a two-color candy gradient. */
-  --nu-gradient-accent: linear-gradient(180deg, var(--nu-color-accent-hover), var(--nu-color-accent));
+     a custom theme repaints these too. Mine keeps them flat; the Y2K preset repoints them at a
+     two-color candy gradient. */
+  --nu-gradient-accent: linear-gradient(180deg, var(--nu-color-accent), var(--nu-color-accent));
   --nu-gradient-accent-hover: linear-gradient(180deg, var(--nu-color-accent-hover), var(--nu-color-accent-hover));
   --nu-gradient-accent-diagonal: linear-gradient(160deg, var(--nu-color-accent-hover), var(--nu-color-accent));
   --nu-gradient-accent-text: linear-gradient(90deg, var(--nu-color-accent), var(--nu-color-accent-2));
   --nu-gradient-danger: linear-gradient(180deg, var(--nu-color-danger), var(--nu-color-danger));
+
+  /* Frame — the Ultimit desktop around the panels (styles/base/frame.css, components/Wallpaper.tsx).
+     The panels are glass windows over a wallpaper, with a gap between them and accent brackets on
+     two corners. Every piece of it is a token, so a theme that wants flat columns (Nightfur) sets
+     the gap and blur to 0, the brackets transparent and the wallpaper's opacity to 0. */
+  --nu-color-panel: color-mix(in srgb, var(--nu-color-bg-primary) 80%, transparent);
+  --nu-color-panel-main: color-mix(in srgb, var(--nu-color-bg-secondary) 82%, transparent);
+  --nu-color-rail: color-mix(in srgb, var(--nu-color-bg-app) 86%, transparent);
+  /* A row or button being pointed at: a faint wash of the text color, so it suits any palette. */
+  --nu-color-hover: color-mix(in srgb, var(--nu-color-text-primary) 6%, transparent);
+  --nu-frame-gap: 14px;
+  --nu-frame-blur: 18px;
+  --nu-frame-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --nu-frame-bracket: var(--nu-color-accent);
+  /* Room above the member list for the clock (app/StatusClock.tsx). */
+  --nu-frame-status-space: 92px;
+  /* The cut corners on buttons and avatars. `none` gives back plain rectangles. */
+  --nu-clip-cut: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  --nu-clip-avatar: polygon(0 0, calc(100% - 22%) 0, 100% 22%, 100% 100%, 22% 100%, 0 calc(100% - 22%));
+  /* Buttons, tabs and section labels are set in capitals and spaced out, like console text. */
+  --nu-label-transform: uppercase;
+  --nu-label-tracking: 0.16em;
+
+  /* Wallpaper (components/Wallpaper.tsx). Mixed from the colors above by default, so a custom
+     theme's wallpaper follows its palette. */
+  --nu-wallpaper-opacity: 1;
+  --nu-wall-ground-start: var(--nu-color-bg-app);
+  --nu-wall-ground-end: color-mix(in srgb, var(--nu-color-bg-elevated) 90%, var(--nu-color-text-muted));
+  --nu-wall-shard: var(--nu-color-text-primary);
+  --nu-wall-edge: color-mix(in srgb, #ffffff 40%, transparent);
+  --nu-wall-grid: var(--nu-color-text-primary);
+  --nu-wall-shade: #000000;
+  --nu-wall-blend: screen;
 
   /* Spacing */
   --nu-space-half: 2px;
@@ -76,23 +115,27 @@
   --nu-space-5: 18px;
   --nu-space-6: 24px;
 
-  /* Radius — soft but not bubbly. --nu-radius-tile is the server rail's squared icons (and
-     anything drawn to match them, like the space card's icon). */
-  --nu-radius-sm: 6px;
-  --nu-radius-md: 8px;
-  --nu-radius-lg: 14px;
-  --nu-radius-tile: 13px;
+  /* Radius — square, like the rest of the frame. --nu-radius-tile is the server rail's icons (and
+     anything drawn to match them, like the space card's icon); --nu-radius-avatar is people's
+     pictures, cut by --nu-clip-avatar instead of rounded; --nu-radius-dot is a presence or unread
+     dot. --nu-radius-full stays a pill for the few things that are meant to be one. */
+  --nu-radius-sm: 0px;
+  --nu-radius-md: 0px;
+  --nu-radius-lg: 0px;
+  --nu-radius-tile: 0px;
+  --nu-radius-avatar: 0px;
+  --nu-radius-dot: 0px;
   --nu-radius-full: 9999px;
 
   /* Typography */
-  --nu-font-body: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  /* Display face — a heavy Japanese poster gothic, used only where a name *is* the headline:
-     the space name, the channel title, a channel's welcome header. Everything else (usernames,
-     buttons, labels) stays on --nu-font-body at a heavier weight. */
-  --nu-font-display: 'Dela Gothic One', var(--nu-font-body);
-  --nu-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* One step up from the original 11/12.5/14/16: at the old sizes most of the interface (labels,
-     channel and member names, hints) sat at 12.5px and read as cramped next to meowops.net. */
+  --nu-font-body: 'Chakra Petch', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Display face — a wide techno grotesque, used only where a name *is* the headline: the space
+     name, the channel title, a window's title. Everything else (usernames, buttons) stays on
+     --nu-font-body at a heavier weight. */
+  --nu-font-display: 'Michroma', 'Eurostile', var(--nu-font-body);
+  --nu-font-mono: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Small console text: section labels, timestamps, counts, the clock. */
+  --nu-font-label: var(--nu-font-mono);
   --nu-font-size-xs: 11.5px;
   --nu-font-size-sm: 13.5px;
   --nu-font-size-md: 15px;
@@ -102,7 +145,7 @@
   --nu-font-size-message: 16px;
 
   /* Layout */
-  --nu-width-server-rail: 72px;
+  --nu-width-server-rail: 84px;
   --nu-width-channel-list: 252px;
   --nu-width-member-list: 252px;
   /* Shared height for the three column headers (channel list, main pane, member list), so their
@@ -301,5 +344,21 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* A window opening on the Ultimit desktop: a hairline draws across from the middle, then the
+   window drops down from it. Modals and the sign-in card use it. */
+@keyframes nu-window-in {
+  0% {
+    clip-path: inset(0 50% calc(100% - 2px) 50%);
+    opacity: 0.3;
+  }
+  45% {
+    clip-path: inset(0 0 calc(100% - 2px) 0);
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
   }
 }

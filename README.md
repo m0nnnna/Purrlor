@@ -136,7 +136,9 @@ list; "Nothing" ones are dimmed.
 Account Settings → Appearance lets you set a status (Online/Away/Invisible + a message), add a
 bio/banner/animated avatar, pick your own **typing status** (so the indicator says "Alice is
 yelling…" instead of "is typing…"), and fully re-theme the app by pasting or loading a `.css` file. The
-default look is "Nightfur"; "Y2K Chatroom" and "Lola" are one click away, or write your own. Space Settings lets you
+default look is "Mine", after the [Ultimit](https://github.com/m0nnnna/ultimit) desktop: glass panels over a
+crystal-shard wallpaper, with a 12-hour clock above the member list. Ultimit's other skins ("Amber",
+"Silver", "Verdant"), the previous default "Nightfur", "Y2K Chatroom" and "Lola" are one click away, or write your own. Space Settings lets you
 set a nickname scoped to just that Space, independent of your global display name.
 
 Your profile can also have a **page**: on your profile, **Build your page** opens a page builder
@@ -310,8 +312,9 @@ opens a new post with it.
   `.css` file), applied instantly. Every color/spacing/radius/font value in the app routes through
   a `--nu-*` token (`src/styles/tokens.css`), so a theme only needs to override tokens, not hunt
   down individual components.
-- Ships with the "Nightfur" default (ink-violet, catseye gold) and two presets: the glossy
-  "Y2K Chatroom" and the black-and-hot-pink "Lola".
+- Ships with the Ultimit-style "Mine" default (black glass, shard wallpaper, ice accent) and
+  presets: Ultimit's Amber, Silver and Verdant skins, the previous default "Nightfur", the glossy
+  "Y2K Chatroom", the black-and-hot-pink "Lola", Foxy and Halloween.
 - Expanded profiles — bio, banner, and animated (GIF/WebP) avatars, on top of Matrix's bare
   `displayname`/`avatar_url`, via MSC4133 extended profiles.
 - A custom **typing status**: set your own word for "typing" in Account Settings, and everyone

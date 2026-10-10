@@ -32,6 +32,8 @@ import { MusicPlayerBar } from '../features/music/MusicPlayerBar';
 import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
 import { useOnlinePing } from '../features/online/useOnlinePing';
 import { InstallHint } from './InstallHint';
+import { StatusClock } from './StatusClock';
+import { Wallpaper } from '../components/Wallpaper';
 import { useVisualViewport } from './useVisualViewport';
 import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
 import { useJoinFromInviteLink } from '../matrix/hooks/useJoinFromInviteLink';
@@ -80,6 +82,8 @@ export function AppShell() {
       data-nu-music={musicOn ? 'on' : undefined}
       data-nu-members-hidden={membersHidden || !selectedRoomId || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
+      <Wallpaper />
+      <StatusClock />
       <VoiceCallSession>
         <ServerRail />
         <ChannelList />

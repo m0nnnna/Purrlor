@@ -11,12 +11,12 @@ import { readableTextOn, type PageFont, type PageStyle } from '../../matrix/prof
 type FontInfo = { label: string; stack: string; /** Google Fonts family to load, unless the app already does. */ load?: string };
 
 export const FONTS: Record<PageFont, FontInfo> = {
-  figtree: { label: 'Figtree', stack: "'Figtree', system-ui, sans-serif" },
-  display: { label: 'Dela Gothic', stack: "'Dela Gothic One', 'Figtree', sans-serif" },
+  figtree: { label: 'Figtree', stack: "'Figtree', system-ui, sans-serif", load: 'Figtree:wght@400;600;700;800' },
+  display: { label: 'Dela Gothic', stack: "'Dela Gothic One', 'Figtree', sans-serif", load: 'Dela+Gothic+One' },
   pixel: { label: 'Pixel', stack: "'Pixelify Sans', monospace", load: 'Pixelify+Sans:wght@400;700' },
   handwriting: { label: 'Handwriting', stack: "'Caveat', cursive", load: 'Caveat:wght@400;700' },
   serif: { label: 'Serif', stack: "'Lora', Georgia, serif", load: 'Lora:ital,wght@0,400;0,700;1,400' },
-  mono: { label: 'Mono', stack: "'JetBrains Mono', ui-monospace, monospace" },
+  mono: { label: 'Mono', stack: "'JetBrains Mono', ui-monospace, monospace", load: 'JetBrains+Mono:wght@500' },
   rounded: { label: 'Rounded', stack: "'Nunito', 'Figtree', sans-serif", load: 'Nunito:wght@400;700;800' },
   typewriter: { label: 'Typewriter', stack: "'Special Elite', 'Courier New', monospace", load: 'Special+Elite' },
   comic: { label: 'Comic', stack: "'Comic Neue', 'Comic Sans MS', cursive", load: 'Comic+Neue:wght@400;700' },

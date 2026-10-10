@@ -9,6 +9,8 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/tokens.css';
 import './styles/base/shell.css';
 import './styles/base/form.css';
+// Last: the Ultimit frame over the component styles above (see its header comment).
+import './styles/base/frame.css';
 
 // Before anything renders, so a saved custom theme (see app/theme.ts) is already in place —
 // no flash of the default look first.

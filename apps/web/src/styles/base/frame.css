@@ -1,0 +1,247 @@
+/*
+ * The Ultimit frame: the app shell as a desktop of glass windows over the shard wallpaper
+ * (components/Wallpaper.tsx), after the Ultimit desktop's design (github.com/m0nnnna/ultimit,
+ * docs/design/mockup.html). Loaded after every component's own stylesheet (main.tsx), so these
+ * rules win over the component's plain column look at the same specificity, and a custom theme,
+ * loaded after this, still wins over both.
+ *
+ * Everything here is driven by the "Frame" tokens (styles/tokens.css). Nightfur
+ * (app/themes/nightfur.ts) shows how a theme turns it all back into flat columns.
+ */
+
+/* ---- Shell: the panels float, with a gap between them; the rail runs edge to edge. ---- */
+
+.nu-shell {
+  position: relative;
+  z-index: 1;
+  column-gap: var(--nu-frame-gap);
+  padding:
+    calc(env(safe-area-inset-top) + var(--nu-frame-gap))
+    calc(env(safe-area-inset-right) + var(--nu-frame-gap))
+    calc(env(safe-area-inset-bottom) + var(--nu-frame-gap))
+    env(safe-area-inset-left);
+}
+
+.nu-shell > .nu-server-rail,
+.nu-shell > [data-nu-role='voice-session'] > .nu-server-rail {
+  margin-top: calc(-1 * (env(safe-area-inset-top) + var(--nu-frame-gap)));
+  margin-bottom: calc(-1 * (env(safe-area-inset-bottom) + var(--nu-frame-gap)));
+  padding-top: calc(env(safe-area-inset-top) + var(--nu-space-5));
+}
+
+/* ---- Panels: glass windows with accent brackets on two corners. ---- */
+
+.nu-channel-list,
+.nu-main-pane,
+.nu-member-list {
+  position: relative;
+  background: var(--nu-color-panel);
+  border: 1px solid var(--nu-color-border);
+  backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  box-shadow: var(--nu-frame-shadow);
+}
+
+/* The main pane is where you are: its own, slightly lighter glass and the stronger edge. */
+.nu-main-pane {
+  background: var(--nu-color-panel-main);
+  border-color: var(--nu-color-border-strong);
+}
+
+.nu-channel-list::before,
+.nu-main-pane::before,
+.nu-member-list::before,
+.nu-channel-list::after,
+.nu-main-pane::after,
+.nu-member-list::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.nu-channel-list::before,
+.nu-main-pane::before,
+.nu-member-list::before {
+  left: -1px;
+  top: -1px;
+  border-left: 2px solid var(--nu-frame-bracket);
+  border-top: 2px solid var(--nu-frame-bracket);
+}
+
+.nu-channel-list::after,
+.nu-main-pane::after,
+.nu-member-list::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--nu-frame-bracket);
+  border-bottom: 2px solid var(--nu-frame-bracket);
+}
+
+/* Headers sit on the panel's glass rather than painting their own block over it. */
+.nu-main-pane__header,
+.nu-channel-list__header,
+.nu-member-list__header {
+  background: transparent;
+}
+
+/* A window's title: the display face, a little smaller, since Michroma runs wide. */
+.nu-main-pane__header-name {
+  font-size: 15px;
+  letter-spacing: 0.05em;
+}
+
+.nu-channel-list__header-title {
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.nu-member-list__header-title {
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+}
+
+.nu-member-list__header-count {
+  font-family: var(--nu-font-label);
+  letter-spacing: 0.12em;
+}
+
+/* ---- Section labels: small spaced console capitals. ---- */
+
+.nu-channel-list__category-header,
+.nu-channel-list__section-header,
+.nu-member-list__group-label {
+  font-family: var(--nu-font-label);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: var(--nu-label-transform);
+  letter-spacing: calc(var(--nu-label-tracking) + 0.04em);
+}
+
+/* Times read as console text too. */
+.nu-timeline__message-time,
+.nu-timeline__message-hover-time {
+  font-family: var(--nu-font-label);
+  letter-spacing: 0.04em;
+}
+
+/* The selected channel: a lit edge on the left rather than a filled pill. */
+.nu-channel-list__item--active,
+.nu-channel-list__item--active:hover {
+  box-shadow: inset 2px 0 0 var(--nu-color-accent);
+}
+
+/* ---- The clock (app/StatusClock.tsx), over the wallpaper above the member list. ---- */
+
+.nu-member-list {
+  margin-top: var(--nu-frame-status-space);
+}
+
+.nu-status-clock {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--nu-frame-gap));
+  right: calc(env(safe-area-inset-right) + var(--nu-frame-gap) + 2px);
+  z-index: 2;
+  max-width: var(--nu-width-member-list);
+  text-align: right;
+  font-family: var(--nu-font-label);
+  color: var(--nu-color-text-primary);
+  pointer-events: none;
+}
+
+.nu-status-clock__time {
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nu-status-clock__date {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-status-clock__sys {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--nu-color-text-muted);
+  white-space: nowrap;
+}
+
+.nu-status-clock__user {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nu-status-clock__dot {
+  font-weight: 400;
+  color: var(--nu-color-success);
+}
+
+.nu-status-clock__dot--off {
+  color: var(--nu-color-danger);
+}
+
+/* With no member list, there's nothing for the big clock to sit above: the rail shows the time
+   instead (RailClock). With one, the rail's clock would only repeat it. */
+.nu-shell[data-nu-members-hidden='true'] .nu-status-clock,
+.nu-shell:not([data-nu-members-hidden='true']) .nu-rail-clock {
+  display: none;
+}
+
+/* ---- Phones: one screen at a time, edge to edge (styles/base/shell.css). ---- */
+
+@media (max-width: 900px) {
+  .nu-shell {
+    --nu-frame-gap: 0px;
+  }
+
+  .nu-channel-list,
+  .nu-main-pane {
+    border-top: none;
+    border-bottom: none;
+    border-right: none;
+  }
+
+  .nu-channel-list::before,
+  .nu-main-pane::before,
+  .nu-member-list::before,
+  .nu-channel-list::after,
+  .nu-main-pane::after,
+  .nu-member-list::after {
+    display: none;
+  }
+
+  /* The member list is a drawer here (still fixed: the panel rule above would otherwise make it
+     relative), so there's no clock above it; the rail's shows instead. */
+  .nu-member-list {
+    position: fixed;
+    margin-top: 0;
+    background: var(--nu-color-bg-primary);
+  }
+
+  .nu-status-clock {
+    display: none;
+  }
+
+  .nu-shell .nu-rail-clock {
+    display: flex;
+  }
+}
+
+/* A file picker's label is often a filename, cut to fit; spaced capitals ran it out of room. */
+.nu-button.nu-file-picker {
+  letter-spacing: 0.06em;
+}

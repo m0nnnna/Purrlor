@@ -28,6 +28,7 @@ import { getParentSpace } from '../../matrix/voice';
 import { CreateSpaceModal } from './CreateSpaceModal';
 import { locateInList, usePointerDrag } from '../../components/usePointerDrag';
 import { moveSpace } from '../../matrix/spaceOrder';
+import { RailClock } from '../../app/StatusClock';
 import './ServerRail.css';
 
 /** The selected tile's cat ears — drawn on every tile, shown only on the active one (CSS),
@@ -69,6 +70,7 @@ function ServerRailItem({ space, active, onSelect, drag }: { space: Room; active
       type="button"
       className={className}
       data-nu-role="server-rail-item"
+      data-nu-label={space.name}
       title={space.name}
       aria-label={space.name}
       aria-current={active ? 'page' : undefined}
@@ -104,6 +106,7 @@ function DirectMessageRailItem({ room, count, onSelect }: { room: Room; count: n
       type="button"
       className="nu-server-rail__item nu-server-rail__item--dm nu-server-rail__item--unread"
       data-nu-role="server-rail-dm"
+      data-nu-label={room.name}
       title={label}
       aria-label={label}
       onClick={onSelect}
@@ -225,6 +228,7 @@ export function ServerRail() {
             .join(' ')
         }
         data-nu-role="server-rail-home"
+        data-nu-label="Home"
         title="Direct Messages"
         aria-label={dmCountTotal > 0 ? `Direct Messages, ${dmCountTotal} unread` : 'Direct Messages'}
         onClick={() => selectSpace(null)}
@@ -251,6 +255,7 @@ export function ServerRail() {
             : 'nu-server-rail__item nu-server-rail__item--global-feed'
         }
         data-nu-role="server-rail-global-feed"
+        data-nu-label="Feed"
         title="Global feed"
         aria-label="Global feed"
         aria-current={globalFeedOpen && !onNotifications ? 'page' : undefined}
@@ -296,6 +301,7 @@ export function ServerRail() {
             : 'nu-server-rail__item nu-server-rail__item--notifications'
         }
         data-nu-role="server-rail-notifications"
+        data-nu-label="Notify"
         title="Notifications"
         aria-label={unreadNotifications > 0 ? `Notifications, ${unreadNotifications} new` : 'Notifications'}
         aria-current={onNotifications ? 'page' : undefined}
@@ -310,6 +316,7 @@ export function ServerRail() {
         type="button"
         className="nu-server-rail__item nu-server-rail__item--invites"
         data-nu-role="server-rail-invites"
+        data-nu-label="Invites"
         title="Invites"
         aria-label="Invites"
         onClick={() => setShowInvites(true)}
@@ -323,6 +330,7 @@ export function ServerRail() {
         type="button"
         className="nu-server-rail__item nu-server-rail__item--discover"
         data-nu-role="server-rail-discover"
+        data-nu-label="Discover"
         title="Discover public spaces and channels"
         aria-label="Discover"
         onClick={() => setShowDiscover(true)}
@@ -333,12 +341,14 @@ export function ServerRail() {
         type="button"
         className="nu-server-rail__item nu-server-rail__item--add"
         data-nu-role="server-rail-add"
+        data-nu-label="Create"
         title="Create a Space"
         aria-label="Create a Space"
         onClick={() => setShowCreateSpace(true)}
       >
         <Icon name="plus" size={20} />
       </button>
+      <RailClock />
       {showCreateSpace && (
         <CreateSpaceModal
           onClose={() => setShowCreateSpace(false)}

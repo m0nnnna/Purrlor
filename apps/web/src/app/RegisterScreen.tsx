@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { Wallpaper } from '../components/Wallpaper';
 import { ClientEvent, type MatrixClient, type SyncState } from 'matrix-js-sdk';
 import { Modal } from '../components/Modal';
 import { EmailVerificationModal } from './EmailVerificationModal';
@@ -147,6 +148,7 @@ export function RegisterScreen({ onSwitchToLogin, onRegistered }: RegisterScreen
 
   return (
     <div className="nu-login" data-nu-role="register-screen">
+      <Wallpaper />
       <form className="nu-login__form" onSubmit={handleSubmit}>
         <img className="nu-login__mascot" src="/icon-192.png" alt="" />
         <h1 className="nu-login__title">Create an account</h1>

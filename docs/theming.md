@@ -54,17 +54,28 @@ at. The one thing it can't show you is the inside of a connected call.
 | `--nu-name-ink-mix` | How far a person's name color in chat (their chosen one, a custom role's, or the hue picked from their name) is mixed toward `--nu-color-text-primary`. `0%` on the dark themes, where those pale colors read as they are; a light theme raises it (Foxy: `55%`) so they darken enough to read |
 | `--nu-color-danger` / `-danger-2` / `-success` / `-warning` | Status colors (`-danger-2` is danger's gradient second stop, same idea as `-accent-2`) |
 | `--nu-color-role-admin` / `-role-moderator` | Name color (timeline and member list) and group swatch for members with that role — see `matrix/roles.ts` for the power-level tiers |
-| `--nu-color-border` | Hairline borders/dividers |
+| `--nu-color-border` / `-border-strong` | Hairline borders/dividers; the stronger one edges the main pane, dialogs and outlined buttons |
+| `--nu-color-panel` / `-panel-main` / `-rail` | The glass of the side panels, the main pane and the server rail (mixed from the `bg-*` colors by default) |
+| `--nu-color-hover` | A row or button being pointed at |
+| `--nu-frame-gap` / `-blur` / `-shadow` / `-bracket` | The Ultimit frame (`styles/base/frame.css`): space between the panels, their glass blur and shadow, and the corner brackets' color (`transparent` hides them) |
+| `--nu-frame-status-space` | Room above the member list for the clock (`app/StatusClock.tsx`) |
+| `--nu-clip-cut` / `--nu-clip-avatar` | Cut corners on buttons and on avatars; `none` gives plain shapes back |
+| `--nu-label-transform` / `-tracking` | Buttons, tabs and section labels in spaced capitals (`none` / `0` for ordinary type) |
+| `--nu-rail-label-display` / `--nu-rail-row-gap` | The names under the server rail's tiles (`none` hides them) and the gap that leaves room for them |
+| `--nu-wallpaper-opacity` | The shard wallpaper (`components/Wallpaper.tsx`); `0` hides it |
+| `--nu-wall-ground-start` / `-ground-end` / `-shard` / `-edge` / `-grid` / `-shade` / `-blend` | The wallpaper's colors: its background gradient, the shards, their edges, the hex grid and ring, their shading, and how shards blend (`screen` on dark, `normal` on light) |
 | `--nu-color-backdrop` | Dimming behind a modal / the recovery-key prompt |
 | `--nu-color-backdrop-strong` | Darker dimming behind the image lightbox specifically |
 | `--nu-gradient-accent` / `-accent-hover` / `-accent-diagonal` / `-accent-text` / `-danger` | Gradients built from the color tokens above — repoint the two flat colors rather than these directly unless you want a genuinely different gradient shape |
 | `--nu-space-half` | 2px — tight list-row gaps (below the smallest step of the space scale) |
 | `--nu-space-1` … `--nu-space-6` | Spacing scale (4px–24px) |
-| `--nu-radius-sm` / `-md` / `-lg` / `-full` | Corner radii (6/8/14px, plus pill) |
+| `--nu-radius-sm` / `-md` / `-lg` / `-full` | Corner radii (all 0 by default, plus pill) |
+| `--nu-radius-avatar` / `-dot` | People's pictures and presence/unread dots (square by default; `9999px` for circles) |
 | `--nu-radius-tile` | The server rail's square space icons, and anything drawn to match them (the space card icon, a channel's welcome icon) |
 | `--nu-font-body` | Base font stack — body copy, message text |
-| `--nu-font-display` | Only where a name is the headline: the space name, channel titles, a channel's welcome header (Dela Gothic One by default) |
+| `--nu-font-display` | Only where a name is the headline: the space name, channel titles, a channel's welcome header (Michroma by default) |
 | `--nu-font-mono` | Code |
+| `--nu-font-label` | Small console text: section labels, times, counts, the clock (the mono face by default) |
 | `--nu-font-size-xs` / `-sm` / `-md` / `-lg` / `-xl` | Font sizes (11.5/13.5/15/17/24px) |
 | `--nu-font-size-message` | Message text, the sender's name above it, and the composer (16px) |
 | `--nu-width-server-rail` / `-channel-list` / `-member-list` | Shell column widths |
@@ -148,6 +159,9 @@ This table grows as new components ship — update it in the same change that ad
 | `data-nu-role="member-list-item"` | One member's row |
 | `data-nu-role="login-screen"` | Login form container |
 | `data-nu-role="login-error"` | Login error message |
+| `data-nu-role="wallpaper"` (`.nu-wallpaper`) | The shard wallpaper behind the shell and the sign-in screen |
+| `data-nu-role="status-clock"` (`.nu-status-clock`) | The 12-hour clock and status lines above the member list |
+| `data-nu-role="rail-clock"` (`.nu-rail-clock`) | The small clock at the foot of the server rail, shown when there is no member list |
 | `data-nu-role="register-screen"` | Registration form container |
 | `data-nu-role="register-error"` | Registration error message |
 | `data-nu-role="modal"` (see `Modal.tsx`) | Also hosts the Terms-of-Service and email-verification prompts during registration |

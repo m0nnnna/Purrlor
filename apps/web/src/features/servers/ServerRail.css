@@ -1,10 +1,15 @@
 .nu-server-rail {
-  background: var(--nu-color-bg-app);
+  background: var(--nu-color-rail);
+  border-right: 1px solid var(--nu-color-border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--nu-space-5) 0 var(--nu-space-4);
-  gap: var(--nu-space-4);
+  /* The bottom padding leaves room for the last tile's label, which hangs below it. */
+  padding: var(--nu-space-5) 0 calc(var(--nu-space-4) + 16px);
+  /* Room under each tile for its label (::after, below). */
+  gap: var(--nu-rail-row-gap, 26px);
   /* The ears (below) sit at z-index -1 so they tuck *behind* their tile's top edge; this keeps
      them above the rail's own background instead of disappearing under it. */
   isolation: isolate;
@@ -22,10 +27,12 @@
   height: 46px;
   border-radius: var(--nu-radius-tile);
   background: var(--nu-color-bg-tertiary);
+  /* A hairline edge, so a tile reads as a framed square on the glass rail. */
+  box-shadow: inset 0 0 0 1px var(--nu-color-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--nu-font-size-lg);
   cursor: pointer;
   transition:
@@ -39,6 +46,36 @@
   color: var(--nu-color-text-primary);
 }
 
+/* The Ultimit rail's labels: each tile's name in small spaced capitals under it (data-nu-label,
+   ServerRail.tsx). Drawn, not read: the tile's aria-label already names it. A theme hides them
+   with `--nu-rail-label-display: none` (and can close up --nu-rail-row-gap). */
+.nu-server-rail__item[data-nu-label]::after {
+  content: attr(data-nu-label);
+  display: var(--nu-rail-label-display, block);
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  width: calc(var(--nu-width-server-rail) - 8px);
+  transform: translateX(-50%);
+  font-family: var(--nu-font-body);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--nu-color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.nu-server-rail__item--active[data-nu-label]::after,
+.nu-server-rail__item:hover[data-nu-label]::after {
+  color: var(--nu-color-text-primary);
+}
+
 .nu-server-rail__item-image {
   width: 100%;
   height: 100%;
@@ -46,16 +83,17 @@
   border-radius: inherit;
 }
 
-/* Left-edge indicator pill, Discord's convention: a short nub for "unread", taller on hover,
-   full height for the selected space. Sits in the rail's margin, outside the tile. */
+/* Left-edge indicator bar, Discord's convention: a short nub for "unread", taller on hover,
+   full height for the selected space. Sits in the rail's margin, outside the tile, against the
+   rail's edge. */
 .nu-server-rail__item::before {
   content: '';
   position: absolute;
-  left: -13px;
+  left: calc((46px - var(--nu-width-server-rail)) / 2);
   top: 50%;
-  width: 4px;
+  width: 3px;
   height: 0;
-  border-radius: 0 var(--nu-radius-full) var(--nu-radius-full) 0;
+  border-radius: 0 var(--nu-radius-dot) var(--nu-radius-dot) 0;
   background: var(--nu-color-text-primary);
   transform: translateY(-50%);
   transition: height 0.2s ease;
@@ -68,7 +106,7 @@
 /* An unread DM under Home (DirectMessageRailItem): round like a person, not squared like a Space,
    and it slides in when the message arrives. */
 .nu-server-rail__item--dm {
-  border-radius: var(--nu-radius-full);
+  border-radius: var(--nu-radius-avatar);
   animation: nu-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -84,8 +122,8 @@
 .nu-server-rail__item--active {
   color: var(--nu-color-text-primary);
   box-shadow:
-    0 0 0 2px var(--nu-color-accent),
-    0 6px 20px color-mix(in srgb, var(--nu-color-accent) 28%, transparent);
+    0 0 0 1px var(--nu-color-accent),
+    0 0 0 4px color-mix(in srgb, var(--nu-color-accent) 16%, transparent);
 }
 
 /* The cat ears: the one flourish in the whole shell. Only the selected tile shows them, and they
@@ -121,7 +159,7 @@
   bottom: -4px;
   right: -4px;
   border: 3px solid var(--nu-color-bg-app);
-  border-radius: var(--nu-radius-full);
+  border-radius: var(--nu-radius-dot);
   line-height: 0;
 }
 
@@ -194,8 +232,10 @@
 
 .nu-server-rail__divider {
   flex: none;
-  width: 28px;
-  height: 2px;
+  width: 40px;
+  height: 1px;
+  /* Pulled up into the label gap above it, so it sits between rows rather than under a label. */
+  margin: -8px 0 -10px;
   background: var(--nu-color-border);
   border-radius: var(--nu-radius-full);
 }
@@ -207,12 +247,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--nu-space-4);
+  gap: var(--nu-rail-row-gap, 26px);
   overflow-y: auto;
   scrollbar-width: none;
-  /* Room above the first tile for its ears, which would otherwise be clipped by this scroll
-     container's edge. */
-  padding: 12px 0 var(--nu-space-1);
+  /* Room above the first tile for its ears, and below the last for its label, which this scroll
+     container's edges would otherwise clip. */
+  padding: 12px 0 18px;
   isolation: isolate;
 }
 
@@ -272,4 +312,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+}
+
+/* RailClock (app/StatusClock.tsx): the time, small, at the foot of the rail. Only where the big
+   clock above the member list isn't showing (styles/base/frame.css decides). */
+.nu-rail-clock {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--nu-font-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--nu-color-text-primary);
+  line-height: 1.15;
+}
+
+.nu-rail-clock__time {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.nu-rail-clock__ampm {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--nu-color-text-muted);
 }

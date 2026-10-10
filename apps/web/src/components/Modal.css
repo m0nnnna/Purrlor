@@ -11,19 +11,48 @@
 }
 
 .nu-modal__panel {
+  position: relative;
   width: 420px;
   max-width: calc(100vw - var(--nu-space-6));
   max-height: calc(100vh - var(--nu-space-6));
   overflow-y: auto;
-  background: var(--nu-color-bg-secondary);
-  border: 1px solid var(--nu-color-border);
+  background: color-mix(in srgb, var(--nu-color-bg-secondary) 92%, transparent);
+  backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  border: 1px solid var(--nu-color-border-strong);
   border-radius: var(--nu-radius-lg);
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--nu-color-text-primary) 5%, transparent) inset,
     0 24px 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  animation: nu-dialog-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+  /* Opens like a console line drawing itself: a hairline across, then down (tokens.css). */
+  animation: nu-window-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* The frame's corner brackets (styles/base/frame.css draws the same on the shell's panels). */
+.nu-modal__panel::before,
+.nu-modal__panel::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nu-modal__panel::before {
+  left: -1px;
+  top: -1px;
+  border-left: 2px solid var(--nu-frame-bracket);
+  border-top: 2px solid var(--nu-frame-bracket);
+}
+
+.nu-modal__panel::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--nu-frame-bracket);
+  border-bottom: 2px solid var(--nu-frame-bracket);
 }
 
 .nu-modal__panel--wide {
@@ -40,8 +69,10 @@
 
 .nu-modal__title {
   margin: 0;
-  font-weight: 800;
-  font-size: var(--nu-font-size-lg);
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: 0.04em;
 }
 
 .nu-modal__close {

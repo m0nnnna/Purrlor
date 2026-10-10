@@ -1,0 +1,65 @@
+/* Wallpaper.tsx: fixed behind everything, never in the way of a click. */
+.nu-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--nu-wallpaper-opacity);
+  background: var(--nu-color-bg-app);
+}
+
+.nu-wallpaper svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nu-wallpaper__ground-start {
+  stop-color: var(--nu-wall-ground-start);
+}
+
+.nu-wallpaper__ground-end {
+  stop-color: var(--nu-wall-ground-end);
+}
+
+.nu-wallpaper__vignette-clear {
+  stop-color: var(--nu-wall-shade);
+  stop-opacity: 0;
+}
+
+.nu-wallpaper__vignette-dark {
+  stop-color: var(--nu-wall-shade);
+  stop-opacity: 0.45;
+}
+
+.nu-wallpaper__hexes,
+.nu-wallpaper__ring {
+  fill: none;
+  stroke: var(--nu-wall-grid);
+  stroke-width: 1;
+}
+
+.nu-wallpaper__hexes .nu-wallpaper__hex-fill {
+  stroke: none;
+  fill: var(--nu-wall-grid);
+}
+
+.nu-wallpaper__shard-stop {
+  stop-color: var(--nu-wall-shard);
+}
+
+/* Light shards add light on a dark ground; a light theme (Silver) lays them on normally. */
+.nu-wallpaper__shards {
+  mix-blend-mode: var(--nu-wall-blend);
+}
+
+.nu-wallpaper__shades {
+  fill: var(--nu-wall-shade);
+  fill-opacity: 0.22;
+}
+
+.nu-wallpaper__edges {
+  fill: none;
+  stroke: var(--nu-wall-edge);
+  stroke-width: 0.8;
+}
