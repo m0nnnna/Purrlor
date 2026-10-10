@@ -95,6 +95,16 @@
   --nu-label-transform: uppercase;
   --nu-label-tracking: 0.16em;
 
+  /* A post in a feed (styles/base/frame.css, "The feed"): a row on the window with a rule above
+     it. A theme that wants cards back sets a background, a border all round and a radius. */
+  --nu-post-background: transparent;
+  --nu-post-border: none;
+  --nu-post-divider: 1px solid var(--nu-color-border);
+  --nu-post-radius: 0px;
+  --nu-post-padding: var(--nu-space-4) var(--nu-space-1) var(--nu-space-2);
+  /* The label above the post composer's box. */
+  --nu-composer-label: '■  New post';
+
   /* Wallpaper (components/Wallpaper.tsx). Mixed from the colors above by default, so a custom
      theme's wallpaper follows its palette. */
   --nu-wallpaper-opacity: 1;

@@ -54,6 +54,12 @@ export const NIGHTFUR_CSS = `/* Nightfur: the previous default look. */
   --nu-label-transform: none;
   --nu-label-tracking: 0.02em;
   --nu-wallpaper-opacity: 0;
+  --nu-post-background: var(--nu-color-bg-primary);
+  --nu-post-border: 1px solid var(--nu-color-border);
+  --nu-post-divider: 1px solid var(--nu-color-border);
+  --nu-post-radius: var(--nu-radius-lg);
+  --nu-post-padding: var(--nu-space-4);
+  --nu-composer-label-display: none;
 
   --nu-radius-sm: 6px;
   --nu-radius-md: 8px;

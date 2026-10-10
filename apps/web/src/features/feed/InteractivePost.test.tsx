@@ -58,7 +58,9 @@ vi.mock('../../matrix/postPublishing', async (importOriginal) => ({
 }));
 // Media and avatars resolve mxc URLs through the client; nothing here needs them to load.
 vi.mock('./PostMedia', () => ({ PostMedia: () => <div data-nu-role="post-media" /> }));
-vi.mock('../../components/Avatar', () => ({ Avatar: () => null }));
+vi.mock('../../components/Avatar', () => ({ Avatar: () => null, nameHue: () => 0 }));
+// Name colors are looked up on the homeserver; these posts' authors have none.
+vi.mock('../../matrix/nameColor', () => ({ useNameColor: () => undefined, nameColorStyle: (color: string) => color }));
 
 let ignoredUsers: string[] = [];
 
@@ -128,8 +130,8 @@ afterEach(() => {
 describe('InteractivePost', () => {
   it('shows like, comment and repost with their counts', () => {
     const { container } = renderPost({ repost });
-    expect(q(container, 'post-like')?.textContent).toBe('2');
-    expect(q(container, 'post-comment-toggle')?.textContent).toBe('1');
+    expect(q(container, 'post-like')?.querySelector('.nu-post__action-count')?.textContent).toBe('2');
+    expect(q(container, 'post-comment-toggle')?.querySelector('.nu-post__action-count')?.textContent).toBe('1');
     expect(q(container, 'post-repost-action')).toBeTruthy();
   });
 
@@ -190,8 +192,8 @@ describe('InteractivePost', () => {
     hook.likesTruncated = true;
     hook.older = { token: 'tok' };
     const { container } = renderPost();
-    expect(q(container, 'post-like')?.textContent).toBe('2+');
-    expect(q(container, 'post-comment-toggle')?.textContent).toBe('1+');
+    expect(q(container, 'post-like')?.querySelector('.nu-post__action-count')?.textContent).toBe('2+');
+    expect(q(container, 'post-comment-toggle')?.querySelector('.nu-post__action-count')?.textContent).toBe('1+');
   });
 
   it('opens the thread with comments and a reply box that takes media', async () => {
@@ -381,7 +383,7 @@ describe('reposting', () => {
     hook.repostCount = 3;
     hook.myRepost = { receiptId: '$receipt', roomId: '!me', eventId: '$r' };
     const { container } = renderPost({ repost });
-    expect(q(container, 'post-repost-action')?.textContent).toBe('3');
+    expect(q(container, 'post-repost-action')?.querySelector('.nu-post__action-count')?.textContent).toBe('3');
     fireEvent.click(q(container, 'post-repost-action')!);
     expect(q(container, 'post-repost-now')).toBeNull();
     fireEvent.click(q(container, 'post-undo-repost')!);

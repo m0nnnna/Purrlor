@@ -1,0 +1,104 @@
+/* NotificationTicker.tsx: a console strip along the bottom of the shell, beside the server rail. */
+.nu-ticker {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + var(--nu-width-server-rail));
+  right: 0;
+  bottom: env(safe-area-inset-bottom);
+  height: var(--nu-ticker-height);
+  z-index: 6;
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  border: none;
+  border-top: 1px solid var(--nu-color-border);
+  background: var(--nu-color-rail);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--nu-color-text-muted);
+  font-family: var(--nu-font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.nu-ticker:focus-visible {
+  outline: 2px solid var(--nu-color-accent);
+  outline-offset: -2px;
+}
+
+.nu-ticker__key {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 16px;
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  letter-spacing: 0.2em;
+}
+
+.nu-ticker__count {
+  padding: 0 5px;
+  background: var(--nu-color-on-accent);
+  color: var(--nu-color-accent);
+  letter-spacing: 0.04em;
+}
+
+.nu-ticker__track {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.nu-ticker__run {
+  display: inline-block;
+  padding-left: 100%;
+  animation: nu-ticker-scroll 40s linear infinite;
+}
+
+.nu-ticker:hover .nu-ticker__run,
+.nu-ticker:focus-visible .nu-ticker__run {
+  animation-play-state: paused;
+}
+
+@keyframes nu-ticker-scroll {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.nu-ticker__empty {
+  padding-left: 16px;
+}
+
+.nu-ticker__sep {
+  margin: 0 14px;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-ticker__time {
+  margin-right: 10px;
+  color: var(--nu-color-text-primary);
+}
+
+.nu-ticker__item--new {
+  color: var(--nu-color-text-primary);
+}
+
+/* Standing still (less motion, Safe effects): the newest first, as many as fit. */
+@media (prefers-reduced-motion: reduce) {
+  .nu-ticker__run {
+    padding-left: 16px;
+    animation: none;
+  }
+}
+
+html[data-nu-effects='safe'] .nu-ticker__run {
+  padding-left: 16px;
+  animation: none;
+}

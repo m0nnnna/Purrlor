@@ -28,6 +28,7 @@ the same server.
 | `your-data.spec.ts` | Download my data: your messages (an encrypted one as text), posts and uploaded file in the ZIP, nobody else's messages; Delete my account: a wrong password changes nothing, then posts and the public page go and the account can't sign in |
 | `channel-drag.spec.ts` | Dragging channels within and between categories and to the top, and a category above another, with the mouse, all saved to the Space; a click still opens a channel; a member can't drag; on a touch screen a long press drags and a swipe doesn't; Spaces dragged into your own order in the rail, saved as account data and kept after a reload |
 | `image-tags.spec.ts` | Tagging someone in a Global post's picture: placed by tapping it and picking them, saved on the picture as whole-number coordinates with the post mentioning them, their invite worded "Tagged you in a photo", and their name shown on the posted picture, opening their profile |
+| `page-effects.spec.ts` | A profile page's effect falls for its owner (Full effects), and stands still, scattered, with reduced motion or Safe effects, where the wallpaper isn't drawn either |
 | `page-background.spec.ts` | A profile page's background picture, "fill" and "stay put", keeps its size while a long profile scrolls and more posts load; "stay put" stays at the top, "fill" scrolls away |
 | `link-previews.spec.ts` | A link in a channel message and in a post gets a preview card (the homeserver fetching a page the token server serves); a link in an encrypted conversation gets none, and the app never asks |
 | `onboarding.spec.ts` | A new account gets the welcome guide: sets its name, finds and joins a public Space, lands in it, and never sees the guide again (after a reload too); one that skips it gets the ways in on the empty screen and joins by pasting an invite link; Account Settings opens the guide again. Every other spec's accounts are marked as welcomed (`createUser`) |
@@ -35,6 +36,8 @@ the same server.
 | `feed-cache.spec.ts` | The feed opened again after a reload shows its last posts before the homeserver answers, then gathers nothing again (no directory or `/state` reads) and asks the feed only for its newest posts, bringing in one posted meanwhile |
 | `room-revisit.spec.ts` | A channel left scrolled up opens again at the same message without asking the homeserver for anything; one left at the bottom opens at the bottom |
 | `session-verification.spec.ts` | Registering sets up cross-signing; a second session verified with the recovery key is signed by the account's self-signing key, which is what other Matrix apps check |
+
+Effects are on Auto (`app/effects.ts`), which in headless Chromium, drawing in software, comes to **Safe**: no wallpaper, blur or animation. A test that needs Full sets `nekous_effects` in localStorage first (`page-effects.spec.ts`).
 
 ## Running locally
 

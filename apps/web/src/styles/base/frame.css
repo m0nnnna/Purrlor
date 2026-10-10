@@ -12,20 +12,27 @@
 /* ---- Shell: the panels float, with a gap between them; the rail runs edge to edge. ---- */
 
 .nu-shell {
+  /* The notification ticker's strip along the bottom (NotificationTicker.tsx), when it's on. */
+  --nu-ticker-height: 26px;
+  --nu-ticker-space: 0px;
   position: relative;
   z-index: 1;
   column-gap: var(--nu-frame-gap);
   padding:
     calc(env(safe-area-inset-top) + var(--nu-frame-gap))
     calc(env(safe-area-inset-right) + var(--nu-frame-gap))
-    calc(env(safe-area-inset-bottom) + var(--nu-frame-gap))
+    calc(env(safe-area-inset-bottom) + var(--nu-frame-gap) + var(--nu-ticker-space))
     env(safe-area-inset-left);
+}
+
+.nu-shell[data-nu-ticker='on'] {
+  --nu-ticker-space: var(--nu-ticker-height);
 }
 
 .nu-shell > .nu-server-rail,
 .nu-shell > [data-nu-role='voice-session'] > .nu-server-rail {
   margin-top: calc(-1 * (env(safe-area-inset-top) + var(--nu-frame-gap)));
-  margin-bottom: calc(-1 * (env(safe-area-inset-bottom) + var(--nu-frame-gap)));
+  margin-bottom: calc(-1 * (env(safe-area-inset-bottom) + var(--nu-frame-gap) + var(--nu-ticker-space)));
   padding-top: calc(env(safe-area-inset-top) + var(--nu-space-5));
 }
 
@@ -195,17 +202,50 @@
 }
 
 /* With no member list, there's nothing for the big clock to sit above: the rail shows the time
-   instead (RailClock). With one, the rail's clock would only repeat it. */
-.nu-shell[data-nu-members-hidden='true'] .nu-status-clock,
-.nu-shell:not([data-nu-members-hidden='true']) .nu-rail-clock {
+   instead (RailClock). With one, or the feed's side column, the rail's clock would only repeat it. */
+.nu-shell[data-nu-members-hidden='true']:not([data-nu-side='feed']) .nu-status-clock,
+.nu-shell:not([data-nu-members-hidden='true']) .nu-rail-clock,
+.nu-shell[data-nu-side='feed'] .nu-rail-clock {
   display: none;
+}
+
+/* ---- The global feed's side column (features/feed/FeedSidebar.tsx), on a wide screen. ---- */
+
+@media (min-width: 1180px) {
+  .nu-shell[data-nu-side='feed'] {
+    grid-template-columns:
+      var(--nu-width-server-rail) var(--nu-width-channel-list) 1fr
+      var(--nu-width-feed-side, 290px);
+  }
+
+  .nu-shell[data-nu-side='feed'] .nu-feed-side {
+    display: flex;
+  }
+}
+
+/* Narrower, there's no column for it: the clock goes back to the rail. */
+@media (max-width: 1179px) {
+  .nu-shell[data-nu-side='feed'] .nu-status-clock {
+    display: none;
+  }
+
+  .nu-shell[data-nu-side='feed'][data-nu-members-hidden='true'] .nu-rail-clock {
+    display: flex;
+  }
 }
 
 /* ---- Phones: one screen at a time, edge to edge (styles/base/shell.css). ---- */
 
 @media (max-width: 900px) {
-  .nu-shell {
+  .nu-shell,
+  .nu-shell[data-nu-ticker='on'] {
     --nu-frame-gap: 0px;
+    --nu-ticker-space: 0px;
+  }
+
+  /* No room on a phone: the rail's bell already counts what's new. */
+  .nu-ticker {
+    display: none;
   }
 
   .nu-channel-list,
@@ -244,4 +284,146 @@
 /* A file picker's label is often a filename, cut to fit; spaced capitals ran it out of room. */
 .nu-button.nu-file-picker {
   letter-spacing: 0.06em;
+}
+
+/* ---- Safe effects (app/effects.ts): the same frame, drawn cheaply. ----
+   No blur, no translucency to composite, no shadows, no wallpaper (Wallpaper.tsx doesn't even
+   render) and no animation. html[...] outranks a theme's :root, so a theme can't switch the
+   costly parts back on for a machine that asked for Safe. */
+
+html[data-nu-effects='safe'] {
+  --nu-frame-blur: 0px;
+  --nu-frame-shadow: none;
+  --nu-color-panel: var(--nu-color-bg-primary);
+  --nu-color-panel-main: var(--nu-color-bg-secondary);
+  --nu-color-rail: var(--nu-color-bg-app);
+  --nu-wallpaper-opacity: 0;
+}
+
+html[data-nu-effects='safe'] *,
+html[data-nu-effects='safe'] *::before,
+html[data-nu-effects='safe'] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Things pinned to the bottom edge sit above the ticker's strip, not on it. */
+.nu-shell[data-nu-ticker='on'] .nu-demo-banner {
+  bottom: calc(var(--nu-space-4) + var(--nu-ticker-space));
+}
+
+/* ---- The feed: posts as rows in the window, not cards on it (the Ultimit mockup's feed). ----
+   The --nu-post-* tokens (tokens.css) shape a post; Nightfur sets them back to cards. Only in a
+   feed column (.nu-feed): a profile page styles its posts in its own colors (ProfilePage.css). */
+
+.nu-feed > .nu-post {
+  background: var(--nu-post-background);
+  border: var(--nu-post-border);
+  border-top: var(--nu-post-divider);
+  border-radius: var(--nu-post-radius);
+  padding: var(--nu-post-padding);
+}
+
+.nu-feed > .nu-post--private {
+  border-top-style: dashed;
+}
+
+.nu-post__author,
+.nu-post__author--link {
+  font-weight: 600;
+}
+
+.nu-post__time,
+.nu-post__time--link,
+.nu-post__repost-label,
+.nu-post__badge {
+  font-family: var(--nu-font-label);
+  letter-spacing: 0.04em;
+}
+
+.nu-post__repost-label {
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: var(--nu-label-transform);
+}
+
+/* Where a post lives: an outlined console chip. */
+.nu-post__origin {
+  background: transparent;
+  border-color: currentColor;
+  font-family: var(--nu-font-label);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: var(--nu-label-transform);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-post__origin--global {
+  color: var(--nu-color-accent-2);
+  border-color: currentColor;
+}
+
+/* LIKE 24 · COMMENT 6 · REPOST 3: console buttons, counts in line. */
+.nu-post__action {
+  min-height: 36px;
+  font-family: var(--nu-font-label);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: var(--nu-label-transform);
+  border: 1px solid transparent;
+}
+
+.nu-post__action:hover:not(:disabled) {
+  border-color: var(--nu-color-border);
+}
+
+.nu-post__actions {
+  margin-left: calc(-1 * var(--nu-space-2));
+}
+
+/* A thread hangs off its post on a rule. */
+.nu-feed .nu-comments {
+  padding-left: var(--nu-space-4);
+  border-left: 1px solid var(--nu-color-border-strong);
+}
+
+/* The composer: a framed box with its console label. */
+.nu-feed > .nu-post-composer {
+  position: relative;
+  background: var(--nu-color-hover);
+  border: 1px solid var(--nu-color-border-strong);
+}
+
+.nu-feed > .nu-post-composer::before {
+  content: var(--nu-composer-label);
+  display: var(--nu-composer-label-display, flex);
+  align-items: center;
+  gap: 8px;
+  font-family: var(--nu-font-label);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-feed-search__input {
+  border-radius: var(--nu-radius-md);
+}
+
+.nu-post__action-count {
+  margin-left: 6px;
+  color: var(--nu-color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A profile page's effect under Safe effects: still there, standing still and scattered, as with
+   reduced motion (ProfilePage.css), rather than run to the end of its fall. */
+html[data-nu-effects='safe'] .nu-profile-page__particle {
+  animation: none !important;
+  top: var(--nu-particle-rest, 50%);
 }

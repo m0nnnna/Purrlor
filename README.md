@@ -137,7 +137,9 @@ Account Settings → Appearance lets you set a status (Online/Away/Invisible + a
 bio/banner/animated avatar, pick your own **typing status** (so the indicator says "Alice is
 yelling…" instead of "is typing…"), and fully re-theme the app by pasting or loading a `.css` file. The
 default look is "Mine", after the [Ultimit](https://github.com/m0nnnna/ultimit) desktop: glass panels over a
-crystal-shard wallpaper, with a 12-hour clock above the member list. Ultimit's other skins ("Amber",
+crystal-shard wallpaper, with a 12-hour clock above the member list and your notifications on a ticker
+along the bottom. Appearance → Effects switches between **Full** (glass, blur, wallpaper, animation) and
+**Safe** (flat and light, for a weaker machine); **Auto** picks for you. Ultimit's other skins ("Amber",
 "Silver", "Verdant"), the previous default "Nightfur", "Y2K Chatroom" and "Lola" are one click away, or write your own. Space Settings lets you
 set a nickname scoped to just that Space, independent of your global display name.
 

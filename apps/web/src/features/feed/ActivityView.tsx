@@ -33,7 +33,8 @@ const ICONS: Record<ActivityKind, IconName> = {
   follow: 'userPlus',
 };
 
-const VERBS: Record<ActivityKind, string> = {
+/** What each kind of notification says after the name: the ticker (NotificationTicker.tsx) uses it too. */
+export const VERBS: Record<ActivityKind, string> = {
   like: 'liked your post',
   repost: 'reposted your post',
   quote: 'quoted your post',

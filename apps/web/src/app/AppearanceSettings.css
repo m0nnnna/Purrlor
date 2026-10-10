@@ -96,3 +96,36 @@
   gap: var(--nu-space-2);
   font-size: var(--nu-font-size-sm);
 }
+
+/* EffectsSettings.tsx: Auto / Full / Safe, and the ticker. */
+.nu-effects-settings__title {
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-effects-settings__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nu-space-2);
+}
+
+.nu-effects-settings__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nu-space-2);
+  padding: var(--nu-space-3);
+  border: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-md);
+  cursor: pointer;
+}
+
+.nu-effects-settings__choice:has(input:checked) {
+  border-color: var(--nu-color-accent);
+  box-shadow: inset 2px 0 0 var(--nu-color-accent);
+}
+
+.nu-effects-settings__choice > span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  color: var(--nu-color-text-primary);
+}

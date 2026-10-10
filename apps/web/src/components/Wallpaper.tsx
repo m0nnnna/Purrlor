@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useEffects } from '../app/effects';
 import './Wallpaper.css';
 
 /**
@@ -9,7 +10,7 @@ import './Wallpaper.css';
  *
  * Every color comes from the `--nu-wall-*` tokens (styles/tokens.css), which default to mixes of
  * the theme's own colors, so a custom theme recolors it without knowing it exists. A theme hides it
- * with `--nu-wallpaper-opacity: 0`.
+ * with `--nu-wallpaper-opacity: 0`; Safe effects (app/effects.ts) leave it out entirely.
  */
 
 const W = 1440;
@@ -134,7 +135,10 @@ const GEOMETRY = buildGeometry();
 
 export function Wallpaper() {
   const id = useId().replace(/:/g, '');
+  const effects = useEffects();
   const g = GEOMETRY;
+  // Safe effects: nothing to draw or composite behind the panels at all.
+  if (effects === 'safe') return null;
   return (
     <div className="nu-wallpaper" data-nu-role="wallpaper" aria-hidden="true">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" focusable="false">

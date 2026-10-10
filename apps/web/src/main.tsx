@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import { applyStoredThemeOnLoad } from './app/theme';
+import { applyEffectsOnLoad } from './app/effects';
 import { captureInstallPrompt } from './app/installApp';
 import { loadRuntimeConfig } from './app/runtimeConfig';
 import { installErrorReporting } from './app/errorReporting';
@@ -15,6 +16,8 @@ import './styles/base/frame.css';
 // Before anything renders, so a saved custom theme (see app/theme.ts) is already in place —
 // no flash of the default look first.
 applyStoredThemeOnLoad();
+// The same for Full or Safe effects (app/effects.ts): a weak machine never draws the full frame first.
+applyEffectsOnLoad();
 
 // The browser offers installing once, early; kept for Account Settings and the phone hint.
 captureInstallPrompt();

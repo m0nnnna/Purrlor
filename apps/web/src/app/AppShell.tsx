@@ -33,6 +33,9 @@ import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
 import { useOnlinePing } from '../features/online/useOnlinePing';
 import { InstallHint } from './InstallHint';
 import { StatusClock } from './StatusClock';
+import { useTickerOn } from './effects';
+import { NotificationTicker } from '../features/notifications/NotificationTicker';
+import { FeedSidebar } from '../features/feed/FeedSidebar';
 import { Wallpaper } from '../components/Wallpaper';
 import { useVisualViewport } from './useVisualViewport';
 import { CommissionAlerts } from '../features/profilePage/CommissionAlerts';
@@ -58,6 +61,7 @@ export function AppShell() {
   const profileOpen = !!useAtomValue(profileUserIdAtom);
   const postOpen = !!useAtomValue(openPostAtom);
   const musicOn = !!useAtomValue(musicQueueAtom);
+  const tickerOn = useTickerOn();
   // On a phone the main pane only shows once there's something in it: a room, a Space's Posts,
   // or the global feed. The last two aren't rooms, so a room check alone left them invisible.
   const mainPaneHasContent = !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
@@ -80,6 +84,9 @@ export function AppShell() {
       data-nu-mobile-pane={mainPaneHasContent ? 'chat' : 'sidebar'}
       data-nu-mobile-members-open={mobileMembersOpen}
       data-nu-music={musicOn ? 'on' : undefined}
+      data-nu-ticker={tickerOn ? 'on' : undefined}
+      // The global feed's own side column (FeedSidebar) takes the member list's place.
+      data-nu-side={globalFeedOpen && !profileOpen && !postOpen ? 'feed' : undefined}
       data-nu-members-hidden={membersHidden || !selectedRoomId || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
       <Wallpaper />
@@ -89,6 +96,7 @@ export function AppShell() {
         <ChannelList />
         <MainPane />
         <MemberList />
+        {globalFeedOpen && !profileOpen && !postOpen && <FeedSidebar />}
       </VoiceCallSession>
       {mobileMembersOpen && (
         <div
@@ -97,6 +105,7 @@ export function AppShell() {
           onClick={() => setMobileMembersOpen(false)}
         />
       )}
+      {tickerOn && <NotificationTicker />}
       <MusicPlayerHost />
       <MusicPlayerBar variant="mini" />
       {/* Not over a chat, where it covered the composer: on the channel list. */}

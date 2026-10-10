@@ -63,6 +63,10 @@ at. The one thing it can't show you is the inside of a connected call.
 | `--nu-label-transform` / `-tracking` | Buttons, tabs and section labels in spaced capitals (`none` / `0` for ordinary type) |
 | `--nu-rail-label-display` / `--nu-rail-row-gap` | The names under the server rail's tiles (`none` hides them) and the gap that leaves room for them |
 | `--nu-wallpaper-opacity` | The shard wallpaper (`components/Wallpaper.tsx`); `0` hides it |
+| `--nu-post-background` / `-border` / `-divider` / `-radius` / `-padding` | A post in a feed: by default a row with a rule above it; Nightfur sets them back to cards |
+| `--nu-composer-label` / `--nu-composer-label-display` | The label over the post composer's box (`none` hides it) |
+| `--nu-ticker-height` | The notification ticker's strip along the bottom (`NotificationTicker.tsx`) |
+| `--nu-width-feed-side` | The global feed's side column (your profile, trending tags), on screens 1180px and wider |
 | `--nu-wall-ground-start` / `-ground-end` / `-shard` / `-edge` / `-grid` / `-shade` / `-blend` | The wallpaper's colors: its background gradient, the shards, their edges, the hex grid and ring, their shading, and how shards blend (`screen` on dark, `normal` on light) |
 | `--nu-color-backdrop` | Dimming behind a modal / the recovery-key prompt |
 | `--nu-color-backdrop-strong` | Darker dimming behind the image lightbox specifically |
@@ -162,6 +166,9 @@ This table grows as new components ship — update it in the same change that ad
 | `data-nu-role="wallpaper"` (`.nu-wallpaper`) | The shard wallpaper behind the shell and the sign-in screen |
 | `data-nu-role="status-clock"` (`.nu-status-clock`) | The 12-hour clock and status lines above the member list |
 | `data-nu-role="rail-clock"` (`.nu-rail-clock`) | The small clock at the foot of the server rail, shown when there is no member list |
+| `data-nu-role="notification-ticker"` (`.nu-ticker`) | The notification ticker along the bottom; opens Notifications |
+| `data-nu-role="feed-side"` / `-profile` / `-trending` / `-tag` (`.nu-feed-side`) | The global feed's side column: your profile card, and trending tags |
+| `data-nu-role="effects-settings"` | Appearance → Effects (Auto, Full, Safe) and the ticker switch |
 | `data-nu-role="register-screen"` | Registration form container |
 | `data-nu-role="register-error"` | Registration error message |
 | `data-nu-role="modal"` (see `Modal.tsx`) | Also hosts the Terms-of-Service and email-verification prompts during registration |
@@ -230,3 +237,7 @@ fetches a different address for each letter typed. Two things stop that:
   The theme is saved as written, so editing it later shows what you wrote.
 
 A theme that targets the documented tokens and `[data-nu-role="…"]` selectors is never changed.
+
+## Effects: Full and Safe
+
+Appearance → Effects picks how much of the frame a device draws (`app/effects.ts`), kept per device. **Full** is the glass, blur, wallpaper and animations. **Safe** keeps the layout and colors but drops the wallpaper, every `backdrop-filter`, translucency, shadows and animation, for a machine without a graphics card. **Auto**, the default, picks Safe when the browser draws in software (WebGL's renderer is SwiftShader, llvmpipe and the like) or the system asks for less motion. It's `data-nu-effects="full|safe"` on `<html>`, so a theme can style either: `html[data-nu-effects='safe'] …`. Safe's rules outrank a theme's `:root`, so a theme can't turn the costly parts back on for a device that asked for Safe.

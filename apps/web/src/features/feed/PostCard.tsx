@@ -44,6 +44,9 @@ type PostCardProps = {
   /** Below the action row — the comment thread, when it's open. */
   footer?: ReactNode;
   role?: string;
+  /** The author's name color, ready for `color:` (InteractivePost: their chosen one). None on the
+   *  signed-out pages, which have no client to look it up with. */
+  authorColor?: string;
 };
 
 function OriginChip({ origin, onOpen }: { origin: PostOrigin; onOpen?: (origin: PostOrigin) => void }) {
@@ -65,10 +68,11 @@ function OriginChip({ origin, onOpen }: { origin: PostOrigin; onOpen?: (origin: 
   );
 }
 
-function AuthorName({ author, onOpenProfile }: { author: PostAuthor; onOpenProfile?: (userId: string) => void }) {
-  if (!onOpenProfile) return <span className="nu-post__author">{author.name}</span>;
+function AuthorName({ author, onOpenProfile, color }: { author: PostAuthor; onOpenProfile?: (userId: string) => void; color?: string }) {
+  const style = color ? { color } : undefined;
+  if (!onOpenProfile) return <span className="nu-post__author" style={style}>{author.name}</span>;
   return (
-    <button type="button" className="nu-post__author nu-post__author--link" data-nu-role="post-author" onClick={() => onOpenProfile(author.userId)}>
+    <button type="button" className="nu-post__author nu-post__author--link" data-nu-role="post-author" style={style} onClick={() => onOpenProfile(author.userId)}>
       {author.name}
     </button>
   );
@@ -198,6 +202,7 @@ export function PostCard({
   actions,
   footer,
   role = 'feed-post',
+  authorColor,
 }: PostCardProps) {
   // A tap on the text opens the post, like any social app — except on something that's its own
   // control (a link, a mention, a spoiler) or when the tap was the end of selecting text to copy.
@@ -227,7 +232,7 @@ export function PostCard({
           </div>
         )}
         <header className="nu-post__meta">
-          <AuthorName author={author} onOpenProfile={onOpenProfile} />
+          <AuthorName author={author} onOpenProfile={onOpenProfile} color={authorColor} />
           {origin && <OriginChip origin={origin} onOpen={openerFor(origin)} />}
           {privateBadge && (
             <span className="nu-post__badge" data-nu-role="feed-private-badge">

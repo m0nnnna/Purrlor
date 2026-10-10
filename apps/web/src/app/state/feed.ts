@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import { isUnread, type ActivityItem } from '../../matrix/activity';
+import type { GlobalPost } from '../../matrix/globalFeed';
 
 /**
  * What the global feed's search box holds — `#tag` or words (matrix/hashtags.ts). Set from
@@ -30,3 +31,7 @@ export const unreadActivityCountAtom = atom((get) => {
   const { items, seenTs } = get(activityAtom);
   return items.filter((item) => isUnread(item, seenTs)).length;
 });
+
+/** The global feed's posts as loaded so far (GlobalFeedView), for the feed's side column
+ *  (FeedSidebar.tsx) to count trending tags from without reading the feed a second time. */
+export const feedPostsAtom = atom<GlobalPost[]>([]);

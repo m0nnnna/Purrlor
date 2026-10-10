@@ -36,6 +36,8 @@ const particleTops = (page: Page) =>
   );
 
 test('the owner sees their page’s effect, falling', async ({ page }) => {
+  // Full effects: a headless browser draws in software, where Auto would pick Safe (app/effects.ts).
+  await page.addInitScript(() => localStorage.setItem('nekous_effects', 'full'));
   const alice = await createUser('alice');
   await pageWithEffect(page, alice);
   await role(page, 'social-nav-profile').click();
@@ -54,6 +56,20 @@ test('with reduced motion the effect stays, standing still', async ({ browser })
   await expect(role(page, 'profile-page-effects-toggle')).toBeVisible();
   const before = await particleTops(page);
   expect(new Set(before).size).toBeGreaterThan(1); // scattered, not in a row at the top
+  await page.waitForTimeout(1000);
+  expect(await particleTops(page)).toEqual(before);
+});
+
+test('with Safe effects the effect stays, standing still, and the wallpaper isn’t drawn', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('nekous_effects', 'safe'));
+  const alice = await createUser('alice');
+  await pageWithEffect(page, alice);
+  await expect(page.locator('html')).toHaveAttribute('data-nu-effects', 'safe');
+  await expect(role(page, 'wallpaper')).toHaveCount(0);
+  await role(page, 'social-nav-profile').click();
+  await expect(role(page, 'profile-page-effects')).toBeVisible();
+  const before = await particleTops(page);
+  expect(new Set(before).size).toBeGreaterThan(1);
   await page.waitForTimeout(1000);
   expect(await particleTops(page)).toEqual(before);
 });

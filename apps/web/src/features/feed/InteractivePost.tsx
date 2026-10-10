@@ -8,6 +8,8 @@ import { Menu, MenuItem } from '../../components/Menu';
 import { shareLink } from '../../components/ShareLinkButton';
 import { postLink } from '../../matrix/publicWeb';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
+import { nameColorStyle, useNameColor } from '../../matrix/nameColor';
+import { nameHue } from '../../components/Avatar';
 import {
   buildPostContent,
   deletePost,
@@ -94,6 +96,9 @@ export function InteractivePost({
   ...card
 }: InteractivePostProps) {
   const mx = useMatrixClient();
+  // The author's name in their own chosen color, as in chat (or the one picked from their name).
+  const chosenColor = useNameColor(card.author.userId);
+  const authorColor = nameColorStyle(chosenColor ?? `hsl(${nameHue(card.author.name)}, 70%, 78%)`);
   // A post you just made has a temporary "~" ID until the server confirms it (a moment). Anything
   // that points at it — an edit, a delete, a like, a comment, a pin — waits for the real one:
   // matrix-js-sdk throws on a temporary ID ("Cannot call getPendingEvents…"). The feed swaps the
@@ -482,6 +487,7 @@ export function InteractivePost({
   return (
     <PostCard
       {...card}
+      authorColor={authorColor}
       content={content}
       edited={edited}
       bodyOverride={editForm}
@@ -505,7 +511,8 @@ export function InteractivePost({
             onClick={() => void handleLike()}
           >
             <Icon name="heart" size={14} filled={liked} />
-            {interactions.likeCount > 0 ? `${interactions.likeCount}${interactions.likesTruncated ? '+' : ''}` : 'Like'}
+            {/* The word and the count, "Like 24", as on the Ultimit feed. */}
+            Like{interactions.likeCount > 0 && <span className="nu-post__action-count">{countLabel(interactions.likeCount, interactions.likesTruncated)}</span>}
           </button>
           <button
             type="button"
@@ -517,7 +524,7 @@ export function InteractivePost({
             onClick={() => setOpen((o) => !o)}
           >
             <Icon name="comment" size={14} />
-            {commentCount || 'Comment'}
+            Comment{commentCount && <span className="nu-post__action-count">{commentCount}</span>}
           </button>
           {(repost || reposted) && (
             <Menu
@@ -527,11 +534,10 @@ export function InteractivePost({
               trigger={
                 <>
                   <Icon name="repost" size={14} />
-                  {interactions.repostCount > 0
-                    ? countLabel(interactions.repostCount, interactions.repostsTruncated)
-                    : reposted
-                      ? 'Reposted'
-                      : 'Repost'}
+                  {reposted ? 'Reposted' : 'Repost'}
+                  {interactions.repostCount > 0 && (
+                    <span className="nu-post__action-count">{countLabel(interactions.repostCount, interactions.repostsTruncated)}</span>
+                  )}
                 </>
               }
             >

@@ -4,7 +4,7 @@ import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { MAIN_FEED_SNAPSHOT } from '../../matrix/feedSnapshot';
 import { OnlineCount } from '../online/OnlineCount';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { composerFocusAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
+import { composerFocusAtom, feedPostsAtom, feedSearchAtom, unreadActivityCountAtom } from '../../app/state/feed';
 import { globalFeedOpenAtom, socialViewAtom, type SocialView } from '../../app/state/selection';
 import { Icon, type IconName } from '../../components/Icon';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -91,6 +91,8 @@ export function GlobalFeedView({ hidden = false }: { hidden?: boolean }) {
       ? filterPosts(posts, { kind: 'following', users: follows.users, spaces: follows.spaces })
       : filterPosts(posts, { kind: 'everyone' });
   const inTab = timeline(feed.posts);
+  const setFeedPosts = useSetAtom(feedPostsAtom);
+  useEffect(() => setFeedPosts(feed.posts), [feed.posts, setFeedPosts]);
   const shown = searching
     ? inTab.filter((post) => {
         const content = readPost(post.event);

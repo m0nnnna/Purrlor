@@ -1,0 +1,190 @@
+/* FeedSidebar.tsx: two glass windows stacked in the shell's fourth column, under the clock. */
+.nu-feed-side {
+  display: none;
+  flex-direction: column;
+  gap: var(--nu-frame-gap, 14px);
+  min-height: 0;
+  min-width: 0;
+  margin-top: var(--nu-frame-status-space);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.nu-feed-side__window {
+  position: relative;
+  flex: none;
+  background: var(--nu-color-panel);
+  border: 1px solid var(--nu-color-border);
+  backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  box-shadow: var(--nu-frame-shadow);
+  border-radius: var(--nu-radius-lg);
+}
+
+.nu-feed-side__window::before,
+.nu-feed-side__window::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nu-feed-side__window::before {
+  left: -1px;
+  top: -1px;
+  border-left: 2px solid var(--nu-frame-bracket);
+  border-top: 2px solid var(--nu-frame-bracket);
+}
+
+.nu-feed-side__window::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--nu-frame-bracket);
+  border-bottom: 2px solid var(--nu-frame-bracket);
+}
+
+/* A banner, or the frame's hatching where there's none. */
+.nu-feed-side__banner {
+  height: 74px;
+  border-bottom: 1px solid var(--nu-color-border);
+  background:
+    repeating-linear-gradient(60deg, transparent 0 10px, var(--nu-color-border) 10px 11px),
+    var(--nu-color-hover);
+  background-size: cover;
+  background-position: center;
+}
+
+.nu-feed-side__profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  padding: 0 var(--nu-space-4) var(--nu-space-4);
+}
+
+.nu-feed-side__avatar {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: -28px;
+  filter: drop-shadow(0 0 0 var(--nu-color-bg-primary));
+}
+
+.nu-feed-side__name {
+  font-family: var(--nu-font-display);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.nu-feed-side__handle {
+  font-family: var(--nu-font-label);
+  font-size: 11px;
+  color: var(--nu-color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.nu-feed-side__bio {
+  margin: 0;
+  font-size: var(--nu-font-size-sm);
+  line-height: 1.5;
+  color: var(--nu-color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nu-feed-side__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nu-space-2);
+  margin: 0;
+}
+
+.nu-feed-side__stats dt,
+.nu-feed-side__label {
+  font-family: var(--nu-font-label);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: var(--nu-label-transform);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-feed-side__stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-feed-side__pad {
+  padding: var(--nu-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+/* A section label with the frame's square bullet. */
+.nu-feed-side__label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nu-feed-side__label::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--nu-color-accent);
+}
+
+.nu-feed-side__tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nu-feed-side__tags li {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+}
+
+.nu-feed-side__tag {
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  border: none;
+  background: none;
+  padding: var(--nu-space-1) 0;
+  text-align: left;
+  font-family: var(--nu-font-label);
+  font-size: 13px;
+  color: var(--nu-color-text-link);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nu-feed-side__tag:hover {
+  color: var(--nu-color-text-primary);
+}
+
+.nu-feed-side__count {
+  font-family: var(--nu-font-label);
+  font-size: 11px;
+  color: var(--nu-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-feed-side__empty {
+  margin: 0;
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-muted);
+}
