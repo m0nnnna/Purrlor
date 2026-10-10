@@ -348,17 +348,21 @@ body {
 }
 
 /* A window opening on the Ultimit desktop: a hairline draws across from the middle, then the
-   window drops down from it. Modals and the sign-in card use it. */
+   window drops down from it. Modals and the sign-in card use it, with `transform-origin: top`.
+   A transform rather than a clip-path: a clip also cuts what can be clicked, so a click in the
+   first moments missed, while a transform moves the element's box and anything waiting for it to
+   settle (a test, a fast hand) waits. Use it with `backwards`, never `both`: a transform left on
+   the window afterwards would trap anything fixed inside it, like a picture opened full screen. */
 @keyframes nu-window-in {
   0% {
-    clip-path: inset(0 50% calc(100% - 2px) 50%);
+    transform: scale(0, 0.004);
     opacity: 0.3;
   }
   45% {
-    clip-path: inset(0 0 calc(100% - 2px) 0);
+    transform: scale(1, 0.004);
     opacity: 1;
   }
   100% {
-    clip-path: inset(0 0 0 0);
+    transform: none;
   }
 }

@@ -58,3 +58,11 @@ export async function send(page: Page, text: string): Promise<void> {
   await input.press('Enter');
   await expect(message(page, text)).toBeVisible();
 }
+
+/** Waits for any window still opening (the `nu-window-in` animation, tokens.css) to settle, before
+ *  measuring something inside it: mid-animation its box is still scaled. */
+export async function windowsSettled(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => !(a instanceof CSSAnimation) || a.animationName !== 'nu-window-in' || a.playState === 'finished')
+  );
+}

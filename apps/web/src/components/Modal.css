@@ -27,7 +27,8 @@
   display: flex;
   flex-direction: column;
   /* Opens like a console line drawing itself: a hairline across, then down (tokens.css). */
-  animation: nu-window-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: top center;
+  animation: nu-window-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 /* The frame's corner brackets (styles/base/frame.css draws the same on the shell's panels). */

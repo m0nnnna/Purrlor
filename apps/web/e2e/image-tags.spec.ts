@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { logIn, role } from './app';
+import { logIn, role, windowsSettled } from './app';
 import { api, createSpaceWithChannel, createUser, eventually, latestEvents, uniqueName } from './matrix';
 
 /**
@@ -43,6 +43,7 @@ test('a person tagged in a Global post’s picture is told, and their name shows
 
   // Tap a spot a third of the way across and halfway down, and pick Bob.
   const picture = role(page, 'image-tagger-image');
+  await windowsSettled(page);
   const box = (await picture.boundingBox())!;
   await page.mouse.click(box.x + box.width / 3, box.y + box.height / 2);
   await role(page, 'image-tagger-search').fill('Bobby');

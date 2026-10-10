@@ -47,6 +47,16 @@ export const FOXY_CSS = `/* Foxy: a light theme in fox orange. */
 
   --nu-name-ink-mix: 55%;
 
+  /* The shard wallpaper, light: white shards laid on (not added to) a cream-to-clay ground. */
+  --nu-wall-ground-start: #fbf1e7;
+  --nu-wall-ground-end: #e3b896;
+  --nu-wall-shard: #ffffff;
+  --nu-wall-edge: rgba(106, 74, 54, 0.4);
+  --nu-wall-grid: #6a4a36;
+  --nu-wall-shade: #6a4a36;
+  --nu-wall-blend: normal;
+  --nu-frame-shadow: 0 24px 70px rgba(61, 33, 14, 0.18);
+
   scrollbar-color: #e2c4a8 transparent;
 }
 

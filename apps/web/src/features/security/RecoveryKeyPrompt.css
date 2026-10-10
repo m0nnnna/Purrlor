@@ -9,19 +9,53 @@
 }
 
 .nu-recovery-prompt__panel {
+  position: relative;
   width: 420px;
   max-width: calc(100vw - var(--nu-space-6));
-  background: var(--nu-color-bg-primary);
+  background: color-mix(in srgb, var(--nu-color-bg-primary) 92%, transparent);
+  backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--nu-frame-blur)) saturate(1.25);
+  border: 1px solid var(--nu-color-border-strong);
   border-radius: var(--nu-radius-md);
+  box-shadow: var(--nu-frame-shadow);
   padding: var(--nu-space-6);
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-3);
+  transform-origin: top center;
+  animation: nu-window-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+/* The frame's corner brackets, as on a dialog (components/Modal.css). */
+.nu-recovery-prompt__panel::before,
+.nu-recovery-prompt__panel::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.nu-recovery-prompt__panel::before {
+  left: -1px;
+  top: -1px;
+  border-left: 2px solid var(--nu-frame-bracket);
+  border-top: 2px solid var(--nu-frame-bracket);
+}
+
+.nu-recovery-prompt__panel::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid var(--nu-frame-bracket);
+  border-bottom: 2px solid var(--nu-frame-bracket);
 }
 
 .nu-recovery-prompt__title {
   margin: 0;
-  font-size: var(--nu-font-size-lg);
+  font-family: var(--nu-font-display);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: 0.04em;
 }
 
 .nu-recovery-prompt__body {
@@ -77,17 +111,30 @@
   color: var(--nu-color-text-muted);
   cursor: pointer;
   padding: var(--nu-space-2) var(--nu-space-3);
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+  text-transform: var(--nu-label-transform);
+  letter-spacing: var(--nu-label-tracking);
 }
 
 .nu-recovery-prompt__submit {
   appearance: none;
   border: none;
   border-radius: var(--nu-radius-sm);
-  padding: var(--nu-space-2) var(--nu-space-4);
+  clip-path: var(--nu-clip-cut);
+  padding: var(--nu-space-3) var(--nu-space-5);
   background: var(--nu-color-accent);
   color: var(--nu-color-on-accent);
+  font-size: var(--nu-font-size-sm);
   font-weight: 600;
+  text-transform: var(--nu-label-transform);
+  letter-spacing: var(--nu-label-tracking);
   cursor: pointer;
+}
+
+.nu-recovery-prompt__submit:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -5px;
 }
 
 .nu-recovery-prompt__submit:hover:not(:disabled) {

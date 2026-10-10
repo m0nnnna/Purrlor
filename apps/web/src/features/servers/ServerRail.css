@@ -338,3 +338,20 @@
   letter-spacing: 0.22em;
   color: var(--nu-color-text-muted);
 }
+
+/* A short window can't fit a labelled rail: the Spaces list would shrink to a tile or two. There
+   the labels go and the rows close up, so every Space stays in reach. */
+@media (max-height: 820px) {
+  .nu-server-rail {
+    --nu-rail-label-display: none;
+    --nu-rail-row-gap: var(--nu-space-4);
+  }
+
+  .nu-server-rail__divider {
+    margin: 0;
+  }
+
+  .nu-server-rail {
+    padding-bottom: var(--nu-space-4);
+  }
+}
