@@ -7,6 +7,10 @@ import type { AudioCaptureOptions } from 'livekit-client';
  * setting: a laptop and a desktop have different hardware, and nobody else needs to know.
  * Settings → Voice & Audio edits it; ActiveVoiceCall applies it, live during a call too.
  */
+/** The message sounds' styles (notifications/messageSounds.ts). */
+export const MESSAGE_SOUND_STYLES = ['pop', 'chime', 'drop', 'tick'] as const;
+export type MessageSoundStyle = (typeof MESSAGE_SOUND_STYLES)[number];
+
 export type AudioSettings = {
   /** '' is "whatever the system's default is", which follows Windows when you plug in a headset. */
   inputDeviceId: string;
@@ -20,6 +24,11 @@ export type AudioSettings = {
   messageSentSound: boolean;
   /** The blip when a message that would notify you comes in, Notification permission or not. */
   messageReceivedSound: boolean;
+  messageSoundStyle: MessageSoundStyle;
+  /** The message sounds' own volume, 0–1, apart from calls. */
+  messageSoundVolume: number;
+  /** The incoming blip only while Purrlor isn't the window in front. */
+  messageReceivedOnlyAway: boolean;
 };
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
@@ -31,6 +40,9 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   outputVolume: 1,
   messageSentSound: true,
   messageReceivedSound: true,
+  messageSoundStyle: 'pop',
+  messageSoundVolume: 0.5,
+  messageReceivedOnlyAway: false,
 };
 
 const STORAGE_KEY = 'nekous_audio_settings';
@@ -41,6 +53,7 @@ function load(): AudioSettings {
     if (!stored || typeof stored !== 'object') return DEFAULT_AUDIO_SETTINGS;
     const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
     const volume = Number(stored.outputVolume);
+    const soundVolume = Number(stored.messageSoundVolume);
     return {
       inputDeviceId: typeof stored.inputDeviceId === 'string' ? stored.inputDeviceId : '',
       outputDeviceId: typeof stored.outputDeviceId === 'string' ? stored.outputDeviceId : '',
@@ -50,6 +63,11 @@ function load(): AudioSettings {
       outputVolume: Number.isFinite(volume) && volume >= 0 && volume <= 1 ? volume : 1,
       messageSentSound: bool(stored.messageSentSound, true),
       messageReceivedSound: bool(stored.messageReceivedSound, true),
+      messageSoundStyle: MESSAGE_SOUND_STYLES.includes(stored.messageSoundStyle as MessageSoundStyle)
+        ? (stored.messageSoundStyle as MessageSoundStyle)
+        : 'pop',
+      messageSoundVolume: Number.isFinite(soundVolume) && soundVolume >= 0 && soundVolume <= 1 ? soundVolume : 0.5,
+      messageReceivedOnlyAway: bool(stored.messageReceivedOnlyAway, false),
     };
   } catch {
     return DEFAULT_AUDIO_SETTINGS;

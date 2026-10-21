@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   deviceIdOrDefault,
+  MESSAGE_SOUND_STYLES,
   saveAudioSettings,
   useAudioSettings,
   type AudioSettings,
+  type MessageSoundStyle,
 } from '../features/voice/audioSettings';
+import { previewMessageSound } from '../features/notifications/messageSounds';
 import { useKeyCapture } from '../features/voice/usePushToTalk';
 import {
   keyLabel,
@@ -209,6 +212,13 @@ function KeybindSettings() {
   );
 }
 
+const MESSAGE_SOUND_NAMES: Record<MessageSoundStyle, string> = {
+  pop: 'Soft pop',
+  chime: 'Chime',
+  drop: 'Droplet',
+  tick: 'Quiet tick',
+};
+
 function deviceName(d: MediaDeviceInfo, i: number, fallback: string): string {
   return d.label || `${fallback} ${i + 1}`;
 }
@@ -360,6 +370,62 @@ export function VoiceSettings() {
             onChange={(e) => saveAudioSettings({ messageReceivedSound: e.target.checked })}
           />
           A blip when a message comes in
+        </label>
+        <label className="nu-field__checkbox-row">
+          <input
+            type="checkbox"
+            data-nu-role="message-sound-only-away"
+            disabled={!settings.messageReceivedSound}
+            checked={settings.messageReceivedOnlyAway}
+            onChange={(e) => saveAudioSettings({ messageReceivedOnlyAway: e.target.checked })}
+          />
+          Only when Purrlor isn’t the window in front
+        </label>
+        <div className="nu-voice-settings__test">
+          <select
+            className="nu-field__input"
+            aria-label="Message sound"
+            data-nu-role="message-sound-style"
+            value={settings.messageSoundStyle}
+            onChange={(e) => {
+              const style = e.target.value as MessageSoundStyle;
+              saveAudioSettings({ messageSoundStyle: style });
+              previewMessageSound('received', style, settings.messageSoundVolume);
+            }}
+          >
+            {MESSAGE_SOUND_STYLES.map((style) => (
+              <option key={style} value={style}>
+                {MESSAGE_SOUND_NAMES[style]}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="nu-button nu-button--secondary"
+            onClick={() => previewMessageSound('sent', settings.messageSoundStyle, settings.messageSoundVolume)}
+          >
+            Sent
+          </button>
+          <button
+            type="button"
+            className="nu-button nu-button--secondary"
+            onClick={() => previewMessageSound('received', settings.messageSoundStyle, settings.messageSoundVolume)}
+          >
+            Incoming
+          </button>
+        </div>
+        <label className="nu-field">
+          Message sound volume: {Math.round(settings.messageSoundVolume * 100)}%
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            data-nu-role="message-sound-volume"
+            value={settings.messageSoundVolume}
+            onChange={(e) => saveAudioSettings({ messageSoundVolume: Number(e.target.value) })}
+            onPointerUp={() => previewMessageSound('received', settings.messageSoundStyle, settings.messageSoundVolume)}
+          />
         </label>
         <span className="nu-field__hint">
           Played by Purrlor’s tab itself, so they work without desktop notifications. Incoming ones

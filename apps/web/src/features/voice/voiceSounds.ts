@@ -7,7 +7,7 @@
 
 let audioCtx: AudioContext | null = null;
 
-function getAudioContext(): AudioContext {
+export function getAudioContext(): AudioContext {
   if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new AudioContext();
   }
@@ -38,7 +38,7 @@ export function warmUpAudioContext(): void {
  * @param duration  - total duration (seconds)
  * @param volume    - gain 0..1
  */
-export function playTone(freqStart: number, freqEnd: number, duration: number, volume: number) {
+function playTone(freqStart: number, freqEnd: number, duration: number, volume: number) {
   try {
     const ctx = getAudioContext();
     const now = ctx.currentTime;

@@ -1173,7 +1173,19 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
     if (!container || !content) return undefined;
 
     // keepScrollPosition only reads refs, so this first render's copy stays correct.
-    const observer = new ResizeObserver(() => keepScrollPosition());
+    // When the timeline's own box gets shorter (the "Replying to" bar or a taller composer below
+    // it), its bottom edge stays put rather than its top: the newest messages, often the one
+    // you're replying to, used to slide under the composer while you were scrolled up a little.
+    let lastHeight = container.clientHeight;
+    const observer = new ResizeObserver(() => {
+      keepScrollPosition();
+      const shrunkBy = lastHeight - container.clientHeight;
+      lastHeight = container.clientHeight;
+      if (shrunkBy > 0 && !pinnedToBottomRef.current && Date.now() >= forceBottomUntilRef.current) {
+        container.scrollTop += shrunkBy;
+        captureAnchor();
+      }
+    });
 
     observer.observe(container);
     observer.observe(content);
