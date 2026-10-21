@@ -152,6 +152,7 @@
 .nu-timeline__message-body {
   flex: 1;
   min-width: 0;
+  display: flow-root;
 }
 
 .nu-timeline__reply-preview {
@@ -340,10 +341,16 @@ button.nu-timeline__reply-preview:focus-visible {
   margin-top: var(--nu-space-1);
 }
 
+/* The hover toolbar floats at the top right of the message's body, so its first line wraps short
+   of it and nothing is ever under it (the space stays reserved while it's hidden). It reaches a
+   few pixels into the gaps above and below its line, never onto text. Touch screens keep it as an
+   overlay that opens on a long press (further down). */
 .nu-timeline__message-actions {
-  position: absolute;
-  top: -14px;
-  right: var(--nu-space-4);
+  float: right;
+  position: relative;
+  /* 30px tall, but it takes up only 12px: less than one line, so only the first line wraps short
+     of it (and on a message with a name, just the name's row). */
+  margin: -4px 0 -14px var(--nu-space-2);
   z-index: 2;
   display: flex;
   gap: 1px;
@@ -370,8 +377,8 @@ button.nu-timeline__reply-preview:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  width: 28px;
+  height: 24px;
   background: transparent;
   color: var(--nu-color-text-muted);
   border-radius: var(--nu-radius-sm);
@@ -542,6 +549,14 @@ button.nu-timeline__reply-preview:focus-visible {
 
   .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me) {
     background: none;
+  }
+
+  .nu-timeline__message-actions {
+    float: none;
+    position: absolute;
+    top: -14px;
+    right: var(--nu-space-4);
+    margin: 0;
   }
 
   .nu-timeline__message:hover .nu-timeline__message-actions {

@@ -217,6 +217,11 @@ const MESSAGE_SOUND_NAMES: Record<MessageSoundStyle, string> = {
   chime: 'Chime',
   drop: 'Droplet',
   tick: 'Quiet tick',
+  bubble: 'Bubble',
+  marimba: 'Marimba',
+  knock: 'Soft knock',
+  glass: 'Glass',
+  hum: 'Low hum',
 };
 
 function deviceName(d: MediaDeviceInfo, i: number, fallback: string): string {

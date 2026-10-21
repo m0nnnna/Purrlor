@@ -8,7 +8,16 @@ import { getAudioContext } from '../voice/voiceSounds';
  * and can keep the incoming one for when Purrlor isn't the window in front (audioSettings.ts).
  */
 
-type Note = { freq: number; endFreq?: number; at?: number; duration: number; gain?: number };
+type Note = {
+  freq: number;
+  endFreq?: number;
+  at?: number;
+  duration: number;
+  gain?: number;
+  wave?: OscillatorType;
+  /** An overtone at `ratio` × freq, `level` loud, dying away `decay` × as fast: a struck sound. */
+  overtone?: { ratio: number; level: number; decay: number };
+};
 
 const STYLES: Record<MessageSoundStyle, { sent: Note[]; received: Note[] }> = {
   // A soft, low bubble.
@@ -37,6 +46,46 @@ const STYLES: Record<MessageSoundStyle, { sent: Note[]; received: Note[] }> = {
       { freq: 1300, at: 0.07, duration: 0.025, gain: 0.5 },
     ],
   },
+  // A quick upward bloop.
+  bubble: {
+    sent: [{ freq: 300, endFreq: 700, duration: 0.05, gain: 0.8 }],
+    received: [
+      { freq: 350, endFreq: 800, duration: 0.05, gain: 0.8 },
+      { freq: 450, endFreq: 1000, at: 0.07, duration: 0.05, gain: 0.6 },
+    ],
+  },
+  // A wooden mallet: the default.
+  marimba: {
+    sent: [{ freq: 523, duration: 0.25, overtone: { ratio: 4, level: 0.3, decay: 3 } }],
+    received: [
+      { freq: 440, duration: 0.25, overtone: { ratio: 4, level: 0.3, decay: 3 } },
+      { freq: 660, at: 0.09, duration: 0.3, overtone: { ratio: 4, level: 0.3, decay: 3 } },
+    ],
+  },
+  // A dull tap on wood.
+  knock: {
+    sent: [{ freq: 180, endFreq: 140, duration: 0.06, wave: 'triangle' }],
+    received: [
+      { freq: 200, endFreq: 150, duration: 0.06, wave: 'triangle' },
+      { freq: 200, endFreq: 150, at: 0.11, duration: 0.06, wave: 'triangle' },
+    ],
+  },
+  // A thin glassy ping.
+  glass: {
+    sent: [{ freq: 1568, duration: 0.3, gain: 0.35, overtone: { ratio: 2.76, level: 0.2, decay: 2 } }],
+    received: [
+      { freq: 1319, duration: 0.35, gain: 0.35, overtone: { ratio: 2.76, level: 0.2, decay: 2 } },
+      { freq: 1760, at: 0.12, duration: 0.4, gain: 0.3, overtone: { ratio: 2.76, level: 0.2, decay: 2 } },
+    ],
+  },
+  // Two soft low notes.
+  hum: {
+    sent: [{ freq: 262, duration: 0.15, gain: 0.8 }],
+    received: [
+      { freq: 220, duration: 0.2, gain: 0.8 },
+      { freq: 294, at: 0.12, duration: 0.22, gain: 0.7 },
+    ],
+  },
 };
 
 /** The loudest a cue gets at full volume: well under the call sounds. */
@@ -46,21 +95,30 @@ function playNotes(notes: Note[], volume: number) {
   if (volume <= 0) return;
   try {
     const ctx = getAudioContext();
-    for (const note of notes) {
-      const start = ctx.currentTime + (note.at ?? 0);
-      const end = start + note.duration;
+    const tone = (freq: number, endFreq: number | undefined, wave: OscillatorType, peak: number, start: number, end: number) => {
       const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(note.freq, start);
-      if (note.endFreq) osc.frequency.exponentialRampToValueAtTime(note.endFreq, end);
+      osc.type = wave;
+      osc.frequency.setValueAtTime(freq, start);
+      if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, end);
       // A few milliseconds' fade in, so it doesn't start with a click.
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(MAX_GAIN * volume * (note.gain ?? 1), start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(peak, start + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
       osc.connect(gain).connect(ctx.destination);
       osc.start(start);
       osc.stop(end);
+    };
+    for (const note of notes) {
+      const start = ctx.currentTime + (note.at ?? 0);
+      const end = start + note.duration;
+      const peak = MAX_GAIN * volume * (note.gain ?? 1);
+      tone(note.freq, note.endFreq, note.wave ?? 'sine', peak, start, end);
+      const o = note.overtone;
+      if (o) {
+        const overtoneEnd = start + Math.max(0.02, note.duration / (1 + o.decay));
+        tone(note.freq * o.ratio, note.endFreq && note.endFreq * o.ratio, 'sine', peak * o.level, start, overtoneEnd);
+      }
     }
   } catch {
     // Audio context unavailable — silently ignore

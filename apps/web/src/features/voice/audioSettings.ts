@@ -8,7 +8,7 @@ import type { AudioCaptureOptions } from 'livekit-client';
  * Settings → Voice & Audio edits it; ActiveVoiceCall applies it, live during a call too.
  */
 /** The message sounds' styles (notifications/messageSounds.ts). */
-export const MESSAGE_SOUND_STYLES = ['pop', 'chime', 'drop', 'tick'] as const;
+export const MESSAGE_SOUND_STYLES = ['pop', 'chime', 'drop', 'tick', 'bubble', 'marimba', 'knock', 'glass', 'hum'] as const;
 export type MessageSoundStyle = (typeof MESSAGE_SOUND_STYLES)[number];
 
 export type AudioSettings = {
@@ -40,7 +40,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   outputVolume: 1,
   messageSentSound: true,
   messageReceivedSound: true,
-  messageSoundStyle: 'pop',
+  messageSoundStyle: 'marimba',
   messageSoundVolume: 0.5,
   messageReceivedOnlyAway: false,
 };
@@ -65,7 +65,7 @@ function load(): AudioSettings {
       messageReceivedSound: bool(stored.messageReceivedSound, true),
       messageSoundStyle: MESSAGE_SOUND_STYLES.includes(stored.messageSoundStyle as MessageSoundStyle)
         ? (stored.messageSoundStyle as MessageSoundStyle)
-        : 'pop',
+        : 'marimba',
       messageSoundVolume: Number.isFinite(soundVolume) && soundVolume >= 0 && soundVolume <= 1 ? soundVolume : 0.5,
       messageReceivedOnlyAway: bool(stored.messageReceivedOnlyAway, false),
     };
