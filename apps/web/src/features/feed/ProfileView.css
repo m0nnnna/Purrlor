@@ -27,17 +27,33 @@
   margin-top: -44px;
 }
 
+/* On a phone they don't all fit beside the avatar: they wrap, right-aligned, instead of squashing. */
 .nu-profile-view__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--nu-space-2);
+  min-width: 0;
 }
 
-/* Message and Share reuse the outlined follow-button look, but isn't a destructive toggle like
-   "Following" — no red on hover. */
+.nu-profile-view__actions > * {
+  flex: none;
+}
+
+/* Message, Share and Settings reuse the outlined follow-button look, but aren't a destructive
+   toggle like "Following" — no red on hover. */
 .nu-profile-view__actions [data-nu-role='profile-message']:hover,
-.nu-profile-view__actions [data-nu-role='profile-share']:hover {
+.nu-profile-view__actions [data-nu-role='profile-share']:hover,
+.nu-profile-view__actions [data-nu-role='profile-settings']:hover {
   border-color: var(--nu-color-text-muted);
   color: var(--nu-color-text-primary);
+}
+
+.nu-profile-view__settings {
+  display: flex;
+  align-items: center;
+  padding-left: var(--nu-space-2);
+  padding-right: var(--nu-space-2);
 }
 
 .nu-profile-view__avatar {

@@ -39,6 +39,7 @@ import './FeedView.css';
 import './ProfileView.css';
 import { nameOrFallback } from '../../matrix/displayName';
 import { PostSkeletons } from '../../components/Skeleton';
+import { AccountSettingsModal } from '../../app/AccountSettingsModal';
 
 type ProfileTab = 'posts' | 'media' | 'likes';
 
@@ -74,6 +75,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const scroll = useKeptScroll<HTMLDivElement>(hidden);
   const [tab, setTab] = useState<ProfileTab>('posts');
   const [editingPage, setEditingPage] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   // A link to something on this page (`/@name/music/<album>`, …) opened it: hand it to the blocks once.
   const [pageTarget, setPageTarget] = useAtom(pageTargetAtom);
   const [linkedTarget] = useState(() => (pageTarget?.userId === userId ? pageTarget.target : undefined));
@@ -222,6 +224,17 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                               {page ? 'Edit page' : 'Build your page'}
                             </button>
                             <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
+                            {/* Settings live on the rail, which a phone doesn't show: this is their way there. */}
+                            <button
+                              type="button"
+                              className="nu-follow-button nu-follow-button--on nu-profile-view__settings"
+                              data-nu-role="profile-settings"
+                              title="Settings"
+                              aria-label="Settings"
+                              onClick={() => setShowSettings(true)}
+                            >
+                              <Icon name="settings" size={16} />
+                            </button>
                           </div>
                         )}
                         {!isMe && (
@@ -408,6 +421,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
         <div ref={sentinelRef} className="nu-feed__sentinel" aria-hidden="true" />
       </div>
 
+      {showSettings && <AccountSettingsModal onClose={() => setShowSettings(false)} />}
       {reportingPage && (
         <ReportDialog
           roomId={reportingPage.roomId}
