@@ -171,10 +171,10 @@ export const LIMITS = {
   /** Longest slowmode a guestbook may ask for, seconds. */
   guestbookSlowmode: 3600,
   albums: 12,
-  albumPieces: 24,
+  albumPieces: 100,
   /** Pieces across a page's gallery blocks. They load only when their album is opened, so they
    *  don't count toward `images`. */
-  galleryPieces: 60,
+  galleryPieces: 200,
   /** Tracks across a page's music blocks. They load only when played, so they don't count toward `images`. */
   tracks: 100,
   /** Music albums across a page. Their covers are small thumbnails and don't count toward `images`. */

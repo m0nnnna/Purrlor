@@ -82,8 +82,8 @@ describe('the gallery block', () => {
     const album = (id: string, count: number) => ({ id, title: id, pieces: Array.from({ length: count }, () => ({ url: MXC })) });
     const blocks = page({
       blocks: [
-        { id: 'a', type: 'art', albums: [album('x', LIMITS.albumPieces), album('y', LIMITS.albumPieces)] },
-        { id: 'b', type: 'art', albums: [album('z', LIMITS.albumPieces)] },
+        { id: 'a', type: 'art', albums: [album('x', LIMITS.albumPieces)] },
+        { id: 'b', type: 'art', albums: [album('y', LIMITS.albumPieces), album('z', LIMITS.albumPieces)] },
         { id: 'c', type: 'art', albums: [album('w', 5)] },
       ],
     })?.blocks as Of<'gallery'>[];

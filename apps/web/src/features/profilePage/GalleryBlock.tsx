@@ -20,6 +20,8 @@ function Piece({
   piece,
   link,
   linked,
+  covered,
+  onReveal,
   onOpen,
 }: {
   piece: ArtPiece;
@@ -27,31 +29,30 @@ function Piece({
   link?: string;
   /** A link pointed at this piece: shown large once it's loaded (unless it's Mature and covered). */
   linked: boolean;
+  /** A Mature piece the viewer hasn't shown yet: blurred, and clicking it shows the whole album. */
+  covered: boolean;
+  onReveal: () => void;
   onOpen: (src: string, alt: string) => void;
 }) {
   const thumb = useMediaUrl(piece.url, { width: 480, height: 480, method: 'scale' });
   const full = useMediaUrl(piece.url);
-  const mature = piece.rating === 'mature';
-  const [revealed, setRevealed] = useState(false);
-  const covered = mature && !revealed;
   const alt = piece.title ?? piece.description ?? '';
   const shownLinked = useRef(false);
   useEffect(() => {
-    if (!linked || shownLinked.current || !full || mature) return;
+    if (!linked || shownLinked.current || !full || covered) return;
     shownLinked.current = true;
     onOpen(full, alt);
-  }, [linked, full, mature, alt, onOpen]);
+  }, [linked, full, covered, alt, onOpen]);
 
   return (
     <figure className="nu-profile-page__piece" data-nu-role="art-piece" data-nu-rating={piece.rating}>
       <button
         type="button"
         className={covered ? 'nu-profile-page__piece-image nu-profile-page__piece-image--blurred' : 'nu-profile-page__piece-image'}
-        aria-label={covered ? 'Mature artwork. Show it' : `Open ${alt || 'artwork'}`}
-        onClick={() => (covered ? setRevealed(true) : full && onOpen(full, alt))}
+        aria-label={covered ? 'Mature artwork. Show the Mature pieces in this album' : `Open ${alt || 'artwork'}`}
+        onClick={() => (covered ? onReveal() : full && onOpen(full, alt))}
       >
         {thumb && <img src={thumb} alt={covered ? '' : alt} loading="lazy" />}
-        {covered && <span className="nu-profile-page__piece-warning">Mature. Click to show</span>}
       </button>
       {(piece.title || piece.description || piece.tags.length > 0 || link) && (
         <figcaption className="nu-profile-page__piece-caption">
@@ -101,7 +102,10 @@ function AlbumPreview({ album, signedIn, showTitle, onOpen }: { album: ArtAlbum;
   );
 }
 
-/** An album over the page: every piece, its tags to filter by, and a link to it. */
+/**
+ * An album over the page: every piece, its tags to filter by, and a link to it. Mature pieces stay
+ * blurred behind one warning for the album, so one click shows them all rather than one each.
+ */
 function AlbumDialog({
   album,
   signedIn,
@@ -122,6 +126,9 @@ function AlbumDialog({
   const tags = [...new Set(pieces.flatMap((piece) => piece.tags))];
   const shown = tag ? pieces.filter((piece) => piece.tags.includes(tag)) : pieces;
   const hidden = album.pieces.length - pieces.length;
+  const mature = pieces.filter((piece) => piece.rating === 'mature').length;
+  const [revealed, setRevealed] = useState(false);
+  const reveal = useCallback(() => setRevealed(true), []);
   const openLightbox = useCallback((src: string, alt: string) => setLightbox({ src, alt }), []);
 
   return (
@@ -150,6 +157,11 @@ function AlbumDialog({
             ))}
           </div>
         )}
+        {mature > 0 && !revealed && (
+          <button type="button" className="nu-profile-page__mature-warning" data-nu-role="art-mature-reveal" onClick={reveal}>
+            This album has {mature} Mature {mature === 1 ? 'piece' : 'pieces'}. Click to show {mature === 1 ? 'it' : 'them all'}
+          </button>
+        )}
         <div className="nu-profile-page__pieces">
           {shown.map((piece, index) => {
             const place = album.pieces.indexOf(piece);
@@ -159,6 +171,8 @@ function AlbumDialog({
                 piece={piece}
                 link={ownerId ? pageLink(ownerId, { kind: 'art', album: album.id, piece: place + 1 }) : undefined}
                 linked={place === linkedPiece}
+                covered={piece.rating === 'mature' && !revealed}
+                onReveal={reveal}
                 onOpen={openLightbox}
               />
             );
@@ -178,7 +192,7 @@ function AlbumDialog({
 /**
  * A page's gallery: each album as a short strip of thumbnails with "View all", opening the album
  * over the page. Only the strips' small thumbnails load until then. With ratings on, Mature pieces
- * are hidden when signed out and blurred until clicked when signed in. A link to an album (or a
+ * are hidden when signed out and, when signed in, blurred until one click shows the album's lot. A link to an album (or a
  * piece in it) opens that album.
  */
 export function GalleryBlock({ block }: { block: GalleryBlockType }) {

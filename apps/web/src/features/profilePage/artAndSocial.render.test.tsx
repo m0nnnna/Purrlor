@@ -75,6 +75,29 @@ describe('the gallery with ratings on', () => {
     expect(button.getAttribute('aria-label')).toContain('Mature');
     fireEvent.click(button);
     expect(mature.querySelector('button')?.className).not.toContain('--blurred');
+    expect(q(document.body, 'art-mature-reveal')).toBeNull();
+  });
+
+  it('puts one warning on an album with Mature pieces, and one click shows them all', () => {
+    viewer.signedIn = true;
+    const { container } = drawOpen(
+      pageOf([
+        {
+          id: 'b',
+          type: 'gallery',
+          ratings: true,
+          albums: [{ id: 'x', title: 'Spicy', pieces: ['m1', 'm2', 'm3'].map((id) => ({ url: MXC(id), tags: [], rating: 'mature' })) }],
+        },
+      ])
+    );
+    openAlbum(container);
+    const blurred = () => pieces().filter((piece) => piece.querySelector('button')?.className.includes('--blurred'));
+    expect(blurred()).toHaveLength(3);
+    const warning = q(document.body, 'art-mature-reveal') as HTMLButtonElement;
+    expect(warning.textContent).toContain('3 Mature pieces');
+    fireEvent.click(warning);
+    expect(blurred()).toHaveLength(0);
+    expect(q(document.body, 'art-mature-reveal')).toBeNull();
   });
 
   it('keeps an album that is all Mature out of the page for someone who has not said, cover included', () => {

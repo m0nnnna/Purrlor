@@ -143,7 +143,7 @@ describe('parseProfilePage', () => {
     expect(linksBlock?.type === 'links' && linksBlock.items).toHaveLength(LIMITS.links);
 
     // An older gallery (a flat list of images) becomes one album, cut to the album limit.
-    const images = Array.from({ length: 50 }, () => ({ url: MXC }));
+    const images = Array.from({ length: LIMITS.albumPieces + 10 }, () => ({ url: MXC }));
     const gallery = page({ blocks: [{ id: 'g', type: 'gallery', images }] })?.blocks[0];
     expect(gallery?.type === 'gallery' && gallery.albums).toHaveLength(1);
     expect(gallery?.type === 'gallery' && gallery.albums[0].pieces).toHaveLength(LIMITS.albumPieces);

@@ -101,7 +101,7 @@ A gallery for anyone, and a commissions block for artists.
   (image, title, caption, up to 6 tags). On the page each album is a strip of its first four
   pieces as small squares and "View all (n)", which opens the whole album over the page, where
   tapping a tag filters it. Only those small thumbnails load until an album is opened, so pieces
-  have their own cap (60 across a page, 24 per album, 12 albums) instead of counting toward the 20
+  have their own cap (200 across a page, 100 per album, 12 albums) instead of counting toward the 20
   images a page shows. `ratings` is an option on the block (the builder's "Let me rate pieces as Mature"): on, each
   piece is **General** or **Mature**; off, every piece is General. **Mature** pieces are blurred
   until clicked for signed-in people. There's no age setting: every account is 18+ (section 1 of the
@@ -147,7 +147,7 @@ A page written by another client, or by hand, can be odd but never more than the
 | Numbers | clamped: corners 0–32 px, see-through 0–70%, gradient angle 0–359°. Whole numbers only in the published event (a homeserver refuses fractions), so `blockOpacity` is stored as a percentage, 30–100; a page published as a fraction (0.3–1) before that still reads |
 | Text | labels and titles one line; text blocks up to 2,000 characters |
 | Blocks | known types only, at most 40, IDs `[A-Za-z0-9_-]` and unique |
-| Images per page | 20 in all (the background counts); gallery pieces are separate, 60 per page |
+| Images per page | 20 in all (the background counts); gallery pieces are separate, 200 per page |
 | Music tracks | `mxc://` files of an allowed sound type, 20 per page in all, title and artist one line each (100 characters) |
 
 Unknown fields and block types are dropped, not passed through. The renderer
