@@ -341,34 +341,61 @@ button.nu-timeline__reply-preview:focus-visible {
   margin-top: var(--nu-space-1);
 }
 
-/* The hover toolbar floats at the top right of the message's body, so its first line wraps short
-   of it and nothing is ever under it (the space stays reserved while it's hidden). It reaches a
-   few pixels into the gaps above and below its line, never onto text. Touch screens keep it as an
-   overlay that opens on a long press (further down). */
-.nu-timeline__message-actions {
+/* The ⋯ at the top right of a message's body, floated so its first line wraps short of it. It
+   takes up less than a line, so messages are no taller. Faint until the message is pointed at or
+   its actions are open, but always there to tap: there's no hover on a phone. */
+.nu-timeline__message-menu-toggle {
   float: right;
-  position: relative;
-  /* 30px tall, but it takes up only 12px: less than one line, so only the first line wraps short
-     of it (and on a message with a name, just the name's row). */
-  margin: -4px 0 -14px var(--nu-space-2);
-  z-index: 2;
+  appearance: none;
+  border: none;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  margin: -2px 0 -10px var(--nu-space-2);
+  padding: 0;
+  background: transparent;
+  color: var(--nu-color-text-muted);
+  border-radius: var(--nu-radius-sm);
+  cursor: pointer;
+  opacity: 0.45;
+  transition:
+    opacity 0.1s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+.nu-timeline__message:hover .nu-timeline__message-menu-toggle,
+.nu-timeline__message-menu-toggle:focus-visible,
+.nu-timeline__message-menu-toggle[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.nu-timeline__message-menu-toggle:hover,
+.nu-timeline__message-menu-toggle[aria-expanded='true'] {
+  color: var(--nu-color-text-primary);
+  background: var(--nu-color-bg-tertiary);
+}
+
+/* A message's actions, opened from its ⋯: a row under the message, in the feed, so it pushes the
+   messages below down instead of covering them. One message's at a time (MessageTimeline.tsx). */
+.nu-timeline__message-actions {
+  clear: both;
+  display: flex;
+  flex-wrap: wrap;
   gap: 1px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: var(--nu-space-1);
   padding: 2px;
   background: var(--nu-color-bg-elevated);
   border: 1px solid var(--nu-color-border);
   border-radius: var(--nu-radius-md);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s ease;
 }
 
-.nu-timeline__message:hover .nu-timeline__message-actions,
-.nu-timeline__message-actions:focus-within,
-.nu-timeline__message-actions:has(.nu-reaction-picker--open) {
-  opacity: 1;
-  pointer-events: auto;
+.nu-timeline__message--actions-open:not(.nu-timeline__message--mentions-me) {
+  background: color-mix(in srgb, var(--nu-color-bg-tertiary) 55%, transparent);
 }
 
 .nu-timeline__message-pin-action {
@@ -533,55 +560,22 @@ button.nu-timeline__reply-preview:focus-visible {
   line-height: 16px;
 }
 
-/* Touch screens: no hover (useLongPressActions in MessageTimeline.tsx). A tap would otherwise leave
-   a message highlighted and its toolbar stuck open over its neighbours; a long press opens the
-   toolbar instead, and doesn't start selecting text (Copy text is in the toolbar). */
-.nu-timeline__message-copy-action {
-  display: none;
-}
-
+/* Touch screens: no hover. A tap would otherwise leave a message highlighted; the ⋯ is always
+   at full strength, and the targets are sized for fingers. */
 @media (hover: none) {
-  .nu-timeline__message {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me) {
+  .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me):not(.nu-timeline__message--actions-open) {
     background: none;
   }
 
-  .nu-timeline__message-actions {
-    float: none;
-    position: absolute;
-    top: -14px;
-    right: var(--nu-space-4);
-    margin: 0;
-  }
-
-  .nu-timeline__message:hover .nu-timeline__message-actions {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .nu-timeline__message--actions-open .nu-timeline__message-actions,
-  .nu-timeline__message--actions-open:hover .nu-timeline__message-actions {
+  .nu-timeline__message-menu-toggle {
     opacity: 1;
-    pointer-events: auto;
+    width: 36px;
+    height: 28px;
+    margin: -5px -6px -12px var(--nu-space-1);
   }
 
-  .nu-timeline__message--actions-open:not(.nu-timeline__message--mentions-me),
-  .nu-timeline__message--actions-open:hover:not(.nu-timeline__message--mentions-me) {
-    background: color-mix(in srgb, var(--nu-color-bg-tertiary) 55%, transparent);
-  }
-
-  .nu-timeline__message-copy-action {
-    display: flex;
-  }
-
-  /* Bigger targets for fingers. */
   .nu-timeline__message-pin-action {
-    width: 38px;
+    width: 40px;
     height: 36px;
   }
 }

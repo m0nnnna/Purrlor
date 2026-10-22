@@ -58,14 +58,13 @@ export function message(page: Page, text: string): Locator {
 }
 
 /**
- * Clicks one of a message's hover actions. Hovers again before each attempt: the timeline can still
- * be settling (scrolling to the newest message), which slides the message out from under the
- * pointer, and the actions only take clicks while their message is hovered — as for a person, who'd
- * just move the mouse back.
+ * Clicks one of a message's actions: opens them from its ⋯ if they aren't open, then clicks the
+ * action. Retried, since the timeline can still be settling (scrolling to the newest message).
  */
 export async function clickMessageAction(target: Locator, action: string): Promise<void> {
   await expect(async () => {
-    await target.hover();
+    const toggle = role(target, 'timeline-message-menu');
+    if ((await toggle.getAttribute('aria-expanded', { timeout: 2000 })) !== 'true') await toggle.click({ timeout: 2000 });
     await role(target, action).click({ timeout: 2000 });
   }).toPass({ timeout: 20_000 });
 }

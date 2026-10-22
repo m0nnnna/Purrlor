@@ -202,52 +202,6 @@ function ReplyPreview({ room, replyEventId }: { room: Room; replyEventId: string
   );
 }
 
-/** How long a finger rests on a message before its actions open. */
-const LONG_PRESS_MS = 450;
-
-/**
- * On a touch screen there's no hover: a tap left a message's hover toolbar stuck open over the
- * messages around it. Its actions open on a long press instead (as in Discord's and Telegram's
- * apps), and close at the next touch anywhere else. Does nothing with a mouse.
- */
-function useLongPressActions() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const cancel = () => clearTimeout(timer.current);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const closeOutside = (evt: Event) => {
-      if (!ref.current?.contains(evt.target as Node)) setOpen(false);
-    };
-    document.addEventListener('touchstart', closeOutside, { passive: true });
-    return () => document.removeEventListener('touchstart', closeOutside);
-  }, [open]);
-  useEffect(() => cancel, []);
-
-  return {
-    ref,
-    open,
-    close: () => setOpen(false),
-    handlers: {
-      onTouchStart: (evt: React.TouchEvent) => {
-        cancel();
-        if (evt.touches.length !== 1) return;
-        // Not over something that's already a control of its own.
-        if ((evt.target as HTMLElement).closest('a, button, input, textarea, video, audio, iframe, [role="button"]')) return;
-        timer.current = setTimeout(() => {
-          setOpen(true);
-          navigator.vibrate?.(10);
-        }, LONG_PRESS_MS);
-      },
-      onTouchMove: cancel,
-      onTouchEnd: cancel,
-      onTouchCancel: cancel,
-    },
-  };
-}
-
 const NO_READERS: never[] = [];
 const NO_REACTIONS: never[] = [];
 
@@ -276,6 +230,8 @@ const MessageRow = memo(function MessageRow({
   threadSummary,
   onOpenThread,
   onReply,
+  actionsOpen,
+  onActions,
   members,
   webhookBotId,
   roles,
@@ -301,6 +257,10 @@ const MessageRow = memo(function MessageRow({
   /** Changes whenever the event does in place (eventRevision): the row is memoized. */
   revision: string;
   onReply: (target: ReplyTarget) => void;
+  /** This message's actions are open (MessageActions): only one message's at a time. */
+  actionsOpen: boolean;
+  /** Opens this message's actions (its event ID), or closes them (null). */
+  onActions: (eventId: string | null) => void;
   members: RoomMember[];
   /** The Space's service bot, whose messages may carry a webhook's name (matrix/webhooks.ts). */
   webhookBotId: string | undefined;
@@ -409,24 +369,23 @@ const MessageRow = memo(function MessageRow({
   const [showForward, setShowForward] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const senderId = event.getSender();
-  const touchActions = useLongPressActions();
   const ircMode = useIrcMode();
+  const hasActions = !event.isDecryptionFailure() && !!eventId && !isEditing && !isPending;
+  const closeActions = () => onActions(null);
 
   return (
     <div
-      ref={touchActions.ref}
       className={[
         'nu-timeline__message',
         isGrouped && 'nu-timeline__message--grouped',
         mentionsMe && 'nu-timeline__message--mentions-me',
         isHighlighted && 'nu-timeline__message--highlighted',
-        touchActions.open && 'nu-timeline__message--actions-open',
+        actionsOpen && hasActions && 'nu-timeline__message--actions-open',
       ]
         .filter(Boolean)
         .join(' ')}
       data-nu-role="timeline-message"
       data-nu-event-id={eventId ?? undefined}
-      {...touchActions.handlers}
     >
       {ircMode ? (
         // IRC mode: no picture, the time in a column down the left on every line, as in the
@@ -451,143 +410,21 @@ const MessageRow = memo(function MessageRow({
         </button>
       )}
       <div className="nu-timeline__message-body">
-        {/* First in the body and floated right (MessageTimeline.css), so text wraps around the
-            toolbar instead of running under it. */}
-        {!event.isDecryptionFailure() && eventId && !isEditing && !isPending && (
-          <div className="nu-timeline__message-actions" data-nu-role="timeline-message-actions">
-            <ReactionPicker room={room} onPick={(key, shortcode) => void sendReaction(mx, room.roomId, eventId, key, shortcode)} />
-            <button
-              type="button"
-              className="nu-timeline__message-pin-action"
-              data-nu-role="timeline-reply-action"
-              title="Reply"
-              aria-label="Reply"
-              onClick={() => onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) })}
-            >
-              <Icon name="reply" size={16} />
-            </button>
-            <button
-              type="button"
-              className="nu-timeline__message-pin-action"
-              data-nu-role="timeline-thread-action"
-              title="Reply in thread"
-              aria-label="Reply in thread"
-              onClick={() => onOpenThread(eventId ?? null)}
-            >
-              <Icon name="threads" size={16} />
-            </button>
-            {/* Touch screens only (MessageTimeline.css): a long press opens these actions instead
-                of selecting text, so copying needs a button of its own. */}
-            {typeof content.body === 'string' && content.body && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action nu-timeline__message-copy-action"
-                data-nu-role="timeline-copy-action"
-                title="Copy text"
-                aria-label="Copy text"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(String(content.body)).catch(() => undefined);
-                  touchActions.close();
-                }}
-              >
-                <Icon name="copy" size={16} />
-              </button>
-            )}
-            {!isPollMessage && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action"
-                data-nu-role="timeline-forward-action"
-                title="Forward"
-                aria-label="Forward"
-                onClick={() => setShowForward(true)}
-              >
-                <Icon name="forward" size={16} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="nu-timeline__message-pin-action"
-              data-nu-role="timeline-save-action"
-              title={saved ? 'Remove from saved' : 'Save message'}
-              aria-label={saved ? 'Remove from saved' : 'Save message'}
-              aria-pressed={saved}
-              onClick={() => void (saved ? unsaveMessage(mx, room.roomId, eventId) : saveMessage(mx, room.roomId, eventId))}
-            >
-              <Icon name="bookmark" size={16} filled={saved} />
-            </button>
-            <Menu
-              label="Remind me"
-              trigger={<Icon name="bell" size={16} />}
-              triggerClassName="nu-timeline__message-pin-action"
-              role="timeline-remind-action"
-              align="end"
-            >
-              {reminderChoices(new Date()).map((choice) => (
-                <MenuItem
-                  key={choice.label}
-                  role="timeline-remind-choice"
-                  onSelect={() =>
-                    // Account data isn't encrypted: an encrypted room's words stay out of it.
-                    void addReminder(mx, { roomId: room.roomId, eventId, remindAt: choice.at, preview: isEncryptedRoom(room) ? '' : previewTextFor(event).slice(0, 140) }).catch(
-                      (err: unknown) => console.warn('Couldn’t set the reminder', err)
-                    )
-                  }
-                >
-                  {choice.label}
-                </MenuItem>
-              ))}
-            </Menu>
-            {isEditable && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action"
-                data-nu-role="timeline-edit-action"
-                title="Edit"
-                aria-label="Edit"
-                onClick={startEditing}
-              >
-                <Icon name="pencil" size={16} />
-              </button>
-            )}
-            {canPin && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action"
-                data-nu-role="timeline-pin-action"
-                title={isPinned ? 'Unpin' : 'Pin'}
-                aria-label={isPinned ? 'Unpin' : 'Pin'}
-                aria-pressed={isPinned}
-                onClick={() => void (isPinned ? unpinMessage(mx, room, eventId) : pinMessage(mx, room, eventId))}
-              >
-                <Icon name="pin" size={16} filled={isPinned} />
-              </button>
-            )}
-            {senderId && senderId !== mx.getUserId() && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action"
-                data-nu-role="timeline-report-action"
-                title="Report"
-                aria-label="Report"
-                onClick={() => setShowReport(true)}
-              >
-                <Icon name="flag" size={16} />
-              </button>
-            )}
-            {canDelete && (
-              <button
-                type="button"
-                className="nu-timeline__message-pin-action nu-timeline__message-delete-action"
-                data-nu-role="timeline-delete-action"
-                title="Delete"
-                aria-label="Delete"
-                onClick={() => void redactMessage(mx, room.roomId, eventId)}
-              >
-                <Icon name="trash" size={16} />
-              </button>
-            )}
-          </div>
+        {/* First in the body and floated right (MessageTimeline.css), so text wraps around it. A
+            click or tap opens the message's actions underneath it (no hover, so it works on a
+            phone); opening another message's closes these. */}
+        {hasActions && (
+          <button
+            type="button"
+            className="nu-timeline__message-menu-toggle"
+            data-nu-role="timeline-message-menu"
+            title={actionsOpen ? 'Close message actions' : 'Message actions'}
+            aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
+            aria-expanded={actionsOpen}
+            onClick={() => onActions(actionsOpen ? null : eventId)}
+          >
+            <Icon name="more" size={16} />
+          </button>
         )}
         {replyEventId && <ReplyPreview room={room} replyEventId={replyEventId} />}
         {(!isGrouped || editedEvent || isPinned) && (
@@ -767,6 +604,166 @@ const MessageRow = memo(function MessageRow({
             ))}
           </div>
         )}
+        {/* In the feed under the message, taking real space rather than covering its neighbours. */}
+        {actionsOpen && hasActions && eventId && (
+          <div className="nu-timeline__message-actions" data-nu-role="timeline-message-actions">
+            <ReactionPicker
+              room={room}
+              onPick={(key, shortcode) => {
+                void sendReaction(mx, room.roomId, eventId, key, shortcode);
+                closeActions();
+              }}
+            />
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action"
+              data-nu-role="timeline-reply-action"
+              title="Reply"
+              aria-label="Reply"
+              onClick={() => {
+                onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) });
+                closeActions();
+              }}
+            >
+              <Icon name="reply" size={16} />
+            </button>
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action"
+              data-nu-role="timeline-thread-action"
+              title="Reply in thread"
+              aria-label="Reply in thread"
+              onClick={() => {
+                onOpenThread(eventId);
+                closeActions();
+              }}
+            >
+              <Icon name="threads" size={16} />
+            </button>
+            {typeof content.body === 'string' && content.body && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action nu-timeline__message-copy-action"
+                data-nu-role="timeline-copy-action"
+                title="Copy text"
+                aria-label="Copy text"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(String(content.body)).catch(() => undefined);
+                  closeActions();
+                }}
+              >
+                <Icon name="copy" size={16} />
+              </button>
+            )}
+            {!isPollMessage && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action"
+                data-nu-role="timeline-forward-action"
+                title="Forward"
+                aria-label="Forward"
+                onClick={() => {
+                  setShowForward(true);
+                  closeActions();
+                }}
+              >
+                <Icon name="forward" size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="nu-timeline__message-pin-action"
+              data-nu-role="timeline-save-action"
+              title={saved ? 'Remove from saved' : 'Save message'}
+              aria-label={saved ? 'Remove from saved' : 'Save message'}
+              aria-pressed={saved}
+              onClick={() => void (saved ? unsaveMessage(mx, room.roomId, eventId) : saveMessage(mx, room.roomId, eventId))}
+            >
+              <Icon name="bookmark" size={16} filled={saved} />
+            </button>
+            <Menu
+              label="Remind me"
+              trigger={<Icon name="bell" size={16} />}
+              triggerClassName="nu-timeline__message-pin-action"
+              role="timeline-remind-action"
+              align="end"
+            >
+              {reminderChoices(new Date()).map((choice) => (
+                <MenuItem
+                  key={choice.label}
+                  role="timeline-remind-choice"
+                  onSelect={() => {
+                    // Account data isn't encrypted: an encrypted room's words stay out of it.
+                    void addReminder(mx, { roomId: room.roomId, eventId, remindAt: choice.at, preview: isEncryptedRoom(room) ? '' : previewTextFor(event).slice(0, 140) }).catch(
+                      (err: unknown) => console.warn('Couldn’t set the reminder', err)
+                    );
+                    closeActions();
+                  }}
+                >
+                  {choice.label}
+                </MenuItem>
+              ))}
+            </Menu>
+            {isEditable && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action"
+                data-nu-role="timeline-edit-action"
+                title="Edit"
+                aria-label="Edit"
+                onClick={() => {
+                  startEditing();
+                  closeActions();
+                }}
+              >
+                <Icon name="pencil" size={16} />
+              </button>
+            )}
+            {canPin && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action"
+                data-nu-role="timeline-pin-action"
+                title={isPinned ? 'Unpin' : 'Pin'}
+                aria-label={isPinned ? 'Unpin' : 'Pin'}
+                aria-pressed={isPinned}
+                onClick={() => void (isPinned ? unpinMessage(mx, room, eventId) : pinMessage(mx, room, eventId))}
+              >
+                <Icon name="pin" size={16} filled={isPinned} />
+              </button>
+            )}
+            {senderId && senderId !== mx.getUserId() && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action"
+                data-nu-role="timeline-report-action"
+                title="Report"
+                aria-label="Report"
+                onClick={() => {
+                  setShowReport(true);
+                  closeActions();
+                }}
+              >
+                <Icon name="flag" size={16} />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                className="nu-timeline__message-pin-action nu-timeline__message-delete-action"
+                data-nu-role="timeline-delete-action"
+                title="Delete"
+                aria-label="Delete"
+                onClick={() => {
+                  void redactMessage(mx, room.roomId, eventId);
+                  closeActions();
+                }}
+              >
+                <Icon name="trash" size={16} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {showReport && eventId && (
         <ReportDialog
@@ -817,6 +814,17 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const mentionGroups = useMemo(() => roleMentionGroups(members, roles), [members, roles]);
   const savedEventIds = new Set(savedMessages.filter((item) => item.roomId === roomId).map((item) => item.eventId));
   const [openThreadRootId, setOpenThreadRootId] = useState<string | null>(null);
+  // The one message whose actions are open (MessageRow): opening another's closes these.
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  useEffect(() => setActionsFor(null), [roomId]);
+  useEffect(() => {
+    if (!actionsFor) return undefined;
+    const onKey = (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') setActionsFor(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [actionsFor]);
   const [pendingJump, setPendingJump] = useAtom(pendingJumpTargetAtom);
   const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1260,6 +1268,8 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
               onOpenThread={setOpenThreadRootId}
               revision={eventRevision(event)}
               onReply={onReply}
+              actionsOpen={!!event.getId() && event.getId() === actionsFor}
+              onActions={setActionsFor}
               members={members}
               webhookBotId={webhookBotId}
               roles={roles}

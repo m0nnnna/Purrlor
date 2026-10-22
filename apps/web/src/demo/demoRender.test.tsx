@@ -143,6 +143,27 @@ describe('MessageTimeline against the demo world', () => {
     expect(screen.getAllByText('Nibbles').length).toBeGreaterThan(0);
     expect(screen.queryByText(/@nibbles:demo\.purrlor/)).not.toBeInTheDocument();
   });
+
+  it('opens a message’s actions from its ⋯, under the message, one message at a time', () => {
+    const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+    const toggles = () => Array.from(container.querySelectorAll<HTMLButtonElement>('[data-nu-role="timeline-message-menu"]'));
+    const open = () => container.querySelectorAll('[data-nu-role="timeline-message-actions"]');
+    expect(toggles().length).toBeGreaterThan(1);
+    expect(open()).toHaveLength(0);
+
+    fireEvent.click(toggles()[0]);
+    expect(open()).toHaveLength(1);
+    expect(toggles()[0].getAttribute('aria-expanded')).toBe('true');
+    expect(toggles()[0].closest('[data-nu-role="timeline-message"]')?.querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
+
+    fireEvent.click(toggles()[1]);
+    expect(open()).toHaveLength(1);
+    expect(toggles()[0].getAttribute('aria-expanded')).toBe('false');
+    expect(toggles()[1].closest('[data-nu-role="timeline-message"]')?.querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(open()).toHaveLength(0);
+  });
 });
 
 describe('FeedView against the demo world', () => {
