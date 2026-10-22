@@ -7,8 +7,9 @@ import { useSyncExternalStore } from 'react';
  * - The rail narrows, with smaller icons that keep their names; the channel and member lists get
  *   narrower, one-line rows (styles/base/density.css).
  * - Messages become IRC lines in the Ultimit mockup's style: a 24-hour time column down the left,
- *   no picture, the name with the text running on after it, and a run of messages from one person
- *   stays one group however long it runs (MessageTimeline.tsx).
+ *   and a run of messages from one person stays one group however long it runs. Each group opens
+ *   with a row of its own, a tiny picture and the name, with its messages under it and a gap
+ *   before the next person's (MessageTimeline.tsx).
  *
  * Kept per device in localStorage, like Effects (app/effects.ts): a big monitor and a laptop want
  * different things. Applied as `data-nu-density` on <html>, before the first render.

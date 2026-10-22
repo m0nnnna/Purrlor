@@ -5,7 +5,7 @@
  *
  * Tight, but still the Ultimit mockup's (docs/design/mockup.html in the Ultimit repo): its lists
  * are rows with a dim console time down the left, small spaced labels, and a rail that keeps its
- * names. The time column, the missing timeline pictures and the member list's picture size are
+ * names. The time column, the timeline's tiny pictures and the member list's picture size are
  * set in markup (useIrcMode), as are the longer message groups (MessageTimeline.tsx).
  */
 
@@ -169,8 +169,10 @@ html[data-nu-density='irc'] .nu-member-list__item-status {
   display: none;
 }
 
-/* ---- The timeline: the time in a dim console column down the left on every line, then the name
-   with the text running on after it, as in the mockup's lists (the News window's rows). ---- */
+/* ---- The timeline: the time in a dim console column down the left on every line. Each person's
+   run of messages starts with a row of its own: a tiny picture and the name, with the messages (text
+   or pictures alike) under it, and a gap above it so one person's block is clearly apart from the
+   next. ---- */
 
 html[data-nu-density='irc'] .nu-timeline {
   padding: var(--nu-space-2) var(--nu-space-2) var(--nu-space-3);
@@ -179,7 +181,7 @@ html[data-nu-density='irc'] .nu-timeline {
 html[data-nu-density='irc'] .nu-timeline__message {
   gap: var(--nu-space-2);
   padding: 1px var(--nu-space-2);
-  margin: var(--nu-space-1) calc(var(--nu-space-2) * -1) 0;
+  margin: var(--nu-space-3) calc(var(--nu-space-2) * -1) 0;
   line-height: 1.4;
 }
 
@@ -205,11 +207,21 @@ html[data-nu-density='irc'] .nu-timeline__message-irc-time {
   white-space: nowrap;
 }
 
-/* The name floats, so the first line of text runs on beside it and the rest wraps under. */
+/* The name row: the tiny picture, the name and its badges, on a line above the messages. */
 html[data-nu-density='irc'] .nu-timeline__message-meta {
-  float: left;
+  align-items: center;
   gap: var(--nu-space-1);
-  margin-right: var(--nu-space-2);
+  margin-bottom: 1px;
+}
+
+html[data-nu-density='irc'] .nu-timeline__message-irc-avatar {
+  appearance: none;
+  flex: none;
+  display: flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
 html[data-nu-density='irc'] .nu-timeline__message-body {

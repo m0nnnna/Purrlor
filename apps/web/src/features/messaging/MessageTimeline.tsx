@@ -388,8 +388,8 @@ const MessageRow = memo(function MessageRow({
       data-nu-event-id={eventId ?? undefined}
     >
       {ircMode ? (
-        // IRC mode: no picture, the time in a column down the left on every line, as in the
-        // mockup's lists. The day is on the divider above, so the time of day is enough here.
+        // IRC mode: the time in a column down the left on every line, as in the mockup's lists
+        // (the picture is a tiny one in the name row instead). The day is on the divider above, so the time of day is enough here.
         <div className="nu-timeline__message-gutter nu-timeline__message-gutter--irc" data-nu-role="timeline-message-gutter">
           <time className="nu-timeline__message-irc-time" dateTime={new Date(event.getTs()).toISOString()} title={DATE_TIME.format(event.getTs())}>
             {IRC_TIME.format(event.getTs())}
@@ -431,6 +431,13 @@ const MessageRow = memo(function MessageRow({
           <div className="nu-timeline__message-meta">
             {!isGrouped && (
               <>
+                {/* IRC mode has no picture column: a tiny one leads the name row instead, so whose
+                    block it is shows at a glance. */}
+                {ircMode && (
+                  <button type="button" className="nu-timeline__message-irc-avatar" data-nu-role="timeline-message-avatar" onClick={() => setShowProfile(true)}>
+                    <Avatar name={senderName} mxcUrl={webhook ? webhook.avatarUrl ?? null : sender?.getMxcAvatarUrl()} size={18} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`nu-timeline__message-sender nu-timeline__message-sender--${senderRole}`}
