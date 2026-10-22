@@ -26,7 +26,7 @@ import { slowmodeWaitMs } from '../../matrix/channelPermissions';
 import { blockedWordForOwnMessage } from '../../matrix/automod';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { useChannelPermissions, useSlowmodeWait } from '../../matrix/hooks/useChannelPermissions';
-import { buildReplyRelation, type ReplyTarget } from '../../matrix/replies';
+import { buildReplyRelation, replyMentions, type ReplyTarget } from '../../matrix/replies';
 import { findSlashCommand, parseSlashInput, SLASH_COMMANDS } from '../../matrix/slashCommands';
 import { BUG_USAGE, parseBugCommand, sendBugReport } from '../../matrix/bugReport';
 import { sendFileMessage, sendVoiceMessage } from '../../matrix/upload';
@@ -232,7 +232,7 @@ export function Composer({
     stopTyping();
     // A reply goes on the first message sent: the first file when there is one (so an image-only
     // reply is still a reply), otherwise the text.
-    const replyTo = replyingTo?.eventId;
+    const replyTo = replyingTo ?? undefined;
     try {
       // Matrix has no combined attachment+caption event shape — Element's own convention (and
       // the one followed here) is to send the file as its own event, then any typed text as a
@@ -264,16 +264,19 @@ export function Composer({
             room ? canMentionRoom(room, mx.getUserId() ?? '') : false,
             mentionGroups
           );
-          const relatesTo = replyTo && filesToSend.length === 0 ? buildReplyRelation(replyTo) : undefined;
+          const replyHere = replyTo && filesToSend.length === 0 ? replyTo : undefined;
+          const relatesTo = replyHere ? buildReplyRelation(replyHere.eventId) : undefined;
+          // Replying mentions whoever wrote the message, so it notifies them like an @mention.
+          const userIds = [...new Set([...mentionedUserIds, ...(replyHere ? replyMentions(replyHere, mx.getUserId()) : [])])];
           const linkEmbeds = await embeds.prepare(effectiveBody);
-          if (formattedBody || relatesTo || mentionedUserIds.length > 0 || mentionsRoom || linkEmbeds) {
+          if (formattedBody || relatesTo || userIds.length > 0 || mentionsRoom || linkEmbeds) {
             await mx.sendMessage(roomId, threadId, {
               msgtype: MsgType.Text,
               body: effectiveBody,
               ...(linkEmbeds && embedsContent(linkEmbeds)),
               ...(formattedBody && { format: 'org.matrix.custom.html', formatted_body: formattedBody }),
-              ...((mentionedUserIds.length > 0 || mentionsRoom) && {
-                'm.mentions': { ...(mentionedUserIds.length > 0 && { user_ids: mentionedUserIds }), ...(mentionsRoom && { room: true }) },
+              ...((userIds.length > 0 || mentionsRoom) && {
+                'm.mentions': { ...(userIds.length > 0 && { user_ids: userIds }), ...(mentionsRoom && { room: true }) },
               }),
               ...(relatesTo && { 'm.relates_to': relatesTo }),
             });
@@ -329,7 +332,7 @@ export function Composer({
       // The waveform needs the recorded bytes decoded independently of the upload — computed
       // up front so a slow/failed upload doesn't also block or repeat the decode.
       const waveform = await computeWaveform(recorded.blob).catch(() => []);
-      await sendVoiceMessage(mx, roomId, threadId, recorded.blob, recorded.mimetype, recorded.durationMs, waveform, replyingTo?.eventId);
+      await sendVoiceMessage(mx, roomId, threadId, recorded.blob, recorded.mimetype, recorded.durationMs, waveform, replyingTo ?? undefined);
       playMessageSentSound();
       voiceRecorder.reset();
       onCancelReply?.();

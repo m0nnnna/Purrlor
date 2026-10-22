@@ -14,10 +14,28 @@ export function buildReplyRelation(eventId: string): { 'm.in_reply_to': { event_
   return { 'm.in_reply_to': { event_id: eventId } };
 }
 
+/** Who a reply mentions: whoever wrote the message replied to, unless that's you. Sent in
+ *  `m.mentions`, it notifies them the same way an @mention does (the spec's
+ *  `.m.rule.is_user_mention`), which is also what the spec asks of a reply. */
+export function replyMentions(target: Pick<ReplyTarget, 'senderId'>, myUserId: string | null): string[] {
+  return target.senderId && target.senderId !== myUserId ? [target.senderId] : [];
+}
+
+/** The content keys that make an event a reply to `target`, mention included (see replyMentions). */
+export function buildReplyContent(
+  target: Pick<ReplyTarget, 'eventId' | 'senderId'>,
+  myUserId: string | null
+): { 'm.relates_to': { 'm.in_reply_to': { event_id: string } }; 'm.mentions'?: { user_ids: string[] } } {
+  const mentioned = replyMentions(target, myUserId);
+  return { 'm.relates_to': buildReplyRelation(target.eventId), ...(mentioned.length > 0 && { 'm.mentions': { user_ids: mentioned } }) };
+}
+
 /** What the composer needs to know about the message being replied to — set from a timeline
  *  row's "Reply" action, cleared once the reply actually sends (see MainPane.tsx). */
 export type ReplyTarget = {
   eventId: string;
+  /** Who wrote it, so the reply can mention them. */
+  senderId?: string;
   senderName: string;
   preview: string;
 };

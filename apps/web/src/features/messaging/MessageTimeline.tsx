@@ -462,7 +462,7 @@ const MessageRow = memo(function MessageRow({
               data-nu-role="timeline-reply-action"
               title="Reply"
               aria-label="Reply"
-              onClick={() => onReply({ eventId, senderName, preview: previewTextFor(event) })}
+              onClick={() => onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) })}
             >
               <Icon name="reply" size={16} />
             </button>

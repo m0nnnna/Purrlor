@@ -8,7 +8,7 @@ import type {
   VideoContent,
 } from 'matrix-js-sdk/lib/@types/media';
 import { buildVoiceMessageContent, type VoiceMessageLocation } from './voiceMessage';
-import { buildReplyRelation } from './replies';
+import { buildReplyContent, type ReplyTarget } from './replies';
 
 type MediaLocation = { url: string } | { file: EncryptedAttachmentInfo & { url: string } };
 
@@ -76,14 +76,14 @@ export async function sendFileMessage(
   roomId: string,
   threadId: string | null,
   file: File,
-  replyTo?: string
+  replyTo?: ReplyTarget
 ): Promise<void> {
   const mimetype = file.type || 'application/octet-stream';
   const dimensions = await readImageDimensions(file);
   const info = { mimetype, size: file.size, ...dimensions };
   const location = await uploadAttachmentBytes(mx, roomId, file);
   const content = buildMediaContent(mimetype, file.name, location, info);
-  await mx.sendMessage(roomId, threadId, replyTo ? { ...content, 'm.relates_to': buildReplyRelation(replyTo) } : content);
+  await mx.sendMessage(roomId, threadId, replyTo ? { ...content, ...buildReplyContent(replyTo, mx.getUserId()) } : content);
 }
 
 /**
@@ -102,12 +102,12 @@ export async function sendVoiceMessage(
   mimetype: string,
   durationMs: number,
   waveform: number[],
-  replyTo?: string
+  replyTo?: ReplyTarget
 ): Promise<void> {
   const location: VoiceMessageLocation = await uploadAttachmentBytes(mx, roomId, blob);
   const content = {
     ...buildVoiceMessageContent({ location, mimetype, size: blob.size, durationMs, waveform }),
-    ...(replyTo && { 'm.relates_to': buildReplyRelation(replyTo) }),
+    ...(replyTo && buildReplyContent(replyTo, mx.getUserId())),
   };
   // matrix-js-sdk's RoomMessageEventContent union has no slot for the MSC1767/MSC3245 voice
   // fields (same reason every other custom-namespaced event in this codebase needs a cast — see
