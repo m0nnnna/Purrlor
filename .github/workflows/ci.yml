@@ -117,7 +117,7 @@ jobs:
           node-version: '22'
       - run: bash deploy/test/federation/run.sh
 
-  # The `purrlor` admin, backup and alert commands against stand-ins for curl, docker and scp, and
+  # The `purrlor` admin, backup, alert and update commands against stand-ins for curl, docker and scp, and
   # a syntax check of the install scripts: no Docker or socket needed (docs/admin.md).
   shell:
     name: shell
@@ -128,3 +128,4 @@ jobs:
       - run: bash deploy/test/purrlor-control.test.sh
       - run: bash deploy/test/purrlor-email.test.sh
       - run: bash deploy/test/purrlor-backup.test.sh
+      - run: bash deploy/test/purrlor-update.test.sh

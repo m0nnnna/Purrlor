@@ -22,7 +22,9 @@ Earlier plans, done apart from their open questions: "Purrlor: profile pages and
 the record of everything built before them (https://claude.ai/code/artifact/8f290dcd-d140-46e7-9ab5-994d822de800).
 
 Branches as of 2026-10-03:
-- `master`: everything. The profile pages plan's branches (`profile-pages`, `sonnet-work-2`, `opus-work-2`, `sonnet-work-3`), the later feature branches and `opus-federation` (federation, 2026-10-03) are fully merged into it. The live server is small and treated as a beta, so `master` deploys straight to it.
+- `master`: everything. The profile pages plan's branches (`profile-pages`, `sonnet-work-2`, `opus-work-2`, `sonnet-work-3`), the later feature branches and `opus-federation` (federation, 2026-10-03) are fully merged into it. The live server is small and treated as a beta, so `master` deploys straight to it: it follows the edge channel (`purrlor update --edge`).
+
+Releases (from 2026-10-23, v1.0.0): servers follow `stable` (`vX.Y.Z` tags, the default) or `edge` (`master`). To cut one, set `VERSION`, add `docs/releases/vX.Y.Z.md`, push, then push the tag; CI builds the images and the GitHub release. See `docs/releases.md`. The desktop and Android apps keep their own `desktop-v*` / `android-v*` tags.
 - `sonnet/gif`: GIF search via Klipy. On hold, do not merge. Klipy's terms forbid the server proxy, re-hosting and caching this branch does unless Klipy approves it in writing.
 
 ## Checks

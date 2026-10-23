@@ -97,7 +97,10 @@ purrlor — manage this Purrlor install
   purrlor status             what's running, and whether each part answers
   purrlor logs [service]     follow logs (web, token-server, push-gateway, livekit, matrix)
   purrlor restart [service]  restart everything, or one service
-  purrlor update             get the latest Purrlor and restart onto it
+  purrlor update             get the newest Purrlor on this server's channel and restart onto it
+  purrlor update --edge      follow every commit on master from now on (--stable: releases only)
+  purrlor update --check     whether an update is waiting (exit 10 if one is)
+  purrlor channel            the version this server runs, and the channel it follows
   purrlor doctor             check everything from the outside, the way a browser would
   purrlor alerts [url|test|off]  get a message when something's down, a disk is filling up,
                              or a nightly backup failed (an ntfy, Discord or Slack webhook URL)
@@ -189,6 +192,7 @@ cmd_info() {
 # so the grace period keeps asking until then rather than reporting a FAIL that isn't one.
 cmd_status() {
   local grace="${1:-0}"
+  echo "Purrlor $(version_string) ($(channel))"
   compose ps
   echo
   local ok=0 a deadline=$((SECONDS + grace))
@@ -342,25 +346,153 @@ ADVICE
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Updates: stable releases and edge (docs/releases.md)
+# ---------------------------------------------------------------------------
+
+# Two channels. stable follows the release tags (v1.2.3, cut from master); edge follows master
+# itself, every commit, the way every install did before releases existed. PURRLOR_CHANNEL in .env
+# is what a bare `purrlor update` follows; an install from before it counts as stable.
+EDGE_BRANCH=master
+RELEASE_TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
+
+channel() { local c; c="$(env_get PURRLOR_CHANNEL)"; printf '%s' "${c:-stable}"; }
+
+# The checkout belongs to root; `purrlor` is run through sudo, which git can count as another user.
+git_() { git -c safe.directory='*' "$@"; }
+
+# newest_release -> the highest vX.Y.Z tag fetched from origin; empty when there are none yet.
+newest_release() { git_ tag -l 'v[0-9]*' --sort=-v:refname | grep -E "$RELEASE_TAG_RE" | head -n1 || true; }
+
+# current_release -> the release tag this checkout is exactly; empty for any other commit.
+current_release() { git_ tag --points-at HEAD -l 'v[0-9]*' --sort=-v:refname | grep -E "$RELEASE_TAG_RE" | head -n1 || true; }
+
+# What this checkout is, the way people say it: "1.2.0", or "1.2.0-4-gabc1234" (four commits
+# after 1.2.0), or just the commit when no release is behind it.
+version_string() {
+  local d
+  d="$(git_ describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null)" || d="$(git_ rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  printf '%s' "${d#v}"
+}
+
+fetch_updates() {
+  git_ fetch --quiet --tags --force origin "+refs/heads/$EDGE_BRANCH:refs/remotes/origin/$EDGE_BRANCH" \
+    || die "Couldn't reach $(git_ remote get-url origin 2>/dev/null || echo origin) to look for updates."
+}
+
+# update_target CHANNEL -> the tag or commit that channel would move this install to. Empty when
+# there's nothing to move to: already there, or (stable) this install is newer than every release
+# because it was on edge — stable never goes backwards, it waits for the next release instead.
+update_target() {
+  local want
+  if [ "$1" = stable ]; then
+    want="$(newest_release)"
+    [ -n "$want" ] || die "There are no Purrlor releases yet. To follow every commit instead: sudo purrlor update --edge"
+  else
+    want="origin/$EDGE_BRANCH"
+  fi
+  [ "$(git_ rev-parse "$want^{commit}")" != "$(git_ rev-parse HEAD)" ] || return 0
+  if [ "$1" = stable ] && git_ merge-base --is-ancestor "$want" HEAD; then return 0; fi
+  printf '%s' "$want"
+}
+
 cmd_update() {
+  local ch="" check=0 apply=0 arg target
+  for arg in "$@"; do
+    case "$arg" in
+      --edge|edge) ch=edge ;;
+      --stable|stable) ch=stable ;;
+      --check) check=1 ;;
+      # Internal (update-apply's first run): restart onto the right images even with nothing to move to.
+      --apply) apply=1 ;;
+      *) die "Usage: purrlor update [--edge|--stable] [--check]" ;;
+    esac
+  done
   need_root update
-  say "Fetching the latest Purrlor"
-  git pull --ff-only || die "git pull couldn't fast-forward — there are local changes in $REPO_ROOT. Check 'git status'."
-  # The pull may have just replaced this very script, which bash is still reading from disk as it
-  # runs. Carry on in the fresh copy instead — which also means the rest of the update is always
-  # the newest version of these steps.
+  [ -n "$ch" ] || ch="$(channel)"
+  [ "$check" = 1 ] || say "Looking for the newest Purrlor ($ch)"
+  fetch_updates
+  target="$(update_target "$ch")"
+  if [ "$check" = 1 ]; then
+    # Exit 10 = an update is waiting, the same as ultimit-update and nekocore.
+    if [ -z "$target" ]; then echo "Up to date: Purrlor $(version_string) ($ch)"; return 0; fi
+    echo "An update is waiting: Purrlor $(version_string) -> $(git_ describe --tags --always "$target" | sed 's/^v//') ($ch)"
+    return 10
+  fi
+  env_set PURRLOR_CHANNEL "$ch"
+  if [ -z "$target" ]; then
+    if [ "$ch" = stable ] && [ -z "$(current_release)" ]; then
+      say "This server runs $(version_string), newer than the newest release ($(newest_release | sed 's/^v//')). It moves to the next release once there is one."
+    else
+      say "Already up to date: Purrlor $(version_string) ($ch)"
+    fi
+    [ "$apply" = 0 ] || exec "$REPO_ROOT/deploy/purrlor" update-apply
+    return 0
+  fi
+  if [ "$ch" = stable ]; then
+    git_ -c advice.detachedHead=false checkout --quiet "$target" \
+      || die "Couldn't switch to $target — there are local changes in $REPO_ROOT. Check 'git status'."
+  else
+    { git_ checkout --quiet "$EDGE_BRANCH" && git_ merge --quiet --ff-only "$target"; } \
+      || die "Couldn't fast-forward to the newest $EDGE_BRANCH — there are local changes in $REPO_ROOT. Check 'git status'."
+  fi
+  say "Now on Purrlor $(version_string)"
+  # The checkout may have just replaced this very script, which bash is still reading from disk as
+  # it runs. Carry on in the fresh copy instead — which also means the rest of the update is always
+  # the new version's own steps.
   exec "$REPO_ROOT/deploy/purrlor" update-apply
+}
+
+# channel-apply [CHANNEL]: PURRLOR_IMAGE_TAG for what's checked out. A release gets its own images
+# (v1.2.3), anything else the newest master build (edge). A new install (setup.sh) also gets its
+# channel: the one install.sh was asked for, or else what the checkout is. The image tag is left
+# alone when PURRLOR_IMAGE_PREFIX is set to empty in .env: those are local images from
+# `docker load`, which are only tagged latest.
+cmd_channel_apply() {
+  local rel
+  rel="$(current_release)"
+  if [ -n "${1:-}" ]; then
+    case "$1" in stable|edge) env_set PURRLOR_CHANNEL "$1" ;; *) die "Unknown channel: $1 (stable or edge)" ;; esac
+  elif [ -z "$(env_get PURRLOR_CHANNEL)" ]; then
+    if [ -n "$rel" ]; then env_set PURRLOR_CHANNEL stable; else env_set PURRLOR_CHANNEL edge; fi
+  fi
+  if grep -q '^PURRLOR_IMAGE_PREFIX=$' .env 2>/dev/null; then return 0; fi
+  env_set PURRLOR_IMAGE_TAG "${rel:-edge}"
+}
+
+cmd_channel() {
+  case "${1:-}" in
+    "")
+      echo "Purrlor $(version_string), following $(channel)"
+      echo "  stable: each release (vX.Y.Z)   edge: every commit on $EDGE_BRANCH"
+      echo "  Switch with: sudo purrlor update --edge   (or --stable)"
+      ;;
+    stable|edge)
+      need_root channel
+      env_set PURRLOR_CHANNEL "$1"
+      say "'purrlor update' follows $1 now. To move there: sudo purrlor update"
+      ;;
+    *) die "Usage: purrlor channel [stable|edge]" ;;
+  esac
 }
 
 cmd_update_apply() {
   need_root update
+  # The first update since releases existed was started by the old `update`, which only pulled
+  # master. Go round through the new one, which puts this install on the newest release.
+  if [ -z "$(env_get PURRLOR_CHANNEL)" ]; then
+    env_set PURRLOR_CHANNEL stable
+    say "Purrlor has stable releases now, and this server follows them. For every commit instead: sudo purrlor update --edge"
+    exec "$REPO_ROOT/deploy/purrlor" update --stable --apply
+  fi
   # An install from before errors and metrics: the services read the token when they're recreated below.
   [ -n "$(env_get PURRLOR_METRICS_TOKEN)" ] || env_set PURRLOR_METRICS_TOKEN "$(openssl rand -hex 32)"
+  cmd_channel_apply
   say "Downloading the new images and restarting onto them"
   if compose pull; then
     compose up -d
   else
-    warn "Couldn't download the prebuilt images — building them here instead (needs ~4 GB of memory)."
+    warn "Couldn't download the prebuilt images — building them here instead (needs ~4 GB of memory). A release's images take about 15 minutes to appear after it's tagged."
     compose up -d --build
   fi
   say "Removing images the update left behind"
@@ -2100,7 +2232,10 @@ case "${1:-help}" in
   status) cmd_status ;;
   logs) shift; compose logs -f --tail 200 "$@" ;;
   restart) shift; compose restart "$@" ;;
-  update) cmd_update ;;
+  update) shift; cmd_update "$@" ;;
+  channel) shift; cmd_channel "$@" ;;
+  version) cmd_channel ;;
+  channel-apply) shift; cmd_channel_apply "$@" ;;
   update-apply) cmd_update_apply ;;
   doctor) cmd_doctor ;;
   backup) shift; cmd_backup "$@" ;;

@@ -65,8 +65,9 @@ docker load -i "$SOURCE_DIR/purrlor-push-gateway.tar"
 echo "==> recreating containers"
 cd "$DEST_DIR"
 # Plain local image names (purrlor-web:latest, ...) — what the `docker load` above provides —
-# rather than the registry ones compose uses by default.
-PURRLOR_IMAGE_PREFIX='' docker compose -f deploy/docker-compose.yml --env-file .env up -d --force-recreate web token-server push-gateway
+# rather than the registry ones compose uses by default (and whatever PURRLOR_IMAGE_TAG
+# `purrlor update` last left in .env).
+PURRLOR_IMAGE_PREFIX='' PURRLOR_IMAGE_TAG=latest docker compose -f deploy/docker-compose.yml --env-file .env up -d --force-recreate web token-server push-gateway
 
 echo "==> done"
 docker compose -f deploy/docker-compose.yml ps

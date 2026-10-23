@@ -1722,6 +1722,9 @@ if [ "$PROVISION_MATRIX" = true ]; then
 fi
 
 log "Downloading and starting the rest of the Purrlor stack"
+# Which images: this release's own when the checkout is one, the newest master build otherwise
+# (deploy/purrlor channel-apply; install.sh passes the channel it was asked for).
+"$REPO_ROOT/deploy/purrlor" channel-apply ${PURRLOR_CHANNEL:-}
 # Prebuilt images first (built by CI for amd64 and arm64 — seconds to download, no memory needed).
 # Only if that fails (no internet to the registry, an unusual CPU) is it built here, which needs
 # ~4 GB of memory: checked first, so a small server gets a clear message instead of a build killed
@@ -1871,7 +1874,7 @@ $SIGNUP_NOTE
 Managing it (from anywhere on this server):
   purrlor status          what's running, and whether it's healthy
   purrlor logs [service]  follow the logs (web, token-server, push-gateway, livekit, matrix)
-  purrlor update          get the latest Purrlor and restart onto it
+  purrlor update          get the newest Purrlor release and restart onto it (--edge: every commit)
   purrlor backup          save .env and the homeserver's data to a file
   purrlor doctor          re-run the outside-in checks above
 

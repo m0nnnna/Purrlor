@@ -6,8 +6,9 @@
 #
 # It installs what the setup needs to start (git, bash, curl), puts Purrlor in /opt/purrlor (or
 # updates it, if it's already there), and starts the guided setup (deploy/setup.sh), which asks a
-# few questions and does the rest. Set PURRLOR_DIR or PURRLOR_BRANCH to change where it goes or
-# which branch it follows.
+# few questions and does the rest. It installs the newest stable release; PURRLOR_CHANNEL=edge
+# follows every commit on master instead (docs/releases.md). Set PURRLOR_DIR or PURRLOR_BRANCH to
+# change where it goes or which branch edge follows.
 #
 # Plain POSIX sh on purpose: a stock Alpine has no bash until this installs it.
 
@@ -16,6 +17,8 @@ set -eu
 REPO_URL="${PURRLOR_REPO:-https://github.com/m0nnnna/Purrlor.git}"
 DIR="${PURRLOR_DIR:-/opt/purrlor}"
 BRANCH="${PURRLOR_BRANCH:-master}"
+CHANNEL="${PURRLOR_CHANNEL:-stable}"
+case "$CHANNEL" in stable|edge) ;; *) echo "PURRLOR_CHANNEL is stable or edge, not '$CHANNEL'." >&2; exit 1 ;; esac
 
 echo
 echo "  Purrlor installer"
@@ -67,5 +70,19 @@ else
   git clone --quiet --branch "$BRANCH" "$REPO_URL" "$DIR"
 fi
 
+# Stable: the newest release tag (vX.Y.Z). A fork with no releases yet stays on the branch.
+if [ "$CHANNEL" = stable ]; then
+  git -C "$DIR" fetch --quiet --tags origin
+  RELEASE="$(git -C "$DIR" tag -l 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+  if [ -n "$RELEASE" ]; then
+    echo "==> Using the newest release, $RELEASE"
+    git -C "$DIR" -c advice.detachedHead=false checkout --quiet "$RELEASE"
+  else
+    echo "==> No releases yet — following $BRANCH"
+    CHANNEL=edge
+  fi
+fi
+
 echo "==> Starting the guided setup"
+export PURRLOR_CHANNEL="$CHANNEL"
 exec bash "$DIR/deploy/setup.sh" </dev/tty

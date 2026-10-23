@@ -395,7 +395,8 @@ The installer adds a `purrlor` command:
 | `purrlor info` | The install summary again: the address, how to log in, the sign-up code |
 | `purrlor status` | What's running, and whether each part answers |
 | `purrlor doctor` | Checks everything from the outside and says what's wrong (DNS, firewall, certificate) |
-| `purrlor update` | Pulls the latest Purrlor and restarts onto it |
+| `purrlor update` | Moves to the newest release and restarts onto it (`--edge` follows every commit instead, `--check` only looks; see [docs/releases.md](docs/releases.md)) |
+| `purrlor channel` | The version this server runs and the channel it follows (stable or edge) |
 | `purrlor logs [service]` | Follows the logs |
 | `purrlor backup` | Saves your settings and all data to a file (`backup schedule daily` for nightly ones, `backup copy-to` to copy them to another server) |
 | `purrlor restore <file>` | Puts a backup back, saving how things are first |

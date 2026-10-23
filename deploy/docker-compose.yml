@@ -15,8 +15,10 @@
 # block too, so `up --build` still builds from this checkout (a fork, a local change, a registry
 # this host can't reach).
 #
-# PURRLOR_IMAGE_PREFIX / PURRLOR_IMAGE_TAG (optional) choose which images: the default is
-# ghcr.io/m0nnnna/purrlor-<service>:latest. PURRLOR_IMAGE_TAG can pin a commit (sha-<first 7>).
+# PURRLOR_IMAGE_PREFIX / PURRLOR_IMAGE_TAG choose which images: ghcr.io/m0nnnna/purrlor-<service>
+# at the tag `purrlor update` sets for the checkout — the release's own (v1.2.3) on the stable
+# channel, `edge` (the newest master build) on edge; `latest` is the newest release. sha-<first 7>
+# pins one commit's build, until the next `purrlor update` (docs/releases.md).
 # Setting PURRLOR_IMAGE_PREFIX to empty uses plain local names (purrlor-web:latest, …) — what a
 # `docker load` of images built elsewhere provides (see deploy/update-from-mount.sh).
 #

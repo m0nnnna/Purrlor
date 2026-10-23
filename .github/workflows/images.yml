@@ -6,20 +6,25 @@ name: Images
 # build stages run natively (--platform=$BUILDPLATFORM in each Dockerfile), and only each image's
 # small final stage is emulated for the other architecture.
 #
-# Tags: `latest` (what installs follow) and `sha-<commit>`, to pin or roll back with
-# PURRLOR_IMAGE_TAG in .env.
+# Tags (docs/releases.md): every push to master is `edge` (what edge installs follow) and
+# `sha-<commit>`. A release tag vX.Y.Z (matching VERSION) is `vX.Y.Z`, `stable` and `latest`, and
+# once its images are up it's published as a GitHub release, notes from docs/releases/vX.Y.Z.md.
+# `purrlor update` sets PURRLOR_IMAGE_TAG in .env to match the checkout.
 
 on:
   push:
     branches: [master]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+# Per ref: a release tagged on the commit master just got must not cancel master's build, or the
+# other way round.
 concurrency:
-  group: images
+  group: images-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -38,6 +43,10 @@ jobs:
             dockerfile: services/push-gateway/Dockerfile
     steps:
       - uses: actions/checkout@v4
+      - name: Check the tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          [ "v$(cat VERSION)" = "${{ github.ref_name }}" ] || { echo "Tag ${{ github.ref_name }} doesn't match VERSION $(cat VERSION)"; exit 1; }
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -49,18 +58,25 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          # On master, `edge`; on a release tag, the tag itself plus `stable` and `latest`.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/master' }}
+            type=ref,event=tag
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.title=${{ matrix.name }}
             org.opencontainers.image.description=Purrlor — ${{ matrix.name }}
+      # The release (1.2.0) or the commit, built into each image for `purrlor metrics` and error reports.
       - id: version
-        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then echo "short=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"; fi
       - uses: docker/build-push-action@v6
         with:
           context: .
-          # The commit, built into each image for `purrlor metrics` and error reports.
           build-args: PURRLOR_VERSION=${{ steps.version.outputs.short }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
@@ -69,3 +85,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # The GitHub release, once all three images are up, so the release page never offers a version
+  # whose images can't be downloaded yet. (`purrlor update` goes by the tag, and builds locally if
+  # it gets there first.)
+  release:
+    name: release
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
+          gh release create "$GITHUB_REF_NAME" --title "Purrlor ${GITHUB_REF_NAME#v}" --verify-tag --latest "$@"

@@ -558,9 +558,12 @@ looking. Still hides the origin IP behind the TURN relay's own IP, which is the 
 
 The installer links a `purrlor` command into `/usr/local/bin`:
 
-- **`purrlor update`** — `git pull`, rebuild what changed, restart onto it, and clear out the old
-  images. (By hand: `git pull`, then `docker compose -f deploy/docker-compose.yml --env-file .env
-  up -d --build`, adding `--profile matrix` with the bundled homeserver.)
+- **`purrlor update`** — move to the newest release, download its images, restart onto them, and
+  clear out the old images. `purrlor update --edge` follows every commit on `master` instead, and
+  `--stable` goes back to releases; `--check` only says whether an update is waiting (exit 10).
+  `purrlor channel` shows the version and channel. See [`releases.md`](releases.md). (By hand:
+  `git fetch --tags && git checkout vX.Y.Z`, then `docker compose -f deploy/docker-compose.yml
+  --env-file .env up -d --build`, adding `--profile matrix` with the bundled homeserver.)
 - **`purrlor status`** / **`purrlor doctor`** — what's running, from the inside and the outside.
 - **`purrlor logs [service]`** — `livekit`, `token-server`, `push-gateway`, `web`, or — with the
   bundled homeserver — `matrix`.
