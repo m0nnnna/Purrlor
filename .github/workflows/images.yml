@@ -104,4 +104,5 @@ jobs:
         run: |
           notes="docs/releases/${GITHUB_REF_NAME}.md"
           if [ -f "$notes" ]; then set -- --notes-file "$notes"; else set -- --generate-notes; fi
-          gh release create "$GITHUB_REF_NAME" --title "Purrlor ${GITHUB_REF_NAME#v}" --verify-tag --latest "$@"
+          # Not marked Latest: it has no downloads, and releases/latest is where people go for the apps.
+          gh release create "$GITHUB_REF_NAME" --title "Purrlor ${GITHUB_REF_NAME#v}" --verify-tag --latest=false "$@"
