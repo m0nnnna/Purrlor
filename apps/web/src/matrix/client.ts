@@ -97,6 +97,10 @@ async function buildClient(session: Session): Promise<MatrixClient> {
     accessToken: session.accessToken,
     userId: session.userId,
     deviceId: session.deviceId,
+    // The SDK sets no timeout of its own, so a request on a connection that died while the tab sat
+    // in the background (or the computer slept) never finished: the composer waited on its send
+    // forever and nothing could be sent until a reload. Sync and uploads set their own timeouts.
+    localTimeoutMs: 30 * 1000,
     store: indexedDBStore,
     cryptoStore,
     timelineSupport: true,
@@ -215,6 +219,11 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   document.addEventListener('visibilitychange', () => {
     // Not once another tab has the session: its sync position is newer than this tab's.
     if (document.visibilityState === 'hidden' && mx.clientRunning) void mx.store.save(true).catch(() => undefined);
+    // Coming back: sync again now rather than after its backoff, in case the connection dropped.
+    if (document.visibilityState === 'visible' && mx.clientRunning) mx.retryImmediately();
+  });
+  window.addEventListener('online', () => {
+    if (mx.clientRunning) mx.retryImmediately();
   });
   // From here the service worker can sign this client's media requests (matrix/mediaWorker.ts).
   startMediaWorkerAuth(mx);
