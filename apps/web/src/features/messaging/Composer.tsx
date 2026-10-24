@@ -269,20 +269,24 @@ export function Composer({
           // Replying mentions whoever wrote the message, so it notifies them like an @mention.
           const userIds = [...new Set([...mentionedUserIds, ...(replyHere ? replyMentions(replyHere, mx.getUserId()) : [])])];
           const linkEmbeds = await embeds.prepare(effectiveBody);
-          if (formattedBody || relatesTo || userIds.length > 0 || mentionsRoom || linkEmbeds) {
-            await mx.sendMessage(roomId, threadId, {
-              msgtype: MsgType.Text,
-              body: effectiveBody,
-              ...(linkEmbeds && embedsContent(linkEmbeds)),
-              ...(formattedBody && { format: 'org.matrix.custom.html', formatted_body: formattedBody }),
-              ...((userIds.length > 0 || mentionsRoom) && {
-                'm.mentions': { ...(userIds.length > 0 && { user_ids: userIds }), ...(mentionsRoom && { room: true }) },
-              }),
-              ...(relatesTo && { 'm.relates_to': relatesTo }),
-            });
-          } else {
-            await mx.sendTextMessage(roomId, threadId, effectiveBody);
-          }
+          // Not awaited: the message shows at once (the SDK's local echo) and the SDK sends a room's
+          // messages in order, so the next can be typed and sent meanwhile, three short lines in a
+          // row included. One that fails stays in the timeline marked "Not sent", with Retry
+          // (MessageTimeline.tsx), rather than coming back into the box over what's typed since.
+          const sent =
+            formattedBody || relatesTo || userIds.length > 0 || mentionsRoom || linkEmbeds
+              ? mx.sendMessage(roomId, threadId, {
+                  msgtype: MsgType.Text,
+                  body: effectiveBody,
+                  ...(linkEmbeds && embedsContent(linkEmbeds)),
+                  ...(formattedBody && { format: 'org.matrix.custom.html', formatted_body: formattedBody }),
+                  ...((userIds.length > 0 || mentionsRoom) && {
+                    'm.mentions': { ...(userIds.length > 0 && { user_ids: userIds }), ...(mentionsRoom && { room: true }) },
+                  }),
+                  ...(relatesTo && { 'm.relates_to': relatesTo }),
+                })
+              : mx.sendTextMessage(roomId, threadId, effectiveBody);
+          sent.catch((err: unknown) => console.error('Failed to send message', err));
         }
       }
       if (filesToSend.length > 0 || !isCommand) playMessageSentSound();

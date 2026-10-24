@@ -1,5 +1,5 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
+import { Direction, EventStatus, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom, useSetAtom } from 'jotai';
 import { useAutoGrow } from '../../components/useAutoGrow';
 import { Avatar, nameHue } from '../../components/Avatar';
@@ -304,6 +304,8 @@ const MessageRow = memo(function MessageRow({
   // until event.status clears (see useRoomTimeline.ts's LocalEchoUpdated listener for the
   // re-render that unlocks this the moment it's safe).
   const isPending = event.status !== null;
+  // Gave up sending (Composer.tsx doesn't wait on a send, so this is where a failure shows).
+  const notSent = event.status === EventStatus.NOT_SENT;
   // Only plain m.text/m.notice bodies get a preview card — m.emote's body is a third-person
   // action line, not really "a message with a link in it" in the same sense, and media/edit
   // states render their own content instead of this branch at all.
@@ -388,6 +390,8 @@ const MessageRow = memo(function MessageRow({
         mentionsMe && 'nu-timeline__message--mentions-me',
         isHighlighted && 'nu-timeline__message--highlighted',
         actionsOpen && hasActions && 'nu-timeline__message--actions-open',
+        isPending && !notSent && 'nu-timeline__message--sending',
+        notSent && 'nu-timeline__message--not-sent',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -629,6 +633,17 @@ const MessageRow = memo(function MessageRow({
               <span className="nu-timeline__message-thread-last">Last from {threadSummary.lastReplySenderName}</span>
             )}
           </button>
+        )}
+        {notSent && (
+          <div className="nu-timeline__message-not-sent" data-nu-role="timeline-not-sent" role="status">
+            <span>Not sent</span>
+            <button type="button" data-nu-role="timeline-resend" onClick={() => void mx.resendEvent(event, room).catch((err: unknown) => console.error('Failed to send message', err))}>
+              Retry
+            </button>
+            <button type="button" data-nu-role="timeline-cancel-send" onClick={() => mx.cancelPendingEvent(event)}>
+              Delete
+            </button>
+          </div>
         )}
         {readers.length > 0 && (
           <div className="nu-timeline__message-readers" data-nu-role="timeline-readers" title={readers.map((r) => r.name).join(', ')}>
