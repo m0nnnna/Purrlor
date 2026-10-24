@@ -52,6 +52,7 @@ import { WatchPartyCard } from '../calendar/WatchPartyCard';
 import { NOTICE_EVENT_KEY } from '../../matrix/watchParty';
 import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
+import { useSwipeToReply } from './useSwipeToReply';
 import { CollapsibleText } from './CollapsibleText';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
@@ -372,6 +373,12 @@ const MessageRow = memo(function MessageRow({
   const ircMode = useIrcMode();
   const hasActions = !event.isDecryptionFailure() && !!eventId && !isEditing && !isPending;
   const closeActions = () => onActions(null);
+  const replyToThis = () => {
+    if (!eventId) return;
+    onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) });
+    closeActions();
+  };
+  const swipe = useSwipeToReply(hasActions ? replyToThis : undefined);
 
   return (
     <div
@@ -386,7 +393,14 @@ const MessageRow = memo(function MessageRow({
         .join(' ')}
       data-nu-role="timeline-message"
       data-nu-event-id={eventId ?? undefined}
+      {...swipe.handlers}
     >
+      {/* Revealed from the left edge as a phone swipes the message right (useSwipeToReply.ts). */}
+      {swipe.swiping && (
+        <span className={['nu-timeline__message-swipe-reply', swipe.armed && 'nu-timeline__message-swipe-reply--armed'].filter(Boolean).join(' ')} aria-hidden="true">
+          <Icon name="reply" size={18} />
+        </span>
+      )}
       {ircMode ? (
         // IRC mode: the time in a column down the left on every line, as in the mockup's lists
         // (the picture is a tiny one in the name row instead). The day is on the divider above, so the time of day is enough here.
@@ -410,21 +424,33 @@ const MessageRow = memo(function MessageRow({
         </button>
       )}
       <div className="nu-timeline__message-body">
-        {/* First in the body and floated right (MessageTimeline.css), so text wraps around it. A
-            click or tap opens the message's actions underneath it (no hover, so it works on a
-            phone); opening another message's closes these. */}
+        {/* First in the body and floated right (MessageTimeline.css), so text wraps around it and
+            nothing is covered. Reply is one click on a computer (phones swipe the message right
+            instead, and keep the space for text); the ⋯ opens the rest underneath the message. */}
         {hasActions && (
-          <button
-            type="button"
-            className="nu-timeline__message-menu-toggle"
-            data-nu-role="timeline-message-menu"
-            title={actionsOpen ? 'Close message actions' : 'Message actions'}
-            aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
-            aria-expanded={actionsOpen}
-            onClick={() => onActions(actionsOpen ? null : eventId)}
-          >
-            <Icon name="more" size={16} />
-          </button>
+          <span className="nu-timeline__message-quick" data-nu-role="timeline-message-quick">
+            <button
+              type="button"
+              className="nu-timeline__message-menu-toggle nu-timeline__message-quick-reply"
+              data-nu-role="timeline-quick-reply"
+              title="Reply"
+              aria-label="Reply"
+              onClick={replyToThis}
+            >
+              <Icon name="reply" size={16} />
+            </button>
+            <button
+              type="button"
+              className="nu-timeline__message-menu-toggle"
+              data-nu-role="timeline-message-menu"
+              title={actionsOpen ? 'Close message actions' : 'Message actions'}
+              aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
+              aria-expanded={actionsOpen}
+              onClick={() => onActions(actionsOpen ? null : eventId)}
+            >
+              <Icon name="more" size={16} />
+            </button>
+          </span>
         )}
         {replyEventId && <ReplyPreview room={room} replyEventId={replyEventId} />}
         {(!isGrouped || editedEvent || isPinned) && (
@@ -627,10 +653,7 @@ const MessageRow = memo(function MessageRow({
               data-nu-role="timeline-reply-action"
               title="Reply"
               aria-label="Reply"
-              onClick={() => {
-                onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) });
-                closeActions();
-              }}
+              onClick={replyToThis}
             >
               <Icon name="reply" size={16} />
             </button>
