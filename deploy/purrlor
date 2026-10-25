@@ -426,7 +426,10 @@ cmd_update() {
     else
       say "Already up to date: Purrlor $(version_string) ($ch)"
     fi
-    [ "$apply" = 0 ] || exec "$REPO_ROOT/deploy/purrlor" update-apply
+    # On edge the code can be current while its images aren't: an update run while CI was still
+    # building the last commit's images pulled the ones before. Pulling again costs little, and
+    # restarts only what changed, so an edge server always catches up with its images here.
+    [ "$apply" = 0 ] && [ "$ch" != edge ] || exec "$REPO_ROOT/deploy/purrlor" update-apply
     return 0
   fi
   if [ "$ch" = stable ]; then
@@ -476,6 +479,21 @@ cmd_channel() {
   esac
 }
 
+# On edge, says so when the web image just pulled was built from an older commit than the one
+# checked out: CI publishes a push's images a few minutes after it, and an update run meanwhile
+# gets the previous ones. Running the update again once they're up catches up (cmd_update).
+edge_images_check() {
+  [ "$(env_get PURRLOR_IMAGE_TAG)" = edge ] || return 0
+  local cid image built head
+  cid="$(service_cid web 2>/dev/null)" || return 0
+  [ -n "$cid" ] || return 0
+  image="$(docker inspect --format '{{.Image}}' "$cid" 2>/dev/null)" || return 0
+  built="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image" 2>/dev/null)" || return 0
+  head="$(git_ rev-parse HEAD 2>/dev/null)" || return 0
+  [ -n "$built" ] && [ "$built" != "$head" ] || return 0
+  warn "The newest images are still being built for $(git_ rev-parse --short HEAD) (this one is from ${built:0:7}). They're usually up within a few minutes of a push: run 'sudo purrlor update' again then."
+}
+
 cmd_update_apply() {
   need_root update
   # The first update since releases existed was started by the old `update`, which only pulled
@@ -495,6 +513,7 @@ cmd_update_apply() {
     warn "Couldn't download the prebuilt images — building them here instead (needs ~4 GB of memory). A release's images take about 15 minutes to appear after it's tagged."
     compose up -d --build
   fi
+  edge_images_check
   say "Removing images the update left behind"
   docker image prune -f >/dev/null
   echo
