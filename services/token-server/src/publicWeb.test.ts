@@ -502,6 +502,18 @@ describe('pageItemPreview', () => {
     assert.deepEqual(pageItemPreview(page, 'art', 'fa', 2), { title: 'Fan art', description: 'From Fan art', image: 'mxc://s/p2' });
   });
 
+  it('gives each album its own link when two music blocks share an album ID', () => {
+    const shared = {
+      blocks: [
+        { type: 'music', albums: [{ id: 'a0', title: 'First', tracks: [{ url: 'mxc://s/t1', title: 'One' }] }] },
+        { type: 'music', albums: [{ id: 'a0', title: 'Second', tracks: [{ url: 'mxc://s/t2', title: 'Two' }] }] },
+      ],
+    };
+    assert.equal(pageItemPreview(shared, 'music', 'a0')?.title, 'First');
+    assert.equal(pageItemPreview(shared, 'music', 'a0_')?.title, 'Second');
+    assert.equal(pageItemPreview(shared, 'music', 'a0_', 1)?.title, 'Two');
+  });
+
   it('has nothing for what the page has not got', () => {
     assert.equal(pageItemPreview(page, 'music', 'nope'), undefined);
     assert.equal(pageItemPreview(page, 'music', 'lp', 3), undefined);
