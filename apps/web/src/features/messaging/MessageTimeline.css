@@ -343,22 +343,12 @@ button.nu-timeline__reply-preview:focus-visible {
   margin-top: var(--nu-space-1);
 }
 
-/* Reply and ⋯ in a column of their own at the right of the message (MessageTimeline.tsx), beside
-   its text rather than in it: nothing wraps around them and nothing is covered. Pulled into the
-   row's gap and padding, so the text loses as little width as it can. */
-.nu-timeline__message-side {
-  flex: none;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 1px;
-  width: 57px;
-  margin: -1px calc(var(--nu-space-2) * -1) 0 calc(var(--nu-space-2) * -1);
-}
-
-/* Faint until the message is pointed at or its actions are open, but always there to tap: there's
-   no hover on a phone. */
+/* Clicking a message opens its actions (MessageTimeline.tsx), so its ⋯ is only for the keyboard
+   and screen readers: out of sight until it's tabbed to, then at the message's top right. */
 .nu-timeline__message-menu-toggle {
+  position: absolute;
+  top: 2px;
+  right: var(--nu-space-2);
   appearance: none;
   border: none;
   display: flex;
@@ -367,37 +357,15 @@ button.nu-timeline__reply-preview:focus-visible {
   width: 28px;
   height: 22px;
   padding: 0;
-  background: transparent;
-  color: var(--nu-color-text-muted);
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
   border-radius: var(--nu-radius-sm);
   cursor: pointer;
-  opacity: 0.45;
-  transition:
-    opacity 0.1s ease,
-    color 0.12s ease,
-    background 0.12s ease;
+  clip-path: inset(50%);
 }
 
-.nu-timeline__message:hover .nu-timeline__message-menu-toggle,
-.nu-timeline__message-menu-toggle:focus-visible,
-.nu-timeline__message-menu-toggle[aria-expanded='true'] {
-  opacity: 1;
-}
-
-.nu-timeline__message-menu-toggle:hover,
-.nu-timeline__message-menu-toggle[aria-expanded='true'] {
-  color: var(--nu-color-text-primary);
-  background: var(--nu-color-bg-tertiary);
-}
-
-/* Reply only shows on the message being pointed at, so a quiet feed stays quiet. */
-.nu-timeline__message-quick-reply {
-  opacity: 0;
-}
-
-.nu-timeline__message:hover .nu-timeline__message-quick-reply,
-.nu-timeline__message-quick-reply:focus-visible {
-  opacity: 1;
+.nu-timeline__message-menu-toggle:focus-visible {
+  clip-path: none;
 }
 
 /* Swiping a message right to reply on a phone (useSwipeToReply.ts): the arrow comes in from the
@@ -614,18 +582,6 @@ button.nu-timeline__reply-preview:focus-visible {
 @media (hover: none) {
   .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me):not(.nu-timeline__message--actions-open) {
     background: none;
-  }
-
-  /* Phones press and hold a message for its actions (MessageActionSheet) and swipe it right to
-     reply, so the text gets the whole width. The column stays for screen readers. */
-  .nu-timeline__message-side {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   /* A long press opens the sheet, not the browser's text selection or its picture menu: the

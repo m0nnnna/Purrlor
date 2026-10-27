@@ -144,25 +144,58 @@ describe('MessageTimeline against the demo world', () => {
     expect(screen.queryByText(/@nibbles:demo\.purrlor/)).not.toBeInTheDocument();
   });
 
-  it('opens a message’s actions from its ⋯, under the message, one message at a time', () => {
+  it('opens a message’s actions by clicking it, under the message, one message at a time', () => {
     const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
-    const toggles = () => Array.from(container.querySelectorAll<HTMLButtonElement>('[data-nu-role="timeline-message-menu"]'));
+    const messages = () => Array.from(container.querySelectorAll<HTMLElement>('[data-nu-role="timeline-message"]'));
+    const text = (index: number) => messages()[index].querySelector<HTMLElement>('.nu-timeline__message-text')!;
     const open = () => container.querySelectorAll('[data-nu-role="timeline-message-actions"]');
-    expect(toggles().length).toBeGreaterThan(1);
     expect(open()).toHaveLength(0);
 
-    fireEvent.click(toggles()[0]);
+    fireEvent.click(text(0));
     expect(open()).toHaveLength(1);
-    expect(toggles()[0].getAttribute('aria-expanded')).toBe('true');
-    expect(toggles()[0].closest('[data-nu-role="timeline-message"]')?.querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
+    expect(messages()[0].querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
 
-    fireEvent.click(toggles()[1]);
+    fireEvent.click(text(1));
     expect(open()).toHaveLength(1);
-    expect(toggles()[0].getAttribute('aria-expanded')).toBe('false');
-    expect(toggles()[1].closest('[data-nu-role="timeline-message"]')?.querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
+    expect(messages()[1].querySelector('[data-nu-role="timeline-message-actions"]')).not.toBeNull();
 
+    // The same message again closes them.
+    fireEvent.click(text(1));
+    expect(open()).toHaveLength(0);
+
+    fireEvent.click(text(0));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(open()).toHaveLength(0);
+  });
+
+  it('puts Reply first in the actions, then reactions', () => {
+    const onReply = vi.fn();
+    const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={onReply} />);
+    fireEvent.click(screen.getByText(/welcome to the café/));
+    const actions = container.querySelector<HTMLElement>('[data-nu-role="timeline-message-actions"]')!;
+    const buttons = within(actions).getAllByRole('button');
+    expect(buttons[0]).toHaveAccessibleName('Reply');
+    expect(buttons[1]).toHaveAccessibleName('Add reaction');
+    fireEvent.click(buttons[0]);
+    expect(onReply).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
+  });
+
+  it('leaves the actions shut for a click on something in the message that does its own thing', () => {
+    const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+    const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+    // The sender's name opens their profile instead.
+    fireEvent.click(within(message).getByRole('button', { name: /Nibbles/ }));
+    expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
+  });
+
+  it('keeps the ⋯ for the keyboard', () => {
+    const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+    const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+    const toggle = within(message).getByRole('button', { name: 'Message actions' });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelectorAll('[data-nu-role="timeline-message-actions"]')).toHaveLength(1);
   });
 
   it('shows a reaction picked from a message’s actions on that message', async () => {
@@ -174,17 +207,6 @@ describe('MessageTimeline against the demo world', () => {
     fireEvent.click(within(document.body).getByRole('button', { name: '👍' }));
     await waitFor(() => expect(within(message).getByRole('button', { name: /You reacted with 👍/ })).toBeInTheDocument());
     expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
-  });
-
-  it('keeps Reply and the ⋯ in a column beside the message, not in its text', () => {
-    const onReply = vi.fn();
-    renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={onReply} />);
-    const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
-    const side = message.querySelector<HTMLElement>(':scope > [data-nu-role="timeline-message-side"]')!;
-    expect(within(side).getByRole('button', { name: 'Message actions' })).toBeInTheDocument();
-    expect(message.querySelector('.nu-timeline__message-body [data-nu-role="timeline-message-menu"]')).toBeNull();
-    fireEvent.click(within(side).getByRole('button', { name: 'Reply' }));
-    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ senderName: expect.any(String) }));
   });
 
   describe('on a phone', () => {

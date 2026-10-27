@@ -58,13 +58,15 @@ export function message(page: Page, text: string): Locator {
 }
 
 /**
- * Clicks one of a message's actions: opens them from its ⋯ if they aren't open, then clicks the
+ * Clicks one of a message's actions: opens them by clicking the message if they aren't open (in
+ * its top left padding, clear of its picture, name and any link in its text), then clicks the
  * action. Retried, since the timeline can still be settling (scrolling to the newest message).
  */
 export async function clickMessageAction(target: Locator, action: string): Promise<void> {
   await expect(async () => {
-    const toggle = role(target, 'timeline-message-menu');
-    if ((await toggle.getAttribute('aria-expanded', { timeout: 2000 })) !== 'true') await toggle.click({ timeout: 2000 });
+    if (!(await role(target, 'timeline-message-actions').isVisible())) {
+      await target.click({ position: { x: 4, y: 1 }, timeout: 2000 });
+    }
     await role(target, action).click({ timeout: 2000 });
   }).toPass({ timeout: 20_000 });
 }

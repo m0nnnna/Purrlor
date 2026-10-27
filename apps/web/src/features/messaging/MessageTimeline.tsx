@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Direction, EventStatus, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom, useSetAtom } from 'jotai';
 import { useAutoGrow } from '../../components/useAutoGrow';
@@ -218,6 +218,12 @@ function eventRevision(event: MatrixEvent): string {
   return [event.getId(), event.getType(), event.status ?? '', event.replacingEventId() ?? '', event.isRedacted(), event.isDecryptionFailure()].join('|');
 }
 
+/** What in a message does something of its own when clicked, so a click there doesn't also open
+ *  the message's actions (MessageRow): links, buttons (pictures, mentions, reactions, Show more),
+ *  players, a spoiler, and the open actions themselves. */
+const CLICKABLE_IN_MESSAGE =
+  'a, button, input, textarea, select, summary, label, video, audio, iframe, [role="button"], [contenteditable="true"], .nu-spoiler, [data-nu-role="timeline-message-actions"]';
+
 /** Memoized: on a phone, redrawing every row for every scroll or timeline update made the app crawl. */
 const MessageRow = memo(function MessageRow({
   mx,
@@ -389,6 +395,16 @@ const MessageRow = memo(function MessageRow({
   };
   const swipe = useSwipeToReply(hasActions ? replyToThis : undefined);
   const longPress = useLongPress(touchOnly && hasActions && eventId ? () => onActions(eventId) : undefined);
+  // A click on the message opens its actions under it, and closes them again: not on anything in
+  // it that's clickable itself, not on a dialog opened from it (its clicks bubble here through the
+  // portal), and not at the end of selecting text. Phones press and hold instead (useLongPress).
+  const toggleFromClick = (evt: ReactMouseEvent<HTMLDivElement>) => {
+    if (touchOnly || !hasActions || !eventId) return;
+    const target = evt.target as Element;
+    if (!evt.currentTarget.contains(target) || target.closest(CLICKABLE_IN_MESSAGE)) return;
+    if (window.getSelection()?.toString()) return;
+    onActions(actionsOpen ? null : eventId);
+  };
   const react = (key: string, shortcode?: string) => {
     if (eventId) void sendReaction(mx, room.roomId, eventId, key, shortcode);
     closeActions();
@@ -411,6 +427,8 @@ const MessageRow = memo(function MessageRow({
           <Icon name="reply" size={16} />
           {label('Reply')}
         </button>
+        {/* A phone's sheet has its quick reactions across its top instead. */}
+        {!touchOnly && <ReactionPicker room={room} onPick={react} />}
         <button
           type="button"
           className={itemClass()}
@@ -579,6 +597,7 @@ const MessageRow = memo(function MessageRow({
       data-nu-role="timeline-message"
       data-nu-event-id={eventId ?? undefined}
       {...combineHandlers(swipe.handlers, longPress)}
+      onClick={toggleFromClick}
     >
       {/* Revealed from the left edge as a phone swipes the message right (useSwipeToReply.ts). */}
       {swipe.swiping && (
@@ -807,46 +826,29 @@ const MessageRow = memo(function MessageRow({
             ))}
           </div>
         )}
-        {/* On a computer, in the feed under the message, taking real space rather than covering
-            its neighbours. On a phone, the same actions in a sheet (below). */}
+        {/* On a computer, opened by clicking the message: in the feed under it, taking real space
+            rather than covering its neighbours. On a phone, the same actions in a sheet (below). */}
         {actionsOpen && hasActions && eventId && !touchOnly && (
           <div className="nu-timeline__message-actions" data-nu-role="timeline-message-actions">
-            <ReactionPicker room={room} onPick={react} />
             {actionItems}
           </div>
         )}
       </div>
-      {/* Reply and the ⋯ in a column of their own at the right, beside the message rather than in
-          its text, so nothing wraps around them or is covered. Always there, so a message is the
-          same width while it sends and after. Phones hide it from sight (a long press opens the
-          sheet instead) but keep it for screen readers. */}
-      <div className="nu-timeline__message-side" data-nu-role="timeline-message-side">
-        {hasActions && (
-          <>
-            <button
-              type="button"
-              className="nu-timeline__message-menu-toggle nu-timeline__message-quick-reply"
-              data-nu-role="timeline-quick-reply"
-              title="Reply"
-              aria-label="Reply"
-              onClick={replyToThis}
-            >
-              <Icon name="reply" size={16} />
-            </button>
-            <button
-              type="button"
-              className="nu-timeline__message-menu-toggle"
-              data-nu-role="timeline-message-menu"
-              title={actionsOpen ? 'Close message actions' : 'Message actions'}
-              aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
-              aria-expanded={actionsOpen}
-              onClick={() => onActions(actionsOpen ? null : eventId)}
-            >
-              <Icon name="more" size={16} />
-            </button>
-          </>
-        )}
-      </div>
+      {/* For the keyboard and screen readers: clicking or pressing and holding the message is how
+          a pointer opens its actions, so this stays out of sight until it's tabbed to. */}
+      {hasActions && (
+        <button
+          type="button"
+          className="nu-timeline__message-menu-toggle"
+          data-nu-role="timeline-message-menu"
+          title={actionsOpen ? 'Close message actions' : 'Message actions'}
+          aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
+          aria-expanded={actionsOpen}
+          onClick={() => onActions(actionsOpen ? null : eventId)}
+        >
+          <Icon name="more" size={16} />
+        </button>
+      )}
       {actionsOpen && hasActions && eventId && touchOnly && (
         <MessageActionSheet room={room} onReact={react} onClose={closeActions}>
           {actionItems}
