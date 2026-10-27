@@ -22,6 +22,19 @@ rtc:
   # not here, so the same image works across deployments without rebuilding the config in.
   use_external_ip: false
 
+  # How often a viewer may ask the sender for a full frame (a keyframe), by the quality it's
+  # receiving. A live stream's viewers join in bursts, and each join asks for one: throttled, a
+  # burst shares a keyframe instead of forcing the streamer to send one per viewer (docs/streaming.md).
+  pli_throttle:
+    low_quality: 500ms
+    mid_quality: 1s
+    high_quality: 2s
+
+# Egress (recording live streams, docs/streaming.md) talks to LiveKit through Redis; the redis
+# container in docker-compose.yml. LiveKit won't start without it once this is set.
+redis:
+  address: redis:6379
+
 # Optional hardening, not enabled by default: an embedded TURN server so voice/screen-share
 # traffic looks like ordinary HTTPS to anyone observing the host, hiding the home server's IP
 # behind a VPS-fronted relay. Requires a dedicated domain (e.g. turn.example.com) with its own
@@ -53,8 +66,10 @@ room:
   # with "no negotiated codecs for track" / "publish time out"), which is why audio/opus (voice's
   # actual codec) must be listed explicitly alongside the video ones below.
   # H.264 for GPU-friendly screen-share decode (see voiceChannelRoomOptions.ts); VP8 kept for
-  # Firefox/compatibility.
+  # Firefox/compatibility. VP9 for live streams: one stream with 720p, 360p and 180p layers (SVC)
+  # that LiveKit hands out per viewer without re-encoding (docs/streaming.md).
   enabled_codecs:
     - mime: audio/opus
     - mime: video/h264
     - mime: video/vp8
+    - mime: video/vp9

@@ -16,6 +16,10 @@ import type { Request } from 'express';
  * Spaces from another server sends `!bug` from their own server's app, to here (bugReports.ts).
  * The same OpenID token proves who's asking, and only a member of a Space served here is taken.
  *
+ * **Live streams (`/api/public/streams`) too**: people on a peer watch a stream here from their own
+ * server's app (docs/streaming.md). Watching needs no credential at all (signed-out viewers watch),
+ * and what a streamer does carries their OpenID token.
+ *
  * Everything else keeps to `ALLOWED_ORIGINS` (comma-separated; `*` for any; `https://*.example.com`
  * for its subdomains).
  */
@@ -40,7 +44,14 @@ export function originAllowed(origin: string | undefined, allowed: string[]): bo
 
 /** Routes any page may call: see above. */
 export function openToAnyOrigin(path: string): boolean {
-  return path === '/api/livekit' || path.startsWith('/api/livekit/') || path === '/api/public/bugs' || path === '/api/public/bugs/';
+  return (
+    path === '/api/livekit' ||
+    path.startsWith('/api/livekit/') ||
+    path === '/api/public/bugs' ||
+    path === '/api/public/bugs/' ||
+    path === '/api/public/streams' ||
+    path.startsWith('/api/public/streams/')
+  );
 }
 
 export function corsOptions(allowed: string[]): CorsOptionsDelegate<Request> {

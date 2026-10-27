@@ -75,6 +75,38 @@ services:
       # here from certbot's output — see deploy/livekit-certs/.gitkeep) — empty otherwise, which
       # is fine since livekit.yaml's turn: block is disabled by default and never reads these.
       - ./livekit-certs:/etc/livekit/certs:ro
+    depends_on:
+      - redis
+    networks:
+      - purrlor-voice
+
+  # LiveKit and Egress talk through it (livekit.yaml's redis: block). Nothing is kept: no volume.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save '' --appendonly no
+    networks:
+      - purrlor-voice
+
+  # Records live streams for their 3-day replays (docs/streaming.md, "Recording and replays"): one
+  # 720p H.264 encode per live stream, about a CPU core each. It writes to the recordings volume,
+  # which the token server serves and deletes from. STREAM_RECORDING=off in .env leaves it idle.
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    environment:
+      EGRESS_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY}
+        api_secret: ${LIVEKIT_API_SECRET}
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        log_level: info
+    volumes:
+      - recordings:/out
+    depends_on:
+      - livekit
+      - redis
     networks:
       - purrlor-voice
 
@@ -137,6 +169,19 @@ services:
       - PEER_MAX_PROFILES=${PEER_MAX_PROFILES:-}
       - PEER_MAX_SPACES=${PEER_MAX_SPACES:-}
       - PEER_SPACE_FEEDS=${PEER_SPACE_FEEDS:-}
+      # Live streams (docs/streaming.md, "Admins"). LIVEKIT_PUBLIC_URL is the wss:// address
+      # viewers on other servers connect to. STREAM_UPLINK_MBPS (the server's upload) sets the
+      # viewer cap unless STREAM_VIEWER_CAP does.
+      - LIVEKIT_PUBLIC_URL=${PURRLOR_LIVEKIT_URL:-}
+      - STREAMING=${STREAMING:-}
+      - STREAM_UPLINK_MBPS=${STREAM_UPLINK_MBPS:-}
+      - STREAM_VIEWER_CAP=${STREAM_VIEWER_CAP:-}
+      - STREAM_MAX_LIVE=${STREAM_MAX_LIVE:-}
+      - STREAM_MAX_HOURS=${STREAM_MAX_HOURS:-}
+      - STREAM_REPLAY_HOURS=${STREAM_REPLAY_HOURS:-}
+      - STREAM_RECORDING=${STREAM_RECORDING:-}
+      - RECORDINGS_DIR=/recordings
+      - RECORDINGS_EGRESS_DIR=/out
       # The admin control socket `purrlor` talks to (docs/admin-control.md). Root-only, never on
       # the network: it's a file in PURRLOR_CONTROL_DIR on the host.
       - CONTROL_SOCKET=/control/purrlor.sock
@@ -150,6 +195,8 @@ services:
       - NODE_USE_ENV_PROXY=1
     volumes:
       - token-server-data:/data
+      # Live streams' replays, written by Egress (docs/streaming.md).
+      - recordings:/recordings
       # The token server makes this directory 0700 and the socket in it 0600 when it starts.
       - ${PURRLOR_CONTROL_DIR:-/run/purrlor}:/control
     depends_on:
@@ -340,3 +387,4 @@ volumes:
   matrix-media:
   push-gateway-data:
   token-server-data:
+  recordings:

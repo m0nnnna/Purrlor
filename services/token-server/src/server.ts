@@ -23,6 +23,9 @@ import { onlineCounter } from './online.js';
 import { BugDesk, BugReportLog, BugRoom, bugReportsRouter, parseBugAdmins, parseBugProjects } from './bugReports.js';
 import { serverNameOf } from './publicWeb.js';
 import { servedSpaceIds } from './tenancy.js';
+import { StreamStore, streamSettings } from './streams.js';
+import { Streams, streamCardHandler, streamsRouter } from './streamRoutes.js';
+import { recorderFromEnv } from './recordings.js';
 
 // The build this is (a commit, set by the image build), for `purrlor metrics` and error reports.
 const VERSION = process.env.PURRLOR_VERSION || undefined;
@@ -172,6 +175,26 @@ app.post('/api/livekit/token', async (req, res) => {
 // more reliable to just ask for than to keep a hand-rolled cache in sync).
 const roomService = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
 
+/**
+ * Live streams (streamRoutes.ts, docs/streaming.md): from this server's own people, watched by
+ * anyone. Recorded with Egress unless STREAM_RECORDING=off.
+ */
+const streams = new Streams({
+  settings: streamSettings(process.env),
+  store: new StreamStore(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'streams.json')),
+  rooms: roomService,
+  recorder: recorderFromEnv(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, process.env),
+  apiKey: LIVEKIT_API_KEY,
+  apiSecret: LIVEKIT_API_SECRET,
+  livekitUrl: process.env.LIVEKIT_PUBLIC_URL ?? '',
+  caller: voiceCaller,
+  serverName,
+  hidden: async () => (await adminStore.lists()).hidden,
+  mx: getServiceClient,
+  dataDir: process.env.PURRLOR_DATA_DIR ?? '/data',
+});
+streams.start().catch((err: unknown) => console.error('Streams not started', err));
+
 /** One request can ask about this many channels at most — the channel list asks about one. */
 const MAX_PARTICIPANT_ROOMS = 50;
 
@@ -278,6 +301,11 @@ app.use(
   })
 );
 app.use('/api/public/embeds', embedsRouter());
+app.use('/api/public/streams', streamsRouter(streams));
+app.get(
+  '/api/public/card/:user/live/:id',
+  streamCardHandler(streams, async () => process.env.PURRLOR_INSTANCE_NAME || (await serverName()))
+);
 app.use('/api/public', publicWebRouter());
 
 app.use(finalErrorHandler);
@@ -296,7 +324,7 @@ startPeering();
  */
 const CONTROL_SOCKET = process.env.CONTROL_SOCKET ?? (process.platform === 'win32' ? '' : '/control/purrlor.sock');
 if (CONTROL_SOCKET) {
-  listenOnControlSocket(CONTROL_SOCKET, controlApp({ store: adminStore, bugs: bugLog, bugDesk, ...controlDeps() })).then(
+  listenOnControlSocket(CONTROL_SOCKET, controlApp({ store: adminStore, bugs: bugLog, bugDesk, streams, ...controlDeps() })).then(
     () => console.log(`Admin control socket at ${CONTROL_SOCKET}`),
     (err) => console.error(`Admin control socket not started: ${(err as Error).message}`)
   );

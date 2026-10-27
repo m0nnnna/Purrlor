@@ -23,6 +23,9 @@ describe('originAllowed', () => {
     assert.equal(openToAnyOrigin('/api/livekitx'), false);
     assert.equal(openToAnyOrigin('/api/public/feed'), false);
     assert.equal(openToAnyOrigin('/api/public/bugsx'), false);
+    assert.equal(openToAnyOrigin('/api/public/streams'), true);
+    assert.equal(openToAnyOrigin('/api/public/streams/k3J9x_Qm2PzL0aBc/token'), true);
+    assert.equal(openToAnyOrigin('/api/public/streamsx'), false);
   });
 });
 

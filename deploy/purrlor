@@ -173,6 +173,12 @@ Bug reports (root; docs/bug-reports.md) — people send them with !bug <project>
   optional --reason "fixed in 1a2b3c", shown on the report. In the Bug reports room: tap the ✅
   under one or reply "fixed"; reply "reopen" or take the ✅ back to open it again.
 
+Live streams (root; docs/streaming.md):
+  purrlor streams                      live streams and replays: who, viewers, replay size, when it's deleted
+  purrlor streams end <id>             stop a live stream now (its replay is kept)
+  purrlor streams delete <id>          end it and delete its replay and chat log now
+  purrlor streams export <id> <dir>    copy its replay and chat log into <dir>
+
 Federation with other Purrlor instances (root; docs/federation.md):
   purrlor peers                        the instances this one federates with, and what the bot reads there
   purrlor peers add <address>          federate with another Purrlor instance (each side adds the other)
@@ -2243,6 +2249,41 @@ cmd_bugs() {
   ctl GET /bugs --data-urlencode "limit=$n" ${project:+--data-urlencode "project=$project"} $([ "$open" = 1 ] && echo --data-urlencode open=1)
 }
 
+cmd_streams() {
+  local usage="Usage: purrlor streams
+       purrlor streams end <id> [--reason \"why\"] [--yes]
+       purrlor streams delete <id> [--reason \"why\"] [--yes]
+       purrlor streams export <id> <dir>"
+  need_root streams "$@"
+  local action="${1:-list}"
+  [ $# -eq 0 ] || shift
+  parse_opts "$@"
+  if [ "$action" != list ]; then
+    [ "${#POS[@]}" -ge 1 ] || die "$usage"
+    printf '%s' "${POS[0]}" | grep -Eq '^[A-Za-z0-9_-]{16}$' || die "'${POS[0]}' isn't a stream ID: it's the first column of 'purrlor streams'."
+  fi
+  case "$action" in
+    list)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      ctl GET /streams ;;
+    end|delete)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      ctl GET "/streams/${POS[0]}" || return 1
+      need_reason
+      if [ "$action" = delete ]; then confirm "Delete stream ${POS[0]}'s replay and chat log for good?"; else confirm "End stream ${POS[0]} now?"; fi
+      ctl POST "/streams/${POS[0]}/$action" --data-urlencode "reason=$REASON" ;;
+    export)
+      [ "${#POS[@]}" -eq 2 ] || die "$usage"
+      local id="${POS[0]}" dir="${POS[1]}"
+      ctl GET "/streams/$id" || return 1
+      mkdir -p "$dir" || die "Couldn't make $dir."
+      # The files live in the token server's volumes (docs/streaming.md); copied out as they are.
+      if compose cp "token-server:/recordings/$id.mp4" "$dir/$id.mp4" 2>/dev/null; then say "replay: $dir/$id.mp4"; else warn "No replay file (still being written, or it wasn't recorded)."; fi
+      if compose cp "token-server:/data/streams/$id/chat.jsonl" "$dir/$id-chat.jsonl" 2>/dev/null; then say "chat log: $dir/$id-chat.jsonl"; else warn "No chat log (it's written when the stream ends)."; fi ;;
+    *) die "$usage" ;;
+  esac
+}
+
 # The dispatcher and the `exit` after it are one command (same line as `esac`), so bash has read
 # all of it before running any of it — a script updated underneath it can't be half-read.
 case "${1:-help}" in
@@ -2277,6 +2318,7 @@ case "${1:-help}" in
   reports) shift; cmd_reports "$@" ;;
   audit) shift; cmd_audit "$@" ;;
   bugs) shift; cmd_bugs "$@" ;;
+  streams) shift; cmd_streams "$@" ;;
   stats) shift; cmd_stats "$@" ;;
   ips) shift; cmd_ips "$@" ;;
   matrix-dns) write_matrix_resolv ;;

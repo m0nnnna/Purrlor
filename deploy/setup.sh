@@ -1240,6 +1240,15 @@ rtc:
   tcp_port: 7881
   allow_tcp_fallback: true
   use_external_ip: false
+  # Live streams' viewers join in bursts: share keyframes rather than send one each (docs/streaming.md).
+  pli_throttle:
+    low_quality: 500ms
+    mid_quality: 1s
+    high_quality: 2s
+
+# Egress (recording live streams) talks to LiveKit through the redis container.
+redis:
+  address: redis:6379
 
 turn:
   enabled: true
@@ -1266,6 +1275,7 @@ room:
     - mime: audio/opus
     - mime: video/h264
     - mime: video/vp8
+    - mime: video/vp9
 LIVEKIT_EOF
   echo "  ok   wrote deploy/livekit.yaml with TURN enabled for $TURN_DOMAIN"
 fi
@@ -1334,14 +1344,14 @@ server {
     }
 
     # A profile page or post link: the app, except for bots unfurling it, who get its preview card.
-    location ~ ^/@[^/]+(/post/[^/]+|/(music|art|commissions)/[A-Za-z0-9_-]+(/[0-9]+)?)?\$ {
+    location ~ ^/@[^/]+(/post/[^/]+|/(music|art|commissions|live)/[A-Za-z0-9_-]+(/[0-9]+)?)?\$ {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         if (\$purrlor_unfurl) {
             rewrite ^/@([^/]+)/post/([^/]+)\$ /api/public/card/post/\$2?author=\$1 break;
-            rewrite ^/@([^/]+)/((music|art|commissions)/.+)\$ /api/public/card/\$1/\$2 break;
+            rewrite ^/@([^/]+)/((music|art|commissions|live)/.+)\$ /api/public/card/\$1/\$2 break;
             rewrite ^/@([^/]+)\$ /api/public/card/\$1 break;
             proxy_pass http://$UPSTREAM:3001;
         }

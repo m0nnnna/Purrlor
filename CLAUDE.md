@@ -2,7 +2,7 @@
 
 ## Roadmap and model split
 
-The newest plan is the Claude Docs doc "Purrlor: WATCH and AUDIO" (2026-10-19). WATCH and AUDIO (tasks 1 to 7) are ON HOLD since 2026-10-19 (nothing built yet, start them only when asked): a YouTube-style WATCH and a Spotify-style AUDIO on the rail, built from profile pages. Live streaming has its own plan in the doc's last sections (2026-10-27): public 720p30 streams from the browser, tasks S1 to S7, with "Verify first" checks (upload bandwidth, load test) before S2; nothing is built yet. The doc builds on the `rail-sections` branch (Home, Feed and Chat on the rail), merged into `master` 2026-10-19:
+The newest plan is the Claude Docs doc "Purrlor: WATCH and AUDIO" (2026-10-19). WATCH and AUDIO (tasks 1 to 7) are ON HOLD since 2026-10-19 (nothing built yet, start them only when asked): a YouTube-style WATCH and a Spotify-style AUDIO on the rail, built from profile pages. Live streaming has its own plan in the doc's last sections (2026-10-27): public 720p30 streams from the browser, tasks S1 to S8. Opus's S1, S2 and S8 are built on the `opus-streaming` branch (2026-10-27, not merged: the doc lists server checks first): the contract `docs/streaming.md`, which the Sonnet client tasks S3 to S6 build on, the token server's streams and replays, and Redis and Egress in `deploy/`. S7 (HLS overflow) waits for S6 and a load test. The doc builds on the `rail-sections` branch (Home, Feed and Chat on the rail), merged into `master` 2026-10-19:
 https://claude.ai/code/artifact/e757fa66-41eb-42c7-964e-037b3ca376df
 
 The previous plan is the Claude Docs doc "Purrlor: link embeds for messages and posts" (2026-10-04):

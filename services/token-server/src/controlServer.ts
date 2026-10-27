@@ -20,6 +20,8 @@ import { REAL_IP_FROM } from './clientIp.js';
 import { diagnose, ipWatch, MAX_WATCH_SECONDS, type IpWatch } from './ipWatch.js';
 import { isMxc, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
 import { knownUserId, normalizePeerUrl, parseInstanceInfo, type Peer } from './peers.js';
+import type { Streams } from './streamRoutes.js';
+import { isStreamId, type StreamRecord } from './streams.js';
 
 /**
  * The admin control channel: an HTTP API on a Unix socket, for the `purrlor` command on the host
@@ -69,6 +71,8 @@ export type ControlDeps = {
   bugs?: BugReportLog;
   /** `purrlor bugs resolve`/`reopen`: changes one and edits its notice in the room. */
   bugDesk?: Pick<BugDesk, 'set'>;
+  /** Live streams (streamRoutes.ts): what `purrlor streams` lists, ends and deletes. */
+  streams?: Pick<Streams, 'all' | 'record' | 'end' | 'expire' | 'viewersOf'>;
 };
 
 export type PeeringDeps = {
@@ -673,6 +677,66 @@ export function controlApp(deps: ControlDeps): express.Express {
     });
   app.post('/bugs/:id/resolve', bugChange('resolve'));
   app.post('/bugs/:id/reopen', bugChange('reopen'));
+
+  // --- Live streams -----------------------------------------------------------------------------
+
+  const streamLine = (r: StreamRecord) => {
+    const size = r.replay ? `replay ${(r.replay.bytes / 1e9).toFixed(2)} GB, ${Math.round(r.replay.durationMs / 60_000)} min` : r.egressId ? 'recording' : 'no replay';
+    const when =
+      r.state === 'live'
+        ? `live since ${formatTime(r.liveAt ?? r.createdAt)}, ${deps.streams?.viewersOf(r.id) ?? 0} watching`
+        : r.state === 'ended'
+          ? `ended ${formatTime(r.endedAt ?? 0)}, ${size}, deleted ${formatTime(r.expiresAt ?? 0)}`
+          : `starting since ${formatTime(r.createdAt)}`;
+    return `${r.id}  ${r.owner}  ${when}\n    ${terminalSafe(r.title)}`;
+  };
+
+  const streamOf = (raw: string): StreamRecord => {
+    if (!deps.streams) throw new ControlError(503, 'Streams aren’t set up in this token server.');
+    const record = isStreamId(raw) ? deps.streams.record(raw) : undefined;
+    if (!record) throw new ControlError(404, `No stream ${raw}. 'purrlor streams' lists them with their IDs.`);
+    return record;
+  };
+
+  app.get(
+    '/streams',
+    route(async (req, res) => {
+      const records = (deps.streams?.all() ?? []).sort((a, b) => b.createdAt - a.createdAt);
+      reply(req, res, 200, records.length ? records.map(streamLine).join('\n') : 'No streams, live or with a replay.', { streams: records });
+    })
+  );
+
+  app.get(
+    '/streams/:id',
+    route(async (req, res) => {
+      const record = streamOf(req.params.id);
+      reply(req, res, 200, streamLine(record), { stream: record });
+    })
+  );
+
+  app.post(
+    '/streams/:id/end',
+    route(async (req, res, actor, body) => {
+      const reason = needReason(body);
+      const record = streamOf(req.params.id);
+      if (record.state === 'ended') return reply(req, res, 200, `${record.id} has already ended.`, { changed: false });
+      if (record.state === 'live') await deps.streams!.end(record);
+      else await deps.streams!.expire(record);
+      await deps.store.audit({ actor, action: 'streams.end', target: `${record.id} (${record.owner})`, reason, result: 'ok' });
+      reply(req, res, 200, `Ended ${record.id} (${record.owner}). Everyone watching was disconnected.`, { changed: true });
+    })
+  );
+
+  app.post(
+    '/streams/:id/delete',
+    route(async (req, res, actor, body) => {
+      const reason = needReason(body);
+      const record = streamOf(req.params.id);
+      await deps.streams!.expire(record);
+      await deps.store.audit({ actor, action: 'streams.delete', target: `${record.id} (${record.owner})`, reason, result: 'ok' });
+      reply(req, res, 200, `Deleted ${record.id} (${record.owner}): its replay and chat log are gone, and its chat room is closed.`, { changed: true });
+    })
+  );
 
   // --- The audit log ----------------------------------------------------------------------------
 

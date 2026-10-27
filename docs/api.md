@@ -171,6 +171,12 @@ media, and link-preview cards. `pages/{user}`, `feed`, `posts/{eventId}`, `statu
 `media/{server}/{mediaId}`, `card/{user}`, `card/post/{eventId}`. All read-only, no sign-in, rate
 limited per address. See [public-web.md](public-web.md) for the shapes and the rules.
 
+### `/api/public/streams…`
+
+Live streams: going live (`POST`, an account on this server), watching (viewer tokens, signed in or
+out, under the server's viewer cap), the chat read signed out, thumbnails and the 3-day replays.
+Open to any page, like voice. See [streaming.md](streaming.md).
+
 ---
 
 ## 3. Push gateway HTTP API
@@ -289,6 +295,8 @@ else. It just isn't shown there.
 | `xyz.nekous.moderation` | `""` | A Space | `{ "review_room": "!…", "blocked_words": ["…"] }`: report review and automod. See [moderation.md](moderation.md). | Space moderators |
 | `xyz.nekous.profile_page` | `""` | A profile room | A profile page: `{ "version": 1, "style": { … }, "blocks": [ … ] }`; `{}` when taken down. See [profile-pages.md](profile-pages.md). | The profile's owner |
 | `xyz.nekous.public_web` | `""` | A profile room | `{ "enabled": true }`: the page may be shown to people who aren't signed in. Anything else is off. See [public-web.md](public-web.md). | The profile's owner |
+| `xyz.nekous.live_stream` | `""` | A profile room | `{ "stream_id", "title", "started_at" }` while live, `{}` after: a hint that the owner is live, checked with their server before a player is drawn. See [streaming.md](streaming.md). | The profile's owner |
+| `xyz.nekous.stream_chat` | `""` | A stream's chat room | `{ "stream_id", "owner" }` | The service bot, at creation |
 | `xyz.nekous.channel_settings` | `""` | A channel | `{ "moderators_only": true, "slowmode_seconds": 30 }`, both optional. Moderators-only also means the room is invite-only; slowmode is honoured by Purrlor's composer only. See [channel-permissions.md](channel-permissions.md). | Channel moderators |
 
 A sub-space inherits its parent's `xyz.nekous.voice_server` unless it sets its own. See
