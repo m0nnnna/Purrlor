@@ -887,6 +887,13 @@ const MessageRow = memo(function MessageRow({
  * get an inline "Edit" action, see `matrix/edits.ts`). Consecutive same-sender messages within
  * GROUP_WINDOW_MS collapse into one visual group (MessageRow's `isGrouped`), Discord-style.
  */
+/** Whether the server has this event yet. A message just sent shows at once with a local ID
+ *  (`~!room:m…`) until the server confirms it; a read receipt for that ID is refused (400). Once the
+ *  server has it, it takes its real `$…` ID, the newest message's ID changes, and the receipt goes. */
+export function isOnServer(event: MatrixEvent): boolean {
+  return event.getId()?.startsWith('$') ?? false;
+}
+
 export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: (target: ReplyTarget) => void }) {
   const ircMode = useIrcMode();
   const mx = useMatrixClient();
@@ -1039,7 +1046,7 @@ export function MessageTimeline({ roomId, onReply }: { roomId: string; onReply: 
   const lastMessageId = messages[messages.length - 1]?.getId();
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || !pinnedToBottomRef.current) return;
+    if (!lastMessage || !pinnedToBottomRef.current || !isOnServer(lastMessage)) return;
     mx.sendReadReceipt(lastMessage).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mx, roomId, lastMessageId]);
