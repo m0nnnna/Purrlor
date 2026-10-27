@@ -30,6 +30,10 @@ export const UPLINK_SHARE = 0.7;
 export const MAX_TITLE = 120;
 
 export type StreamState = 'starting' | 'live' | 'ended';
+/** Where the picture comes from: the streamer's browser, or OBS (or anything else) over WHIP. */
+export type StreamSource = 'browser' | 'obs';
+/** The longest a chat timeout can be, in minutes. */
+export const MAX_TIMEOUT_MINUTES = 24 * 60;
 export type Replay = { bytes: number; durationMs: number };
 
 export type StreamRecord = {
@@ -44,6 +48,12 @@ export type StreamRecord = {
   egressId: string | null;
   replay: Replay | null;
   expiresAt: number | null;
+  source: StreamSource;
+  /** OBS streams: the LiveKit Ingress made for this stream, and the key Purrlor's WHIP address passes on to it. */
+  ingressId: string | null;
+  ingressKey: string | null;
+  /** People timed out of the chat, until when (ms). */
+  timeouts: Record<string, number>;
 };
 
 export type StreamSettings = {
@@ -151,6 +161,16 @@ export function viewerGrant(room: string): VideoGrant {
   return { room, roomJoin: true, canSubscribe: true, canPublish: false, canPublishData: false, canUpdateOwnMetadata: false, hidden: true };
 }
 
+/** The streamer's dashboard watching their own OBS stream: not a viewer. */
+export function previewIdentity(owner: string): string {
+  return `${owner}#preview`;
+}
+
+/** Whether someone in a stream room counts as a viewer: not the streamer, their preview or a recorder. */
+export function isViewer(person: RoomPerson, owner: string): boolean {
+  return !person.recorder && person.identity !== owner && person.identity !== previewIdentity(owner);
+}
+
 /** Someone in a stream's LiveKit room, as the cap sees them. */
 export type RoomPerson = { identity: string; recorder: boolean };
 
@@ -168,7 +188,7 @@ export function countViewers(
 ): ViewerCount {
   const present = new Set<string>();
   for (const room of rooms) {
-    for (const person of room.people) if (!person.recorder && person.identity !== room.owner) present.add(person.identity);
+    for (const person of room.people) if (isViewer(person, room.owner)) present.add(person.identity);
   }
   for (const token of pending) if (now - token.at < PENDING_VIEWER_MS) present.add(token.identity);
   let guests = 0;
@@ -224,6 +244,7 @@ export type PublicStream = {
   /** Ended, and Egress is still finishing the replay's file. */
   saving: boolean;
   expiresAt: number | null;
+  source: StreamSource;
 };
 
 /** The answer's shape (docs/streaming.md, `GET /api/public/streams/:id`). */
@@ -242,6 +263,7 @@ export function publicStream(record: StreamRecord, extra: { viewers?: number; ha
     replay: record.replay ? { durationMs: record.replay.durationMs, url: `${base}/replay` } : null,
     saving: record.state === 'ended' && !record.replay && record.egressId !== null,
     expiresAt: record.expiresAt,
+    source: record.source,
   };
 }
 
@@ -266,6 +288,28 @@ export function chatPowerLevels(botId: string, owner: string): Record<string, un
     invite: 100,
     events: { 'm.room.name': 100, 'm.room.topic': 100, 'm.room.power_levels': 100, 'm.room.join_rules': 100 },
   };
+}
+
+/**
+ * The chat's power levels with timeouts applied: someone timed out is at -1, below what sending
+ * takes (0); anyone whose timeout is over is back at the default. Others are left as they were.
+ */
+export function levelsWithTimeouts(levels: Record<string, unknown>, timeouts: Record<string, number>, lifted: string[]): Record<string, unknown> {
+  const users = { ...(isRecord(levels.users) ? levels.users : {}) } as Record<string, unknown>;
+  for (const userId of lifted) if (users[userId] === -1) delete users[userId];
+  for (const userId of Object.keys(timeouts)) users[userId] = -1;
+  return { ...levels, users };
+}
+
+/** The timeouts still running at `now`, and those that are over. */
+export function splitTimeouts(timeouts: Record<string, number>, now: number): { running: Record<string, number>; over: string[] } {
+  const running: Record<string, number> = {};
+  const over: string[] = [];
+  for (const [userId, until] of Object.entries(timeouts)) {
+    if (until > now) running[userId] = until;
+    else over.push(userId);
+  }
+  return { running, over };
 }
 
 export type ChatMessage = { id: string; ts: number; sender: string; body: string };
@@ -340,6 +384,12 @@ export function parseStreamRecord(raw: unknown): StreamRecord | undefined {
     egressId: nullableString(raw.egressId),
     replay,
     expiresAt: nullableNumber(raw.expiresAt),
+    source: raw.source === 'obs' ? 'obs' : 'browser',
+    ingressId: nullableString(raw.ingressId),
+    ingressKey: nullableString(raw.ingressKey),
+    timeouts: isRecord(raw.timeouts)
+      ? Object.fromEntries(Object.entries(raw.timeouts).filter((entry): entry is [string, number] => typeof entry[1] === 'number'))
+      : {},
   };
 }
 

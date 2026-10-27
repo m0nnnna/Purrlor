@@ -1,6 +1,7 @@
 # Live streaming
 
-Public live streams from a person's profile: 720p at 30 fps from the browser, watched by anyone
+Public live streams from a person's profile: 720p at 30 fps from the browser, or whatever OBS sends
+over WHIP (below, "OBS"), watched by anyone
 (signed in on this server or a peer, or signed out on the public web), with a chat beside it and a
 replay kept for 3 days. This is the contract the web client builds on. The plan, and why it's
 shaped like this (the bandwidth sums), is the "Live streaming" sections of the Claude Docs doc
@@ -8,7 +9,8 @@ shaped like this (the bandwidth sums), is the "Live streaming" sections of the C
 
 The service side is `services/token-server/src/streams.ts` (the pure rules: caps, grants, records,
 expiry; unit-tested in `streams.test.ts`), `streamRoutes.ts` (the HTTP side, LiveKit and the chat
-room), `recordings.ts` (Egress and the replay files) and `controlServer.ts` (`purrlor streams`).
+room), `recordings.ts` (Egress and the replay files), `whip.ts` (stream keys and the WHIP address
+OBS sends to) and `controlServer.ts` (`purrlor streams`).
 
 ## How it fits together
 
@@ -126,6 +128,11 @@ channels (`matrix-…`): a voice token never names a stream room and the other w
 | Streamer | their Matrix ID | `canPublish` (sources: screen share, screen-share audio, microphone), `canSubscribe` (LiveKit never connects a client without it; nobody else in the room sends anything), `canPublishData: false`, `canUpdateOwnMetadata: false` | 12 h |
 | Signed-in viewer | their Matrix ID, `#`, 8 random hex digits | `canSubscribe`, `hidden`, nothing else | 5 min (only for joining) |
 | Signed-out viewer | `guest-` + 16 random characters | `canSubscribe`, `hidden`, nothing else | 5 min |
+| OBS's picture (Ingress) | the streamer's Matrix ID | given by Ingress itself: a camera and a microphone track | while OBS sends |
+| The streamer's dashboard, OBS streams | their Matrix ID + `#preview` | as a viewer (`canSubscribe`, `hidden`) | 12 h |
+
+The preview identity isn't a viewer: it doesn't count toward the cap or in `viewers`, like the
+streamer and the recorder.
 
 Each viewing is its own identity, so one person in two tabs (or the streamer checking their own
 stream) doesn't knock the other out, and each counts toward the cap, as each costs upload. A viewer
@@ -165,11 +172,18 @@ Each stream's chat is a Matrix room the service bot makes when the stream starts
   (`{ "stream_id": "…", "owner": "@luna:…" }`), join rule `public`, history `shared`, not in the
   room directory;
 - power levels: the bot 100, the streamer 50 (they can delete messages, kick and ban), everyone else
-  0;
+  0, anyone timed out -1 (sending takes 0);
 - anyone signed in, on this server or another, joins it and talks; the app joins when the chat is
   opened and leaves when the watch page closes;
 - **signed out**, the chat is read-only, through `GET /api/public/streams/:id/chat`: the newest
   messages, plain text only, with the sender's user ID and avatar. There's no way to send.
+
+**Moderating.** The streamer moderates from their dashboard through `POST /:id/moderate` (below), and
+the bot does it, so it works the same whichever server the person is from: deleting a message
+(a redaction), a **timeout** of 1 minute to 24 hours (the bot sets them to -1; the sweep puts them
+back when it's over, within 15 s), and ban and unban. The streamer can't be moderated, nor the bot.
+Timeouts are kept in the record (`timeouts`, user to until when) and dropped when the stream ends,
+as the room is read-only from then on.
 
 When the stream ends, the bot makes the room read-only (sending needs power level 50) and writes the
 whole chat to the log (below); the watch page shows it beside the replay. When the replay expires, the bot closes the room: join rule `invite`,
@@ -180,7 +194,8 @@ someone else's server.
 ## Recording and replays
 
 Egress records each stream once it's `live`: **one participant egress** of the streamer (screen
-share and its sound, plus the microphone) to one MP4, H.264 720p at 30 fps with AAC, written to
+share and its sound, plus the microphone; for an OBS stream, Ingress's camera and microphone
+tracks) to one MP4, H.264 720p at 30 fps with AAC, written to
 `/recordings/<id>.mp4`. That's the only encoding the server does: about one CPU core per live stream.
 When the stream ends the egress is stopped and the record's `replay` is filled in:
 
@@ -216,11 +231,16 @@ minute).
 
 ### `POST /api/public/streams` — go live
 
-`{ "openid_token", "title" }` → `201`
+`{ "openid_token", "title", "source"? }` → `201`
 
 ```json
 { "stream": { …the stream… }, "token": "<LiveKit JWT>", "url": "wss://livekit.purr.example" }
 ```
+
+`source` is `"browser"` (the default: `token` is the streamer's, to publish with) or `"obs"`
+(`token` is the dashboard's preview, to watch with; the picture comes from OBS, below). For `obs`
+the token server makes the stream's own Ingress first; `403 obs_off` when the server has none,
+`503 obs_unavailable` when Ingress doesn't answer.
 
 The caller must be on this server and not hidden by an admin (docs/public-web.md). `title` is 1 to
 120 characters of plain text. Makes the record (`starting`), the LiveKit room and the chat room. A
@@ -233,6 +253,43 @@ server_busy`.
 
 `{ "openid_token" }`, the streamer only, once their tracks are published. → `200 { "stream" }`, now
 `live`; recording starts. The app writes the profile pointer after this answer.
+
+For an OBS stream: `409 not_receiving` until OBS's picture is in the room; the dashboard asks again
+every 3 s. The sweep also makes it live on its own once the picture arrives (the dashboard may be
+closed), so the dashboard writes the profile pointer whenever it sees the stream `live`.
+
+### `POST /api/public/streams/mine`
+
+`{ "openid_token" }` → `200 { "stream": … | null }`: the caller's stream that's `starting` or
+`live`, `starting` ones too (no other route shows those). The dashboard picks a stream back up with
+it after a reload.
+
+### `POST /api/public/streams/obs`
+
+`{ "openid_token", "reset"? }` → `200 { "url": "https://purr.example/api/public/whip", "key":
+"pk_…" }`: what goes in OBS. The key is made the first time it's asked for and kept; `"reset":
+true` makes a new one, and the old one stops working at once (a stream already coming in goes on).
+`403 obs_off` without Ingress.
+
+### `POST /api/public/streams/:id/preview`
+
+`{ "openid_token" }`, the streamer only, an OBS stream not yet ended → `200 { "token", "url" }`: a
+new preview token (after a reload). `409 not_obs`, `409 ended`.
+
+### `POST /api/public/streams/:id/moderate`
+
+`{ "openid_token", "action", … }`, the streamer only:
+
+| `action` | Also | Does |
+| --- | --- | --- |
+| `delete` | `event_id` | Deletes that message |
+| `timeout` | `user`, `minutes` (1 to 1440) | They can't send until then (live only) |
+| `untimeout` | `user` | Lifts it now |
+| `ban` / `unban` | `user` | Out of the chat room for good, or let back |
+
+→ `200 { "timeouts": { "@bob:…": 1790000304000 } }`, the timeouts running now. Errors: `400
+bad_action | bad_event | bad_user | bad_minutes`, `404 no_chat`, `409 ended` (a timeout after the
+end).
 
 ### `POST /api/public/streams/:id/stop`
 
@@ -264,7 +321,7 @@ Anyone. → `200 { "stream": … }` as below, or `404 { "code": "not_found" }` (
 { "id": "k3J9x_Qm2PzL0aBc", "owner": "@luna:purr.example", "title": "Drawing a commission",
   "state": "live", "liveAt": 1790000004000, "endedAt": null, "viewers": 37,
   "chatRoom": "!abc:purr.example", "thumbnail": "/api/public/streams/k3J9x_Qm2PzL0aBc/thumbnail",
-  "replay": null, "saving": false, "expiresAt": null }
+  "replay": null, "saving": false, "expiresAt": null, "source": "browser" }
 ```
 
 `viewers` is the number watching now (live only). `replay`, once ended and written, is `{
@@ -329,6 +386,54 @@ Settings, in `.env` (then `purrlor restart token-server`):
 | `STREAM_MAX_HOURS` | `12` | Longest stream |
 | `STREAM_REPLAY_HOURS` | `72` | How long replays and chat logs are kept |
 
+## OBS
+
+Anyone who can go live can stream from OBS (or anything else that speaks WHIP) instead of the
+browser. The picture passes through as OBS sends it: nothing is encoded again, so OBS's settings
+are what viewers get. Purrlor's setup page asks for 720p or 1080p at 30 fps, about 3000 to 4500
+kbps, H.264 with B-frames off, a keyframe every 2 s, and Opus sound. That's OBS's default for
+WHIP, apart from the resolution and bitrate. Without layers to pick from (no simulcast),
+everyone receives the one stream: the cap above assumes about 1.6 Mbps a viewer, so a 4500 kbps
+stream gets about a third as many viewers before the server's upload runs out. The setup page
+says so.
+
+In OBS: Settings → Stream → Service **WHIP**, Server **the `url`** from `POST /obs`, Bearer Token
+**the key**.
+
+How a stream goes:
+
+1. On the setup page, the streamer picks OBS and a title and presses Go live (`POST /` with
+   `source: "obs"`). The token server makes an **Ingress** for this stream (`WHIP_INPUT`,
+   transcoding off) that puts what it gets into `stream-<id>` as the streamer's Matrix ID.
+2. They press Start Streaming in OBS. OBS sends its offer to `/api/public/whip` with the key. The
+   token server finds whose key it is and their OBS stream that's going, and hands the offer on to
+   Ingress (`INGRESS_WHIP_URL`) under that stream's own Ingress key. With no such stream: `403
+   not_live` ("Go live in Purrlor first"); a wrong key, `401 bad_key`. Ingress's answer comes back
+   with its `Location` rewritten to `/api/public/whip/…`, so OBS's later requests (`PATCH`,
+   `DELETE`) come back the same way.
+3. Once the picture is in the room the stream is `live` (above), and recording starts.
+4. Ending in Purrlor deletes the Ingress, which cuts OBS off. OBS stopping on its own counts as the
+   streamer leaving: two minutes later, the stream ends.
+
+So the key in OBS never changes between streams, and LiveKit's own keys never leave the server.
+Keys are kept in `/data/obs-keys.json` (0600), one per person.
+
+## The dashboard
+
+Going live opens the streamer's dashboard in place of the old bar, and the setup page before it.
+Everything it needs is above:
+
+- **Setup**: title, thumbnail (uploaded as for browser streams, `PUT /:id/thumbnail`), source
+  (browser, or OBS with the `url` and key to copy and a button to make a new key).
+- **Preview and health**: for a browser stream, its own tracks; for OBS, the preview token. Its
+  resolution, frame rate and bitrate come from the client's WebRTC stats, and `viewers` from `GET
+  /:id`.
+- **While live**: the title (`POST /:id/title`), and for a browser stream, switching what's shared
+  (another screen or window, the microphone on or off, the shared sound on or off) by replacing
+  its own tracks: nothing on the server changes.
+- **Chat with moderation**: the stream's chat, with delete, timeout and ban on each message
+  (`POST /:id/moderate`).
+
 ## Deploying
 
 Recording adds two containers to `deploy/docker-compose.yml`: **Redis** (Egress needs it to talk to
@@ -337,6 +442,13 @@ volume is mounted into Egress and the token server. The token server gets `LIVEK
 `wss://` address viewers on other servers connect to; it's `PURRLOR_LIVEKIT_URL`). Egress's own
 config is written in the compose file (`EGRESS_CONFIG_BODY`, from the same API key). If Egress can't
 record, the stream goes on and `replay` stays `null`; `STREAM_RECORDING=off` doesn't ask it at all.
+
+OBS adds an **Ingress** container (`livekit/ingress`, config `INGRESS_CONFIG_BODY` in the compose
+file). Its WHIP server (port 8080) is only reached by the token server, through `INGRESS_WHIP_URL`
+(default `http://ingress:8080`; set it empty to turn OBS off), so nginx needs nothing new. Its media
+takes **UDP 7885**, which has to reach the server from the internet like 7882: `setup.sh` opens it
+in ufw, and a router or firewall in front needs it forwarded. A host that reaches the internet
+through `OUTBOUND_PROXY` needs `ingress` in `OUTBOUND_NO_PROXY`.
 
 LiveKit needs Redis running once `livekit.yaml` names it, so voice depends on the `redis` container
 too: `purrlor update` starts it with everything else.

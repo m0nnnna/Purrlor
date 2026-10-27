@@ -3,7 +3,7 @@ import express from 'express';
 import { ipWatch } from './ipWatch.js';
 import cors from 'cors';
 import { corsOptions, parseAllowedOrigins } from './corsPolicy.js';
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, IngressClient, RoomServiceClient } from 'livekit-server-sdk';
 import { validateOpenIdToken } from './openid.js';
 import { checkMembership, getBotUserId, getServiceClient, mayViewParticipants } from './membership.js';
 import { grantsForPowerLevel } from './grants.js';
@@ -24,7 +24,8 @@ import { BugDesk, BugReportLog, BugRoom, bugReportsRouter, parseBugAdmins, parse
 import { serverNameOf } from './publicWeb.js';
 import { servedSpaceIds } from './tenancy.js';
 import { StreamStore, streamSettings } from './streams.js';
-import { Streams, streamCardHandler, streamsRouter } from './streamRoutes.js';
+import { Streams, streamCardHandler, streamsRouter, whipLimited } from './streamRoutes.js';
+import { StreamKeys, whipRouter } from './whip.js';
 import { recorderFromEnv } from './recordings.js';
 
 // The build this is (a commit, set by the image build), for `purrlor metrics` and error reports.
@@ -192,6 +193,14 @@ const streams = new Streams({
   hidden: async () => (await adminStore.lists()).hidden,
   mx: getServiceClient,
   dataDir: process.env.PURRLOR_DATA_DIR ?? '/data',
+  // Streaming from OBS, through LiveKit Ingress's WHIP server (INGRESS_WHIP_URL, inside the stack).
+  ...(process.env.INGRESS_WHIP_URL && {
+    obs: {
+      ingress: new IngressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET),
+      keys: new StreamKeys(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'obs-keys.json')),
+      whipBase: process.env.INGRESS_WHIP_URL.replace(/\/+$/, ''),
+    },
+  }),
 });
 streams.start().catch((err: unknown) => console.error('Streams not started', err));
 
@@ -302,6 +311,7 @@ app.use(
 );
 app.use('/api/public/embeds', embedsRouter());
 app.use('/api/public/streams', streamsRouter(streams));
+if (process.env.INGRESS_WHIP_URL) app.use('/api/public/whip', whipRouter(streams.whipTarget(), whipLimited));
 app.get(
   '/api/public/card/:user/live/:id',
   streamCardHandler(streams, async () => process.env.PURRLOR_INSTANCE_NAME || (await serverName()))

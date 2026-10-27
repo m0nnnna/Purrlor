@@ -4,7 +4,7 @@ import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import express, { Router, type Request, type Response } from 'express';
-import { AccessToken, type RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, IngressInput, type IngressClient, type RoomServiceClient } from 'livekit-server-sdk';
 import { Direction, Preset, Visibility, type MatrixClient } from 'matrix-js-sdk';
 import { clientIp } from './clientIp.js';
 import { profilePath } from './peers.js';
@@ -25,9 +25,14 @@ import {
   isGuestIdentity,
   isPublic,
   isStreamId,
+  isViewer,
+  levelsWithTimeouts,
+  MAX_TIMEOUT_MINUTES,
   newStreamId,
   openIdFromHeader,
+  previewIdentity,
   publicStream,
+  splitTimeouts,
   STARTING_TIMEOUT_MS,
   STREAM_CHAT_EVENT,
   streamerGrant,
@@ -39,9 +44,11 @@ import {
   type DownloadKind,
   type StreamRecord,
   type StreamSettings,
+  type StreamSource,
   type StreamStore,
 } from './streams.js';
 import { RateLimiter } from './webhooks.js';
+import type { StreamKeys, WhipTarget } from './whip.js';
 
 /**
  * Live streams over HTTP (docs/streaming.md, "API"): going live, watching, the chat room and the
@@ -64,7 +71,12 @@ export type StreamDeps = {
   hidden(): Promise<Set<string>>;
   mx(): Promise<MatrixClient>;
   dataDir: string;
+  /** Streaming from OBS: off when the stack has no Ingress (INGRESS_WHIP_URL unset). */
+  obs?: { ingress: IngressClient; keys: StreamKeys; whipBase: string };
 };
+
+const MATRIX_USER = /^@[^\s:]{1,255}:[^\s]{1,255}$/;
+const EVENT_ID = /^\$[^\s]{1,255}$/;
 
 const SWEEP_MS = 15_000;
 const CHAT_CACHE_MS = 2_000;
@@ -111,6 +123,7 @@ export class Streams {
 
   async start(): Promise<void> {
     await this.deps.store.load();
+    await this.deps.obs?.keys.load();
     setInterval(() => void this.sweep(), SWEEP_MS).unref();
   }
 
@@ -145,7 +158,7 @@ export class Streams {
 
   // --- Going live ------------------------------------------------------------------------------
 
-  async goLive(openIdToken: unknown, rawTitle: unknown, base: string): Promise<{ record: StreamRecord; token: string }> {
+  async goLive(openIdToken: unknown, rawTitle: unknown, base: string, rawSource?: unknown): Promise<{ record: StreamRecord; token: string }> {
     const { settings, store } = this.deps;
     const userId = await this.who(openIdToken);
     if (!settings.enabled) throw new Refusal(403, 'streaming_off', 'Streaming is switched off on this server');
@@ -154,6 +167,8 @@ export class Streams {
     if ((await this.deps.hidden()).has(userId)) throw new Refusal(403, 'hidden', 'Streaming isn’t available for this account');
     const title = cleanTitle(rawTitle);
     if (!title) throw new Refusal(400, 'bad_title', 'A title is 1 to 120 characters');
+    const source: StreamSource = rawSource === 'obs' ? 'obs' : 'browser';
+    if (source === 'obs' && !this.deps.obs) throw new Refusal(403, 'obs_off', 'Streaming from OBS isn’t set up on this server');
 
     // A stream of theirs that never went live (a reload while connecting) gives way to the new one.
     for (const old of store.all()) if (old.owner === userId && old.state === 'starting') await this.drop(old);
@@ -163,6 +178,16 @@ export class Streams {
 
     const id = newStreamId();
     const roomName = streamRoomName(id);
+    // OBS's picture comes in through an Ingress of this stream's own, into its room as the streamer.
+    let ingress: { ingressId: string; streamKey: string } | null = null;
+    if (source === 'obs') {
+      ingress = await this.deps
+        .obs!.ingress.createIngress(IngressInput.WHIP_INPUT, { name: `stream ${id}`, roomName, participantIdentity: userId, participantName: userId, enableTranscoding: false })
+        .catch((err: unknown) => {
+          console.error(`Stream ${id}: Ingress not made`, err);
+          throw new Refusal(503, 'obs_unavailable', 'Streaming from OBS isn’t available right now');
+        });
+    }
     // Kept while empty as long as a stream may be starting: were LiveKit to drop it first, joining
     // would make it afresh with the defaults, and voice's limit of 50.
     await this.deps.rooms.createRoom({ name: roomName, maxParticipants: settings.viewerCap + 4, emptyTimeout: STARTING_TIMEOUT_MS / 1000, departureTimeout: 120 });
@@ -182,22 +207,95 @@ export class Streams {
       egressId: null,
       replay: null,
       expiresAt: null,
+      source,
+      ingressId: ingress?.ingressId ?? null,
+      ingressKey: ingress?.streamKey ?? null,
+      timeouts: {},
     };
     await store.put(record);
-    const at = new AccessToken(this.deps.apiKey, this.deps.apiSecret, { identity: userId, name: userId, ttl: '12h' });
-    at.addGrant(streamerGrant(roomName));
-    return { record, token: await at.toJwt() };
+    return { record, token: source === 'obs' ? await this.previewToken(record) : await this.streamerToken(record) };
+  }
+
+  private async streamerToken(record: StreamRecord): Promise<string> {
+    const at = new AccessToken(this.deps.apiKey, this.deps.apiSecret, { identity: record.owner, name: record.owner, ttl: '12h' });
+    at.addGrant(streamerGrant(streamRoomName(record.id)));
+    return at.toJwt();
+  }
+
+  /** The dashboard watching an OBS stream: sees what viewers see, isn't counted as one. */
+  private async previewToken(record: StreamRecord): Promise<string> {
+    const at = new AccessToken(this.deps.apiKey, this.deps.apiSecret, { identity: previewIdentity(record.owner), name: record.owner, ttl: '12h' });
+    at.addGrant(viewerGrant(streamRoomName(record.id)));
+    return at.toJwt();
+  }
+
+  /** A new preview token for the dashboard of an OBS stream that's going (after a reload). */
+  async preview(id: string, openIdToken: unknown): Promise<string> {
+    const record = await this.owned(id, openIdToken);
+    if (record.state === 'ended') throw new Refusal(409, 'ended', 'This stream has ended');
+    if (record.source !== 'obs') throw new Refusal(409, 'not_obs', 'Only an OBS stream has a preview');
+    return this.previewToken(record);
+  }
+
+  /** The caller's stream that's starting or live, if any: the dashboard picks it back up after a reload. */
+  async mine(openIdToken: unknown) {
+    const userId = await this.who(openIdToken);
+    const record = this.deps.store.all().find((r) => r.owner === userId && r.state !== 'ended');
+    return record ? this.shape(record) : null;
+  }
+
+  // --- OBS -------------------------------------------------------------------------------------
+
+  private obs() {
+    if (!this.deps.obs) throw new Refusal(403, 'obs_off', 'Streaming from OBS isn’t set up on this server');
+    return this.deps.obs;
+  }
+
+  /** What goes in OBS: the WHIP address and the caller's stream key (made the first time). */
+  async obsSettings(openIdToken: unknown, base: string, reset = false): Promise<{ url: string; key: string }> {
+    const obs = this.obs();
+    const userId = await this.who(openIdToken);
+    const key = reset ? await obs.keys.reset(userId) : await obs.keys.keyOf(userId);
+    return { url: `${base}/api/public/whip`, key };
+  }
+
+  /** For `/api/public/whip`: the Ingress key behind a Purrlor stream key, while its OBS stream is going. */
+  whipTarget(): WhipTarget {
+    const obs = this.obs();
+    return {
+      base: obs.whipBase,
+      ingressKeyFor: (streamKey) => {
+        const userId = obs.keys.ownerOf(streamKey);
+        if (!userId) throw new Refusal(401, 'bad_key', 'That stream key isn’t right: copy it again from Purrlor');
+        const record = this.deps.store.all().find((r) => r.owner === userId && r.state !== 'ended' && r.source === 'obs' && r.ingressKey);
+        if (!record) throw new Refusal(403, 'not_live', 'Go live in Purrlor first, with OBS as the source');
+        return record.ingressKey!;
+      },
+      refused: (err) => (err instanceof Refusal ? { status: err.status, code: err.code, message: err.message } : undefined),
+    };
   }
 
   async markLive(id: string, openIdToken: unknown): Promise<StreamRecord> {
     const record = await this.owned(id, openIdToken);
     if (record.state === 'live') return record;
     if (record.state !== 'starting') throw new Refusal(409, 'ended', 'This stream has ended');
+    if (record.source === 'obs' && !(await this.streamerIn(record))) throw new Refusal(409, 'not_receiving', 'Nothing is coming in from OBS yet');
+    return this.goneLive(record);
+  }
+
+  private async streamerIn(record: StreamRecord): Promise<boolean> {
+    const participants = await this.deps.rooms.listParticipants(streamRoomName(record.id)).catch(() => []);
+    return participants.some((p) => p.identity === record.owner);
+  }
+
+  private async goneLive(record: StreamRecord): Promise<StreamRecord> {
+    const id = record.id;
     const now = Date.now();
     let live: StreamRecord = { ...record, state: 'live', liveAt: now };
     this.streamerSeen.set(id, now);
     try {
-      const egressId = await this.deps.recorder.start(streamRoomName(id), record.owner, id);
+      // The browser sends a screen share; Ingress publishes as a camera and microphone.
+      const egressId = await this.deps.recorder.start(streamRoomName(id), record.owner, id, record.source === 'browser');
       if (egressId) live = { ...live, egressId };
     } catch (err) {
       // The stream goes on; it just won't have a replay.
@@ -355,12 +453,13 @@ export class Streams {
   // --- Ending and expiring ---------------------------------------------------------------------
 
   async end(record: StreamRecord): Promise<StreamRecord> {
-    const ended = endedRecord(record, Date.now(), this.deps.settings);
+    const ended = { ...endedRecord(record, Date.now(), this.deps.settings), ingressId: null, ingressKey: null, timeouts: {} };
     await this.deps.store.put(ended);
     this.viewers.delete(record.id);
     this.streamerSeen.delete(record.id);
     // Disconnects everyone; the replay takes over on the watch page.
     await this.deps.rooms.deleteRoom(streamRoomName(record.id)).catch(() => undefined);
+    await this.removeIngress(record);
     if (ended.egressId) await this.deps.recorder.stop(ended.egressId);
     // After the answer: the log can take a while. Deleting the stream waits for it (expire).
     const finishing = this.closeChatForWriting(ended).finally(() => this.finishing.delete(record.id));
@@ -373,7 +472,14 @@ export class Streams {
     await this.deps.store.remove(record.id);
     this.thumbnails.delete(record.id);
     await this.deps.rooms.deleteRoom(streamRoomName(record.id)).catch(() => undefined);
+    await this.removeIngress(record);
     await this.closeChatRoom(record.chatRoom);
+  }
+
+  /** An OBS stream's Ingress goes with it; OBS is cut off. */
+  private async removeIngress(record: StreamRecord): Promise<void> {
+    if (!record.ingressId || !this.deps.obs) return;
+    await this.deps.obs.ingress.deleteIngress(record.ingressId).catch((err: unknown) => console.warn(`Stream ${record.id}: Ingress not removed`, err));
   }
 
   /** Deletes a stream's replay, chat log and record, and closes its chat room. */
@@ -397,9 +503,15 @@ export class Streams {
       const now = Date.now();
       for (const room of await this.peopleInLiveRooms()) {
         if (room.people.some((p) => p.identity === room.owner)) this.streamerSeen.set(room.id, now);
-        this.viewers.set(room.id, room.people.filter((p) => !p.recorder && p.identity !== room.owner).length);
+        this.viewers.set(room.id, room.people.filter((p) => isViewer(p, room.owner)).length);
       }
       for (const record of this.deps.store.all()) {
+        // An OBS stream is live once OBS's picture arrives, even with the dashboard closed.
+        if (record.state === 'starting' && record.source === 'obs' && (await this.streamerIn(record))) {
+          await this.goneLive(record);
+          continue;
+        }
+        if (record.state === 'live' && Object.keys(record.timeouts).length) await this.liftTimeouts(record, now);
         const action = dueAction(record, now, this.deps.settings, this.streamerSeen.get(record.id));
         if (action === 'drop') await this.drop(record);
         else if (action === 'end') await this.end(record);
@@ -418,6 +530,63 @@ export class Streams {
     if (result.status === 'running') return;
     if (result.status === 'failed') console.warn(`Stream ${record.id}: no replay, the recording failed`);
     await this.deps.store.put({ ...record, egressId: null, replay: result.status === 'done' ? result.replay : null });
+  }
+
+  // --- Moderation ------------------------------------------------------------------------------
+
+  /**
+   * The streamer moderating their chat, done by the bot: delete a message, time someone out
+   * (lifted by the sweep), or ban and unban them.
+   */
+  async moderate(id: string, openIdToken: unknown, body: Record<string, unknown>): Promise<{ timeouts: Record<string, number> }> {
+    let record = await this.owned(id, openIdToken);
+    if (!record.chatRoom) throw new Refusal(404, 'no_chat', 'This stream has no chat');
+    const mx = await this.deps.mx();
+    const action = body.action;
+    const user = body.user;
+    if (action === 'delete') {
+      if (typeof body.event_id !== 'string' || !EVENT_ID.test(body.event_id)) throw new Refusal(400, 'bad_event', 'Which message?');
+      await mx.redactEvent(record.chatRoom, body.event_id, undefined, { reason: 'Removed by the streamer' });
+      this.chatCache.delete(id);
+      return { timeouts: record.timeouts };
+    }
+    if (action !== 'timeout' && action !== 'untimeout' && action !== 'ban' && action !== 'unban') throw new Refusal(400, 'bad_action', 'Unknown action');
+    if (typeof user !== 'string' || !MATRIX_USER.test(user)) throw new Refusal(400, 'bad_user', 'Who?');
+    if (user === record.owner || user === mx.getUserId()) throw new Refusal(400, 'bad_user', 'Not them');
+    if (action === 'ban') {
+      await mx.ban(record.chatRoom, user, 'Banned by the streamer');
+    } else if (action === 'unban') {
+      await mx.unban(record.chatRoom, user);
+    } else {
+      if (record.state === 'ended') throw new Refusal(409, 'ended', 'This stream has ended');
+      const timeouts = { ...record.timeouts };
+      if (action === 'timeout') {
+        const minutes = Number(body.minutes);
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_TIMEOUT_MINUTES) throw new Refusal(400, 'bad_minutes', 'A timeout is 1 minute to 24 hours');
+        timeouts[user] = Date.now() + minutes * 60_000;
+      } else delete timeouts[user];
+      await this.setLevels(record.chatRoom, timeouts, action === 'untimeout' ? [user] : []);
+      record = { ...record, timeouts };
+      await this.deps.store.put(record);
+    }
+    return { timeouts: record.timeouts };
+  }
+
+  private async setLevels(chatRoom: string, timeouts: Record<string, number>, lifted: string[]): Promise<void> {
+    const mx = await this.deps.mx();
+    const levels = (await mx.getStateEvent(chatRoom, 'm.room.power_levels', '')) as Record<string, unknown>;
+    await mx.sendStateEvent(chatRoom, 'm.room.power_levels' as never, levelsWithTimeouts(levels, timeouts, lifted) as never, '');
+  }
+
+  private async liftTimeouts(record: StreamRecord, now: number): Promise<void> {
+    const { running, over } = splitTimeouts(record.timeouts, now);
+    if (!over.length || !record.chatRoom) return;
+    try {
+      await this.setLevels(record.chatRoom, running, over);
+      await this.deps.store.put({ ...record, timeouts: running });
+    } catch (err) {
+      console.warn(`Stream ${record.id}: timeouts not lifted`, err);
+    }
   }
 
   // --- Files -----------------------------------------------------------------------------------
@@ -512,6 +681,11 @@ export class Streams {
 
 // --- HTTP --------------------------------------------------------------------------------------
 
+/** `/api/public/whip`, rate-limited like tokens. */
+export function whipLimited(req: Request, res: Response): boolean {
+  return limited(req, res, tokenLimiter);
+}
+
 function limited(req: Request, res: Response, limiter: RateLimiter): boolean {
   if (limiter.take(clientIp(req))) return false;
   res.status(429).json({ error: 'Too many requests; slow down', code: 'rate_limited' });
@@ -557,10 +731,27 @@ export function streamsRouter(streams: Streams): Router {
   router.post('/', async (req, res) => {
     if (limited(req, res, tokenLimiter)) return;
     try {
-      const { record, token } = await streams.goLive(req.body?.openid_token, req.body?.title, baseUrl(req));
+      const { record, token } = await streams.goLive(req.body?.openid_token, req.body?.title, baseUrl(req), req.body?.source);
       res.status(201).json({ stream: publicStream(record, { hasThumbnail: false }), token, url: streams.livekitUrl });
     } catch (err) {
       fail(res, err, 'going live');
+    }
+  });
+
+  router.post('/mine', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store').json({ stream: await streams.mine(req.body?.openid_token) });
+    } catch (err) {
+      fail(res, err, 'finding one’s stream');
+    }
+  });
+
+  router.post('/obs', async (req, res) => {
+    if (limited(req, res, tokenLimiter)) return;
+    try {
+      res.set('Cache-Control', 'no-store').json(await streams.obsSettings(req.body?.openid_token, baseUrl(req), req.body?.reset === true));
+    } catch (err) {
+      fail(res, err, 'OBS settings');
     }
   });
 
@@ -650,6 +841,22 @@ export function streamsRouter(streams: Streams): Router {
       await sendFile(req, res, streams.replayPath(req.params.id), 'video/mp4', 'inline');
     } catch (err) {
       if (!res.headersSent) fail(res, err, 'a replay');
+    }
+  });
+
+  router.post('/:id/preview', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store').json({ token: await streams.preview(req.params.id, req.body?.openid_token), url: streams.livekitUrl });
+    } catch (err) {
+      fail(res, err, 'a preview token');
+    }
+  });
+
+  router.post('/:id/moderate', async (req, res) => {
+    try {
+      res.json(await streams.moderate(req.params.id, req.body?.openid_token, (req.body ?? {}) as Record<string, unknown>));
+    } catch (err) {
+      fail(res, err, 'moderating');
     }
   });
 

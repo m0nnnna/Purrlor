@@ -11,6 +11,9 @@ import {
   chatPowerLevels,
   cleanTitle,
   countViewers,
+  levelsWithTimeouts,
+  previewIdentity,
+  splitTimeouts,
   downloadAllowed,
   downloadSignature,
   dueAction,
@@ -47,6 +50,10 @@ function record(over: Partial<StreamRecord> = {}): StreamRecord {
     egressId: null,
     replay: null,
     expiresAt: null,
+    source: 'browser',
+    ingressId: null,
+    ingressKey: null,
+    timeouts: {},
     ...over,
   };
 }
@@ -277,5 +284,27 @@ describe('StreamStore', () => {
     assert.ok((await readFile(file, 'utf8')).includes('k3J9x_Qm2PzL0aBc'));
     assert.equal(parseStreamRecord({ ...record(), id: 'bad' }), undefined);
     assert.equal(parseStreamRecord({ ...record(), state: 'paused' }), undefined);
+  });
+});
+
+describe('OBS and moderation rules', () => {
+  it('doesn’t count the streamer’s preview as a viewer', () => {
+    const rooms = [{ owner: '@luna:purr.example', people: [{ identity: previewIdentity('@luna:purr.example'), recorder: false }, { identity: '@bob:purr.example#1', recorder: false }] }];
+    assert.deepEqual(countViewers(rooms, [], 0), { total: 1, guests: 0 });
+  });
+
+  it('puts timed-out people below sending and lifts finished timeouts', () => {
+    const levels = { users: { '@bot:x': 100, '@old:x': -1, '@mod:x': 50 }, events_default: 0 };
+    const out = levelsWithTimeouts(levels, { '@new:x': 99 }, ['@old:x', '@mod:x']);
+    assert.deepEqual(out.users, { '@bot:x': 100, '@mod:x': 50, '@new:x': -1 });
+    assert.equal(out.events_default, 0);
+    assert.deepEqual(splitTimeouts({ '@a:x': 10, '@b:x': 30 }, 20), { running: { '@b:x': 30 }, over: ['@a:x'] });
+  });
+
+  it('reads old records as browser streams with no timeouts', () => {
+    const old = { ...record(), source: undefined, ingressId: undefined, ingressKey: undefined, timeouts: undefined };
+    const parsed = parseStreamRecord(JSON.parse(JSON.stringify(old)));
+    assert.equal(parsed?.source, 'browser');
+    assert.deepEqual(parsed?.timeouts, {});
   });
 });

@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { RoomServiceClient } from 'livekit-server-sdk';
+import type { IngressClient, RoomServiceClient } from 'livekit-server-sdk';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { Recorder } from './recordings.js';
 import { Streams, type StreamDeps } from './streamRoutes.js';
-import { streamSettings, StreamStore, streamRoomName } from './streams.js';
+import { previewIdentity, streamSettings, StreamStore, streamRoomName } from './streams.js';
+import { StreamKeys } from './whip.js';
 
 const LUNA = '@luna:purr.example';
 
@@ -22,6 +23,7 @@ function fakes() {
     deleteRoom: async (name: string) => void deleted.push(name),
   } as unknown as RoomServiceClient;
   const stateSent: { type: string; content: Record<string, unknown> }[] = [];
+  const moderated: [string, string][] = [];
   const chunk = [{ type: 'm.room.message', event_id: '$1', sender: '@bob:purr.example', origin_server_ts: 5, content: { msgtype: 'm.text', body: 'hi' } }];
   const mx = {
     getUserId: () => '@bot:purr.example',
@@ -33,8 +35,21 @@ function fakes() {
     kick: async () => undefined,
     leave: async () => undefined,
     getProfileInfo: async () => ({}),
+    redactEvent: async (_room: string, eventId: string) => void moderated.push(['redact', eventId]),
+    ban: async (_room: string, userId: string) => void moderated.push(['ban', userId]),
+    unban: async (_room: string, userId: string) => void moderated.push(['unban', userId]),
   } as unknown as MatrixClient;
-  return { people, created, deleted, rooms, mx, stateSent };
+  const ingresses: { ingressId: string; roomName?: string; participantIdentity: string }[] = [];
+  const ingressesDeleted: string[] = [];
+  const ingress = {
+    createIngress: async (_input: unknown, opts: { roomName?: string; participantIdentity: string }) => {
+      const info = { ingressId: `IN_${ingresses.length}`, streamKey: `ingresskey${ingresses.length}`, ...opts };
+      ingresses.push(info);
+      return info;
+    },
+    deleteIngress: async (ingressId: string) => void ingressesDeleted.push(ingressId),
+  } as unknown as IngressClient;
+  return { people, created, deleted, rooms, mx, stateSent, moderated, ingress, ingresses, ingressesDeleted };
 }
 
 async function setup(env: Record<string, string> = {}, hidden: string[] = []) {
@@ -57,6 +72,7 @@ async function setup(env: Record<string, string> = {}, hidden: string[] = []) {
     hidden: async () => new Set(hidden),
     mx: async () => f.mx,
     dataDir: dir,
+    obs: { ingress: f.ingress, keys: new StreamKeys(join(dir, 'obs-keys.json')), whipBase: 'http://ingress:8080' },
   };
   return { streams: new Streams(deps), f, dir };
 }
@@ -182,5 +198,87 @@ describe('ending and expiring', () => {
     await assert.rejects(streams.remove(record.id, '@bob:purr.example'), refused('not_yours'));
     await streams.remove(record.id, LUNA);
     assert.equal(streams.record(record.id), undefined);
+  });
+});
+
+describe('OBS', () => {
+  it('gives each person a stream key that only gets through while their OBS stream is going', async () => {
+    const { streams, f } = await setup();
+    const { url, key } = await streams.obsSettings(LUNA, 'https://purr.example');
+    assert.equal(url, 'https://purr.example/api/public/whip');
+    assert.equal((await streams.obsSettings(LUNA, 'https://purr.example')).key, key);
+    const whip = streams.whipTarget();
+    assert.throws(() => whip.ingressKeyFor('pk_nope'), refused('bad_key'));
+    assert.throws(() => whip.ingressKeyFor(key), refused('not_live'));
+
+    const { record } = await streams.goLive(LUNA, 'Painting', 'https://purr.example', 'obs');
+    assert.equal(record.source, 'obs');
+    assert.deepEqual(f.ingresses.map((i) => [i.roomName, i.participantIdentity]), [[streamRoomName(record.id), LUNA]]);
+    assert.equal(whip.ingressKeyFor(key), 'ingresskey0');
+
+    // A new key: the old one stops working at once.
+    const fresh = (await streams.obsSettings(LUNA, 'https://purr.example', true)).key;
+    assert.notEqual(fresh, key);
+    assert.throws(() => whip.ingressKeyFor(key), refused('bad_key'));
+    assert.equal(whip.ingressKeyFor(fresh), 'ingresskey0');
+  });
+
+  it('is live once OBS’s picture arrives, records the camera, and drops the Ingress at the end', async () => {
+    const { streams, f } = await setup();
+    const { record } = await streams.goLive(LUNA, 'Painting', 'https://purr.example', 'obs');
+    assert.equal((await streams.mine(LUNA))?.id, record.id);
+    assert.equal(await streams.mine('@bob:purr.example'), null);
+    await assert.rejects(streams.markLive(record.id, LUNA), refused('not_receiving'));
+    f.people.set(streamRoomName(record.id), [{ identity: LUNA, kind: 1 }, { identity: previewIdentity(LUNA) }]);
+    await streams.sweep();
+    assert.equal(streams.record(record.id)?.state, 'live');
+    await streams.sweep();
+    assert.equal(streams.viewersOf(record.id), 0);
+    await streams.stop(record.id, LUNA);
+    assert.deepEqual(f.ingressesDeleted, ['IN_0']);
+    assert.throws(() => streams.whipTarget().ingressKeyFor('anything'), refused('bad_key'));
+  });
+
+  it('gives the dashboard a preview token for OBS streams only', async () => {
+    const { streams } = await setup();
+    const browser = await streams.goLive(LUNA, 'Drawing', 'https://purr.example');
+    await assert.rejects(streams.preview(browser.record.id, LUNA), refused('not_obs'));
+    const obs = await streams.goLive(LUNA, 'Painting', 'https://purr.example', 'obs');
+    await assert.rejects(streams.preview(obs.record.id, '@bob:purr.example'), refused('not_yours'));
+    assert.equal((await streams.preview(obs.record.id, LUNA)).split('.').length, 3);
+  });
+});
+
+describe('moderation', () => {
+  it('deletes messages, bans and times out, for the streamer only', async () => {
+    const { streams, f } = await setup();
+    const { record } = await streams.goLive(LUNA, 'Drawing', 'https://purr.example');
+    await streams.markLive(record.id, LUNA);
+    const BOB = '@bob:purr.example';
+    await assert.rejects(streams.moderate(record.id, BOB, { action: 'ban', user: LUNA }), refused('not_yours'));
+    await assert.rejects(streams.moderate(record.id, LUNA, { action: 'ban', user: LUNA }), refused('bad_user'));
+    await assert.rejects(streams.moderate(record.id, LUNA, { action: 'timeout', user: BOB, minutes: 0 }), refused('bad_minutes'));
+    await streams.moderate(record.id, LUNA, { action: 'delete', event_id: '$1' });
+    await streams.moderate(record.id, LUNA, { action: 'ban', user: BOB });
+    await streams.moderate(record.id, LUNA, { action: 'unban', user: BOB });
+    assert.deepEqual(f.moderated, [['redact', '$1'], ['ban', BOB], ['unban', BOB]]);
+
+    const { timeouts } = await streams.moderate(record.id, LUNA, { action: 'timeout', user: BOB, minutes: 5 });
+    assert.ok(timeouts[BOB] > Date.now());
+    assert.deepEqual(f.stateSent.at(-1), { type: 'm.room.power_levels', content: { users: { [BOB]: -1 }, events_default: 0 } });
+    assert.deepEqual((await streams.moderate(record.id, LUNA, { action: 'untimeout', user: BOB })).timeouts, {});
+  });
+
+  it('lifts a timeout once it’s over', async () => {
+    const { streams, f } = await setup();
+    const { record } = await streams.goLive(LUNA, 'Drawing', 'https://purr.example');
+    await streams.markLive(record.id, LUNA);
+    f.people.set(streamRoomName(record.id), [{ identity: LUNA }]);
+    await streams.moderate(record.id, LUNA, { action: 'timeout', user: '@bob:purr.example', minutes: 1 });
+    const stored = streams.record(record.id)!;
+    // Over already, as far as the sweep can tell.
+    await (streams as unknown as { deps: { store: StreamStore } }).deps.store.put({ ...stored, timeouts: { '@bob:purr.example': Date.now() - 1 } });
+    await streams.sweep();
+    assert.deepEqual(streams.record(record.id)?.timeouts, {});
   });
 });

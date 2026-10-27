@@ -48,11 +48,11 @@ export class Recorder {
     return join(this.dir, `${id}.mp4`);
   }
 
-  /** Starts recording the streamer; resolves with the egress ID, or undefined when recording is off. */
-  async start(roomName: string, identity: string, id: string): Promise<string | undefined> {
+  /** Starts recording the streamer (their screen share, or their camera for OBS); resolves with the egress ID, or undefined when recording is off. */
+  async start(roomName: string, identity: string, id: string, screenShare: boolean): Promise<string | undefined> {
     if (!this.egress) return undefined;
     const file = new EncodedFileOutput({ fileType: EncodedFileType.MP4, filepath: `${this.egressDir}/${id}.mp4` });
-    const info = await this.egress.startParticipantEgress(roomName, identity, { file }, { screenShare: true, encodingOptions: REPLAY_ENCODING });
+    const info = await this.egress.startParticipantEgress(roomName, identity, { file }, { screenShare, encodingOptions: REPLAY_ENCODING });
     return info.egressId;
   }
 

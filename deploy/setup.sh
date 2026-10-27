@@ -1582,9 +1582,9 @@ echo "  ok   nginx configured and running"
 # can't go through nginx; without them calls connect and then hear nothing.
 if [ "$EDGE_MODE" = true ]; then
   # Only the media ports, and only if they reach this server directly rather than via the relay.
-  FIREWALL_PORTS=("7881/tcp" "7882/udp")
+  FIREWALL_PORTS=("7881/tcp" "7882/udp" "7885/udp")
 else
-  FIREWALL_PORTS=("80/tcp" "443/tcp" "7881/tcp" "7882/udp")
+  FIREWALL_PORTS=("80/tcp" "443/tcp" "7881/tcp" "7882/udp" "7885/udp")
 fi
 if [ "$PROVISION_MATRIX" = true ] && [ "$EDGE_MODE" = false ]; then FIREWALL_PORTS+=("8448/tcp"); fi
 if [ "$ENABLE_TURN" = true ]; then FIREWALL_PORTS+=("5349/tcp" "3478/udp"); fi
