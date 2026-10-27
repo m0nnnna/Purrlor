@@ -6,7 +6,8 @@ import { api, createUser, eventually, type TestUser } from './matrix';
  * Live streams (docs/streaming.md) through the real token server and LiveKit: someone goes live
  * from their profile, a signed-in viewer watches on the watch page and chats, a signed-out visitor
  * watches and reads the chat but can't write, and ending it ends it for everyone and takes the
- * pointer out of the profile room. (Recording needs Egress, which the e2e stack doesn't run.)
+ * pointer out of the profile room. While live it shows on a viewer's Home; after, in the streamer's
+ * profile Streams tab, where it can be renamed and deleted. (Recording needs Egress, which the e2e stack doesn't run.)
  */
 
 const TOKEN_SERVER = process.env.E2E_TOKEN_SERVER ?? 'http://127.0.0.1:6168';
@@ -51,7 +52,7 @@ async function newPage(browser: Browser): Promise<Page> {
   return page;
 }
 
-type Stream = { id: string; state: string; viewers?: number; chatRoom: string | null };
+type Stream = { id: string; title?: string; state: string; viewers?: number; chatRoom: string | null };
 
 async function streamsOf(user: TestUser): Promise<Stream[]> {
   const res = await fetch(`${TOKEN_SERVER}/api/public/streams?owner=${enc(user.localpart)}`);
@@ -80,7 +81,7 @@ async function expectPicture(page: Page): Promise<void> {
 }
 
 test('going live from a profile, watched signed in with chat and signed out without, then ended for everyone', async ({ browser }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
   const [luna, bob] = await Promise.all([createUser('luna'), createUser('bob')]);
 
   // Luna goes live from her own profile.
@@ -139,6 +140,17 @@ test('going live from a profile, watched signed in with chat and signed out with
   await eventually(() => readStream(stream.id), (s) => (s?.viewers ?? 0) >= 2, 45_000);
   await expect(role(lunaPage, 'live-bar-viewers')).toContainText(/[2-9] watching/, { timeout: 30_000 });
 
+  // A signed-in viewer's Home lists it under "Live now"; the card opens the watch page.
+  const bobHome = await newPage(browser);
+  await logIn(bobHome, bob);
+  const card = role(bobHome, 'home-live-stream');
+  await expect(card).toBeVisible({ timeout: 45_000 });
+  await expect(card).toContainText('Drawing a commission');
+  await expect(card).toContainText('LIVE');
+  await card.click();
+  await expect(role(bobHome, 'stream-title')).toHaveText('Drawing a commission', { timeout: 30_000 });
+  await bobHome.close();
+
   // Luna ends it: everyone's connection goes, the server says it ended, and the pointer is empty.
   await role(lunaPage, 'live-bar-stop').click();
   await expect(role(lunaPage, 'live-bar')).toBeHidden({ timeout: 30_000 });
@@ -152,4 +164,24 @@ test('going live from a profile, watched signed in with chat and signed out with
     (levels) => levels.events_default === 50
   );
   await expect(api(bob, 'PUT', `/rooms/${chat}/send/m.room.message/late-${Date.now()}`, { msgtype: 'm.text', body: 'too late' })).rejects.toThrow();
+
+  // Her profile's Streams tab now lists it as a replay; she renames it, then deletes it for good.
+  await role(lunaPage, 'stream-watch-back').click();
+  await openOwnProfile(lunaPage);
+  // The profile kept under the watch page is hidden: take the one showing.
+  await lunaPage.locator('[data-nu-role="profile-tab-streams"]:visible').click();
+  const tile = lunaPage.locator('[data-nu-role="stream-tile"]:visible');
+  await expect(tile).toHaveCount(1);
+  await expect(tile).toContainText('Drawing a commission');
+  await expect(tile).toContainText('REPLAY');
+  await role(tile, 'stream-tile-rename').click();
+  const input = role(tile, 'stream-tile-rename-input');
+  await input.fill('Finished piece');
+  await input.press('Enter');
+  await expect(tile).toContainText('Finished piece');
+  expect((await readStream(stream.id))?.title).toBe('Finished piece');
+  await role(tile, 'stream-tile-delete').click();
+  await role(tile, 'stream-tile-delete-yes').click();
+  await expect(tile).toHaveCount(0);
+  expect(await readStream(stream.id)).toBeUndefined();
 });

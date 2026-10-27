@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchStream, fetchStreamsOf, streamBaseFor, type PublicStream } from '../../matrix/liveStream';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { fetchLiveStreams, fetchStream, fetchStreamsOf, streamBaseFor, type PublicStream } from '../../matrix/liveStream';
 
 const LIVE_POLL_MS = 15_000;
 const PROFILE_POLL_MS = 30_000;
@@ -52,22 +52,27 @@ export function useStream(base: string | undefined, id: string | undefined): { s
 }
 
 /**
- * What a profile shows: its owner's live stream, or else their newest replay. Asked when the
- * profile opens and every 30 s while it's showing, so going live shows up without a reload.
+ * A profile's streams (live, or ended and not yet expired), newest first. Asked when the profile
+ * opens and every 30 s while it's showing, so going live shows up without a reload. `undefined`
+ * until the first answer. The setter is for the Streams tab, which renames and deletes.
  */
-export function useProfileStream(ownerId: string | undefined, base: string | undefined, refresh?: unknown): PublicStream | undefined {
-  const [stream, setStream] = useState<PublicStream>();
+export function useProfileStreams(
+  ownerId: string | undefined,
+  base: string | undefined,
+  refresh?: unknown
+): [PublicStream[] | undefined, Dispatch<SetStateAction<PublicStream[] | undefined>>] {
+  const [streams, setStreams] = useState<PublicStream[]>();
   useEffect(() => {
     if (!ownerId || base === undefined) {
-      setStream(undefined);
+      setStreams(undefined);
       return undefined;
     }
     let cancelled = false;
     let timer: number | undefined;
     const read = () => {
       void fetchStreamsOf(base, ownerId)
-        .then((streams) => {
-          if (!cancelled) setStream(streams.find((s) => s.state === 'live') ?? streams.find((s) => s.replay));
+        .then((found) => {
+          if (!cancelled) setStreams(found);
         })
         .catch(() => undefined)
         .finally(() => {
@@ -80,5 +85,40 @@ export function useProfileStream(ownerId: string | undefined, base: string | und
       window.clearTimeout(timer);
     };
   }, [ownerId, base, refresh]);
-  return stream;
+  return [streams, setStreams];
+}
+
+/** What a profile shows above its posts: its owner's live stream, or else their newest replay. */
+export function streamToShow(streams: PublicStream[] | undefined): PublicStream | undefined {
+  return streams?.find((s) => s.state === 'live') ?? streams?.find((s) => s.replay);
+}
+
+export function useProfileStream(ownerId: string | undefined, base: string | undefined, refresh?: unknown): PublicStream | undefined {
+  return streamToShow(useProfileStreams(ownerId, base, refresh)[0]);
+}
+
+/** The streams live on this server, asked every 30 s while the caller is mounted (Home's "Live now"). */
+export function useLiveStreams(base: string | undefined, enabled: boolean): PublicStream[] {
+  const [streams, setStreams] = useState<PublicStream[]>([]);
+  useEffect(() => {
+    if (!enabled || base === undefined) return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    const read = () => {
+      void fetchLiveStreams(base)
+        .then((found) => {
+          if (!cancelled) setStreams(found);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) timer = window.setTimeout(read, PROFILE_POLL_MS);
+        });
+    };
+    read();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [base, enabled]);
+  return enabled ? streams : [];
 }

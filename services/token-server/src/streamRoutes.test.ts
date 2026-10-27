@@ -168,4 +168,19 @@ describe('ending and expiring', () => {
     assert.equal(streams.record(record.id), undefined);
     assert.deepEqual(f.stateSent.at(-1), { type: 'm.room.join_rules', content: { join_rule: 'invite' } });
   });
+
+  it('lets the streamer rename a stream, and delete it once it has ended', async () => {
+    const { streams } = await setup();
+    const { record } = await streams.goLive(LUNA, 'Drawing', 'https://purr.example');
+    await streams.markLive(record.id, LUNA);
+    await assert.rejects(streams.rename(record.id, '@bob:purr.example', 'Mine now'), refused('not_yours'));
+    await assert.rejects(streams.rename(record.id, LUNA, '   '), refused('bad_title'));
+    assert.equal((await streams.rename(record.id, LUNA, 'Inking')).title, 'Inking');
+    assert.equal(streams.record(record.id)?.title, 'Inking');
+    await assert.rejects(streams.remove(record.id, LUNA), refused('not_ended'));
+    await streams.stop(record.id, LUNA);
+    await assert.rejects(streams.remove(record.id, '@bob:purr.example'), refused('not_yours'));
+    await streams.remove(record.id, LUNA);
+    assert.equal(streams.record(record.id), undefined);
+  });
 });

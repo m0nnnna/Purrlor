@@ -42,10 +42,11 @@ import { PostSkeletons } from '../../components/Skeleton';
 import { AccountSettingsModal } from '../../app/AccountSettingsModal';
 import { GoLiveButton } from '../streaming/GoLive';
 import { ProfileStreamCard } from '../streaming/StreamViews';
+import { StreamList } from '../streaming/StreamList';
 import { openStreamAtom, streamerAtom } from '../streaming/streamerState';
-import { useProfileStream, useStreamBase } from '../streaming/useStream';
+import { streamToShow, useProfileStreams, useStreamBase } from '../streaming/useStream';
 
-type ProfileTab = 'posts' | 'media' | 'likes';
+type ProfileTab = 'posts' | 'media' | 'likes' | 'streams';
 
 /**
  * A person's page: banner, bio, Message and Follow, who they follow and who follows them, and
@@ -63,7 +64,8 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   // Your own is asked again whenever you go live or stop.
   const streamBase = useStreamBase(userId, mx.getDomain() ?? undefined);
   const streamerPhase = useAtomValue(streamerAtom).phase;
-  const stream = useProfileStream(userId, streamBase, isMe ? streamerPhase : undefined);
+  const [streams, setStreams] = useProfileStreams(userId, streamBase, isMe ? streamerPhase : undefined);
+  const stream = streamToShow(streams);
   const setOpenStream = useSetAtom(openStreamAtom);
   // This person's profile feed is read directly, even past the directory caps.
   // Their posts as last shown (or as the feed has them) are there at once, and only their own feeds
@@ -161,7 +163,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const listed = pinnedPost ? posts.filter((post) => post.eventId !== pinnedPost.eventId) : posts;
 
   const sentinelRef = useInfiniteScroll({
-    hasMore: feed.hasMore && tab !== 'likes',
+    hasMore: feed.hasMore && tab !== 'likes' && tab !== 'streams',
     loading: feed.loading || feed.loadingMore,
     onLoadMore: feed.loadMore,
   });
@@ -364,6 +366,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                     <div className="nu-profile-view__tabs" role="tablist">
                       {tabButton('posts', 'Posts')}
                       {tabButton('media', 'Media')}
+                      {(isMe || (streams?.length ?? 0) > 0) && tabButton('streams', 'Streams')}
                       {isMe && tabButton('likes', 'Likes')}
                     </div>
 
@@ -413,6 +416,17 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       </>
                     )}
 
+                    {tab === 'streams' && streamBase !== undefined && (
+                      <StreamList
+                        base={streamBase}
+                        owner={userId}
+                        mx={mx}
+                        streams={streams ?? []}
+                        setStreams={setStreams}
+                        onOpen={(opened) => setOpenStream({ owner: userId, streamId: opened.id })}
+                      />
+                    )}
+
                     {tab === 'likes' && isMe && (
                       <>
                         <p className="nu-profile-view__private-note">
@@ -429,8 +443,8 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       </>
                     )}
 
-                    {tab !== 'likes' && feed.loading && posts.length === 0 && <PostSkeletons count={2} />}
-                    {tab !== 'likes' && (feed.loading || feed.loadingMore) && (
+                    {tab !== 'likes' && tab !== 'streams' && feed.loading && posts.length === 0 && <PostSkeletons count={2} />}
+                    {tab !== 'likes' && tab !== 'streams' && (feed.loading || feed.loadingMore) && (
                       <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
                     )}
                   </div>

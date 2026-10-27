@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useSetAtom } from 'jotai';
 import { NotificationCountType, type Room } from 'matrix-js-sdk';
 import { mobileColumnOpenAtom } from '../../app/state/mobile';
@@ -24,6 +25,8 @@ import { listChildRooms } from '../../matrix/hooks/useSpaceRooms';
 import { useDirectMessageUnreads, useUnreadSummary } from '../../matrix/hooks/useUnreadCounts';
 import { describeRoomLevel } from '../../matrix/notificationSettings';
 import type { LiveVoiceChannel } from '../../matrix/liveVoice';
+import type { PublicStream } from '../../matrix/liveStream';
+import { useUserProfile } from '../../matrix/hooks/useUserProfile';
 import { isDemoMode } from '../../demo/demoMode';
 import { useJoinVoiceChannel } from '../calendar/useJoinVoiceChannel';
 import { NoSpacesYet, useInNoSpace } from '../onboarding/WelcomeGuideHost';
@@ -31,6 +34,8 @@ import { GlobalPostList } from '../feed/GlobalPostList';
 import { useComposerTargets } from '../feed/useComposerTargets';
 import { useOpenSocial } from '../feed/useOpenSocial';
 import { StoriesBar } from '../stories/StoriesBar';
+import { openStreamAtom } from '../streaming/streamerState';
+import { useLiveStreams } from '../streaming/useStream';
 import './HomeView.css';
 
 /** Participant avatars shown on a live card before "+N". */
@@ -83,14 +88,56 @@ function LiveCard({ channel }: { channel: LiveVoiceChannel }) {
   );
 }
 
-function LiveNow({ live }: { live: LiveVoiceChannel[] }) {
-  if (live.length === 0) return null;
+/** A live stream's thumbnail is replaced this often (the server's newest picture comes about every 60 s). */
+const THUMBNAIL_REFRESH_MS = 60_000;
+
+function StreamCard({ stream }: { stream: PublicStream }) {
+  const setOpenStream = useSetAtom(openStreamAtom);
+  const owner = useUserProfile(stream.owner);
+  // A new `?t=` makes the browser fetch the newest picture instead of its cached one.
+  const [stamp, setStamp] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setStamp(Date.now()), THUMBNAIL_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  const watching = stream.viewers === undefined ? '' : stream.viewers === 1 ? '1 watching' : `${stream.viewers} watching`;
+  return (
+    <button
+      type="button"
+      className="nu-home__live nu-home__stream"
+      data-nu-role="home-live-stream"
+      aria-label={`${stream.title}, live from ${owner.name}${watching ? `, ${watching}` : ''}`}
+      onClick={() => setOpenStream({ owner: stream.owner, streamId: stream.id })}
+    >
+      <span className="nu-home__stream-thumb">
+        {stream.thumbnail && <img src={`${stream.thumbnail}?t=${stamp}`} alt="" />}
+        <span className="nu-home__stream-badges">
+          <span className="nu-live-badge">LIVE</span>
+          {watching}
+        </span>
+      </span>
+      <span className="nu-home__stream-text">
+        <span className="nu-home__stream-title">{stream.title}</span>
+      </span>
+      <span className="nu-home__stream-owner">
+        <Avatar name={owner.name} mxcUrl={owner.avatarUrl} size={22} />
+        {owner.name}
+      </span>
+    </button>
+  );
+}
+
+function LiveNow({ live, streams }: { live: LiveVoiceChannel[]; streams: PublicStream[] }) {
+  if (live.length === 0 && streams.length === 0) return null;
   return (
     <section className="nu-home__section" data-nu-role="home-live" aria-labelledby="nu-home-live">
       <h2 className="nu-home__heading" id="nu-home-live">
         Live now
       </h2>
       <div className="nu-home__live-list">
+        {streams.map((stream) => (
+          <StreamCard key={stream.id} stream={stream} />
+        ))}
         {live.map((channel) => (
           <LiveCard key={channel.roomId} channel={channel} />
         ))}
@@ -212,12 +259,14 @@ function Following({ posts, targets }: { posts: ReturnType<typeof useFollowingPo
 export function HomeView() {
   const following = useFollowingPosts();
   const live = useLiveVoiceChannels(true);
+  // Streams live on this server (docs/streaming.md), beside the voice channels.
+  const streams = useLiveStreams(isDemoMode() ? undefined : '', true);
   const unread = useUnreadRooms();
   const showStories = !isDemoMode();
   const stories = useStories(showStories, following.follows.users);
   // Someone in no Space yet gets the ways in (joining, creating) rather than a quiet dashboard.
   const noSpaces = useInNoSpace() && !isDemoMode();
-  const empty = live.length === 0 && following.posts.length === 0 && unread.length === 0;
+  const empty = live.length === 0 && streams.length === 0 && following.posts.length === 0 && unread.length === 0;
 
   return (
     <main className="nu-main-pane" data-nu-role="main-pane">
@@ -228,7 +277,7 @@ export function HomeView() {
       <div className="nu-home" data-nu-role="home">
         <h2 className="nu-home__title">Here’s what’s happening</h2>
         {showStories && <StoriesBar stories={stories} />}
-        <LiveNow live={live} />
+        <LiveNow live={live} streams={streams} />
         <Following posts={following.posts} targets={following.targets} />
         <UnreadMessages unread={unread} />
         {empty && noSpaces && <NoSpacesYet />}

@@ -16,7 +16,7 @@ export function StreamPlayerLazy(props: { base: string; stream: PublicStream; mx
   );
 }
 
-function ago(ts: number): string {
+export function ago(ts: number): string {
   const minutes = Math.round((Date.now() - ts) / 60_000);
   if (minutes < 60) return minutes <= 1 ? 'just now' : `${minutes} minutes ago`;
   const hours = Math.round(minutes / 60);

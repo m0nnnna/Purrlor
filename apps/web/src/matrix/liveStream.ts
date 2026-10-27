@@ -174,6 +174,16 @@ export async function stopStream(mx: MatrixClient, id: string): Promise<PublicSt
   return call(`/api/public/streams/${id}/stop`, post({ openid_token: await getOpenIdTokenCached(mx) }), readStreamAnswer);
 }
 
+/** Changes a stream's title (live or ended). Only its streamer can. */
+export async function renameStream(mx: MatrixClient, id: string, title: string): Promise<PublicStream> {
+  return call(`/api/public/streams/${id}/title`, post({ openid_token: await getOpenIdTokenCached(mx), title }), readStreamAnswer);
+}
+
+/** Deletes an ended stream's replay, chat log and record for good. Only its streamer can; not while it's live. */
+export async function deleteStream(mx: MatrixClient, id: string): Promise<void> {
+  await call(`/api/public/streams/${id}/delete`, post({ openid_token: await getOpenIdTokenCached(mx) }), () => undefined);
+}
+
 export async function sendThumbnail(mx: MatrixClient, id: string, picture: Blob): Promise<void> {
   const token = await getOpenIdTokenCached(mx);
   const response = await fetch(`/api/public/streams/${id}/thumbnail`, {
@@ -209,6 +219,14 @@ export async function fetchStreamsOf(base: string, owner: string): Promise<Publi
   if (isDemoMode()) return [];
   return call(`${base}/api/public/streams?owner=${encodeURIComponent(owner)}`, {}, (body) =>
     (isRecord(body) && Array.isArray(body.streams) ? body.streams : []).flatMap((s) => parseStream(s) ?? [])
+  );
+}
+
+/** The streams live now on a server (Home's "Live now"), newest first. */
+export async function fetchLiveStreams(base: string): Promise<PublicStream[]> {
+  if (isDemoMode()) return [];
+  return call(`${base}/api/public/streams`, {}, (body) =>
+    (isRecord(body) && Array.isArray(body.streams) ? body.streams : []).flatMap((s) => parseStream(s) ?? []).filter((s) => s.state === 'live')
   );
 }
 

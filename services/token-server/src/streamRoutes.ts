@@ -422,6 +422,23 @@ export class Streams {
 
   // --- Files -----------------------------------------------------------------------------------
 
+  /** The streamer renames a stream, live or ended. */
+  async rename(id: string, openIdToken: unknown, rawTitle: unknown): Promise<StreamRecord> {
+    const record = await this.owned(id, openIdToken);
+    const title = cleanTitle(rawTitle);
+    if (!title) throw new Refusal(400, 'bad_title', 'A title is 1 to 120 characters');
+    const renamed = { ...record, title };
+    await this.deps.store.put(renamed);
+    return renamed;
+  }
+
+  /** The streamer deletes an ended stream now: its replay, chat log and record, as expiry would. */
+  async remove(id: string, openIdToken: unknown): Promise<void> {
+    const record = await this.owned(id, openIdToken);
+    if (record.state !== 'ended') throw new Refusal(409, 'not_ended', 'Stop the stream before deleting it');
+    await this.expire(record);
+  }
+
   async downloadLinks(id: string, openIdToken: unknown): Promise<{ replay?: string; chat?: string }> {
     const record = await this.owned(id, openIdToken);
     if (record.state !== 'ended') throw new Refusal(409, 'not_ended', 'Downloads are there once the stream ends');
@@ -633,6 +650,23 @@ export function streamsRouter(streams: Streams): Router {
       await sendFile(req, res, streams.replayPath(req.params.id), 'video/mp4', 'inline');
     } catch (err) {
       if (!res.headersSent) fail(res, err, 'a replay');
+    }
+  });
+
+  router.post('/:id/title', async (req, res) => {
+    try {
+      res.json({ stream: publicStream(await streams.rename(req.params.id, req.body?.openid_token, req.body?.title), { hasThumbnail: !!streams.thumbnail(req.params.id) }) });
+    } catch (err) {
+      fail(res, err, 'renaming');
+    }
+  });
+
+  router.post('/:id/delete', async (req, res) => {
+    try {
+      await streams.remove(req.params.id, req.body?.openid_token);
+      res.status(204).end();
+    } catch (err) {
+      fail(res, err, 'deleting');
     }
   });
 

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  deleteStream,
+  fetchLiveStreams,
   fetchStream,
   formatDuration,
   goLiveRefusalText,
@@ -7,6 +9,7 @@ import {
   parseStream,
   readLivePointer,
   refusalText,
+  renameStream,
   StreamError,
   streamBaseFor,
   viewerToken,
@@ -107,6 +110,31 @@ describe('talking to the stream’s server', () => {
   it('reads a gone stream as none', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ code: 'not_found' }), { status: 404 })));
     expect(await fetchStream('', ID)).toBeUndefined();
+  });
+});
+
+describe('the streamer’s own calls', () => {
+  it('renames and deletes with the OpenID token, and passes a refusal on', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ stream: { ...live, title: 'New' } })))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'not_ended', error: 'Still live' }), { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await renameStream({} as never, ID, 'New')).title).toBe('New');
+    await expect(deleteStream({} as never, ID)).resolves.toBeUndefined();
+    const err = await deleteStream({} as never, ID).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 409, code: 'not_ended' });
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    expect(calls[0][0]).toBe(`/api/public/streams/${ID}/title`);
+    expect(JSON.parse(calls[0][1].body as string)).toEqual({ openid_token: { access_token: 'tok', matrix_server_name: 'purr.example' }, title: 'New' });
+    expect(calls[1][0]).toBe(`/api/public/streams/${ID}/delete`);
+  });
+
+  it('lists only the streams live now', async () => {
+    const ended = { ...live, id: 'k3J9x_Qm2PzL0aBd', state: 'ended' };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ streams: [live, ended, { nope: 1 }] }))));
+    expect((await fetchLiveStreams('')).map((s) => s.id)).toEqual([ID]);
   });
 });
 

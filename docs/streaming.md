@@ -77,10 +77,17 @@ live; their own server's page is where they're watched.
   the replay until it expires, then says the stream has ended.
 - **The feed.** The streamer can post about it: a normal Global post (docs/posts.md) whose text has
   the watch page's link, which shows as a link card (docs/embeds.md) with the stream's thumbnail.
+- **The profile's Streams tab.** Every live or unexpired stream of the person, newest first, as
+  cards (thumbnail, title, LIVE or REPLAY with its length, when it ended and when it'll be
+  deleted). It shows when they have any, and always on your own profile. On your own, each card can
+  also be renamed, downloaded, and (once ended) deleted for good.
+- **Home, "Live now".** The streams live on the signed-in person's own server, beside the voice
+  channels with people in them: thumbnail, viewer count, title and streamer. Asked every 30 s while
+  Home is showing; a card opens the watch page.
 - **Small views** (a card, a link preview) show the thumbnail, refreshed every 60 s, never video.
 
-There is no Live list or directory until WATCH is built (`GET /api/public/streams` below is there
-for it).
+There is no directory of every server's streams; Home lists this server's live ones
+(`GET /api/public/streams` below).
 
 ## The cap
 
@@ -231,6 +238,16 @@ server_busy`.
 
 `{ "openid_token" }`, the streamer only. → `200 { "stream" }`, now `ended`. Everyone in the LiveKit
 room is disconnected. The app empties the profile pointer.
+
+### `POST /api/public/streams/:id/title`
+
+`{ "openid_token", "title" }`, the streamer only, any time (live or ended). `title` is 1 to 120
+characters. → `200 { "stream" }` with the new title. Errors: `400 bad_title`, `403 not_yours`.
+
+### `POST /api/public/streams/:id/delete`
+
+`{ "openid_token" }`, the streamer only, once the stream has ended. Deletes the replay, the chat log
+and the record for good. → `204`. Errors: `403 not_yours`, `409 not_ended` (still live).
 
 ### `PUT /api/public/streams/:id/thumbnail`
 

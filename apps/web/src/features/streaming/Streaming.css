@@ -531,3 +531,154 @@
   background: var(--nu-color-bg-primary);
   color: var(--nu-color-text-primary);
 }
+
+/* --- The profile's Streams tab --- */
+
+.nu-stream-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-stream-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nu-stream-tile__open {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-stream-tile__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-stream-tile__thumb img,
+.nu-stream-tile__placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-stream-tile__open:hover .nu-stream-tile__thumb {
+  outline: 2px solid var(--nu-color-border-strong);
+}
+
+.nu-stream-tile__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.nu-stream-tile__note {
+  margin: 0;
+  color: var(--nu-color-text-muted);
+  font-size: 13px;
+}
+
+.nu-stream-tile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.nu-stream-tile__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 6px;
+  background: var(--nu-color-bg-secondary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-stream-tile__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.nu-stream-tile__error {
+  margin: 0;
+  color: var(--nu-color-danger);
+  font-size: 13px;
+}
+
+/* --- Home's live streams --- */
+
+.nu-home__stream {
+  padding: 0;
+  overflow: hidden;
+}
+
+.nu-home__stream-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-home__stream-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-home__stream-badges {
+  position: absolute;
+  left: var(--nu-space-2);
+  bottom: var(--nu-space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: 1px var(--nu-space-2);
+  border-radius: var(--nu-radius-full);
+  background: rgb(0 0 0 / 60%);
+  color: #fff;
+  font-size: var(--nu-font-size-xs);
+}
+
+.nu-home__stream-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 var(--nu-space-4);
+}
+
+.nu-home__stream-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.nu-home__stream-owner {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: 0 var(--nu-space-4) var(--nu-space-4);
+  font-size: var(--nu-font-size-xs);
+  color: var(--nu-color-text-muted);
+}
