@@ -5,9 +5,10 @@ import { PublicChrome } from './PublicChrome';
 import { PublicFeed } from './PublicFeed';
 import { PublicPage } from './PublicPage';
 import { PublicPostView } from './PublicPostView';
+import { PublicStreamView } from '../streaming/PublicStreamView';
 
 /**
- * What a visitor who isn't signed in sees at `/@name`, `/@name/post/<id>` and `/feed`
+ * What a visitor who isn't signed in sees at `/@name`, `/@name/post/<id>`, `/@name/live/<id>` and `/feed`
  * (docs/public-web.md). Everything here is read through the public API, never Matrix.
  *
  * It first learns this deployment's own server name, so a federated instance's people keep theirs
@@ -33,6 +34,7 @@ export function PublicApp({ route, onSignIn, onRegister }: { route: PublicRoute;
       {known && route.kind === 'feed' && <PublicFeed onSignIn={onSignIn} onRegister={onRegister} />}
       {known && route.kind === 'page' && <PublicPage user={route.user} target={route.target} onSignIn={onSignIn} onRegister={onRegister} />}
       {known && route.kind === 'post' && <PublicPostView eventId={route.eventId} author={route.user} onSignIn={onSignIn} onRegister={onRegister} />}
+      {known && route.kind === 'live' && <PublicStreamView user={route.user} streamId={route.streamId} onSignIn={onSignIn} />}
     </PublicChrome>
   );
 }

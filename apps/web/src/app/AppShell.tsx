@@ -34,6 +34,7 @@ import { MusicPlayerHost } from '../features/music/MusicPlayerHost';
 import { useOnlinePing } from '../features/online/useOnlinePing';
 import { InstallHint } from './InstallHint';
 import { StatusClock } from './StatusClock';
+import { LiveStreamBar } from '../features/streaming/LiveStreamBar';
 import { useTickerOn } from './effects';
 import { NotificationTicker } from '../features/notifications/NotificationTicker';
 import { FeedSidebar } from '../features/feed/FeedSidebar';
@@ -100,6 +101,7 @@ export function AppShell() {
     >
       <Wallpaper />
       <StatusClock />
+      <LiveStreamBar />
       <VoiceCallSession>
         <ServerRail />
         <ChannelList />

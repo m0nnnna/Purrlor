@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { profileUserIdAtom, selectedRoomIdAtom, selectedSpaceIdAtom } from '../../app/state/selection';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
@@ -40,6 +40,10 @@ import './ProfileView.css';
 import { nameOrFallback } from '../../matrix/displayName';
 import { PostSkeletons } from '../../components/Skeleton';
 import { AccountSettingsModal } from '../../app/AccountSettingsModal';
+import { GoLiveButton } from '../streaming/GoLive';
+import { ProfileStreamCard } from '../streaming/StreamViews';
+import { openStreamAtom, streamerAtom } from '../streaming/streamerState';
+import { useProfileStream, useStreamBase } from '../streaming/useStream';
 
 type ProfileTab = 'posts' | 'media' | 'likes';
 
@@ -55,6 +59,12 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const myUserId = mx.getUserId() ?? '';
   const isMe = userId === myUserId;
   const setProfileUserId = useSetAtom(profileUserIdAtom);
+  // Their live stream or newest replay, from their own server (docs/streaming.md), above the posts.
+  // Your own is asked again whenever you go live or stop.
+  const streamBase = useStreamBase(userId, mx.getDomain() ?? undefined);
+  const streamerPhase = useAtomValue(streamerAtom).phase;
+  const stream = useProfileStream(userId, streamBase, isMe ? streamerPhase : undefined);
+  const setOpenStream = useSetAtom(openStreamAtom);
   // This person's profile feed is read directly, even past the directory caps.
   // Their posts as last shown (or as the feed has them) are there at once, and only their own feeds
   // are read, for what's new since.
@@ -224,6 +234,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                               {page ? 'Edit page' : 'Build your page'}
                             </button>
                             <ShareLinkButton url={pageLink(userId)} label="Share" title={basic.name} className="nu-follow-button nu-follow-button--on" role="profile-share" />
+                            <GoLiveButton />
                             {/* Settings live on the rail, which a phone doesn't show: this is their way there. */}
                             <button
                               type="button"
@@ -283,7 +294,14 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                           </div>
                         )}
                       </div>
-                      <h2 className="nu-profile-view__name">{basic.name}</h2>
+                      <h2 className="nu-profile-view__name">
+                        {basic.name}
+                        {stream?.state === 'live' && (
+                          <span className="nu-live-badge nu-profile-view__live" data-nu-role="profile-live-badge">
+                            LIVE
+                          </span>
+                        )}
+                      </h2>
                       <p className="nu-profile-view__handle">{handleFor(userId)}</p>
                       {page?.blocks.some((block) => block.type === 'commissions') && (
                         <p className="nu-profile-view__commissions">
@@ -340,6 +358,9 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                 }
                 posts={
                   <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
+                    {stream && streamBase !== undefined && (
+                      <ProfileStreamCard base={streamBase} stream={stream} mx={mx} onOpen={() => setOpenStream({ owner: userId, streamId: stream.id })} />
+                    )}
                     <div className="nu-profile-view__tabs" role="tablist">
                       {tabButton('posts', 'Posts')}
                       {tabButton('media', 'Media')}

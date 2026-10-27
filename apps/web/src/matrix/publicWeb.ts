@@ -147,7 +147,9 @@ export type PublicRoute =
   | { kind: 'feed' }
   | { kind: 'page'; user: string; target?: PageTarget }
   /** `roomId`: a Space post's link names its feed room (`?room=`), for members' apps to find it. */
-  | { kind: 'post'; user: string; eventId: string; roomId?: string };
+  | { kind: 'post'; user: string; eventId: string; roomId?: string }
+  /** A live stream's watch page, or its replay's (docs/streaming.md). */
+  | { kind: 'live'; user: string; streamId: string };
 
 const ITEM_ID = /^[A-Za-z0-9_-]{1,16}$/;
 
@@ -174,6 +176,8 @@ export function parsePublicRoute(pathname: string, search = ''): PublicRoute | u
         ...(roomId && /^![^\s/]{1,255}$/.test(roomId) && { roomId }),
       };
     }
+    const live = /^\/@([^/]+)\/live\/([A-Za-z0-9_-]{16})$/.exec(path);
+    if (live) return { kind: 'live', user: decodeURIComponent(live[1]), streamId: live[2] };
     const page = /^\/@([^/]+)$/.exec(path);
     if (page) return { kind: 'page', user: decodeURIComponent(page[1]) };
     const item = /^\/@([^/]+)\/(music|art|commissions)\/([^/]+)(?:\/(\d+))?$/.exec(path);

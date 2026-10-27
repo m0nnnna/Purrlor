@@ -5,6 +5,7 @@ import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { parsePublicRoute } from '../../matrix/publicWeb';
 import { pageTargetAtom } from '../profilePage/PageTargetContext';
 import { loadLinkedPost } from '../feed/useOpenPost';
+import { openStreamAtom } from '../streaming/streamerState';
 
 /**
  * Signed in, the public addresses open the same things inside the app: `/@name` is that person's
@@ -34,6 +35,11 @@ export function useOpenPublicRoute(): void {
     if (!userId) return;
     store.set(pageTargetAtom, route.kind === 'page' && route.target ? { userId, target: route.target } : null);
     store.set(profileUserIdAtom, userId);
+    // A stream's watch page, over its owner's profile.
+    if (route.kind === 'live') {
+      store.set(openStreamAtom, { owner: userId, streamId: route.streamId });
+      return;
+    }
     // A post's link: its own page, over the author's profile (where it stays if the post can't be read).
     if (route.kind === 'post') {
       void loadLinkedPost(mx, userId, route.eventId, route.roomId)

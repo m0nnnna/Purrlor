@@ -51,6 +51,12 @@ services:
       MATRIX_HOMESERVER_URL: http://matrix:8008
       MATRIX_BOT_USERNAME: e2e-bot
       MATRIX_BOT_PASSWORD: e2e-bot-password
+      # Live streams (streaming.spec.ts): the address browsers connect to, no recording (no Egress
+      # here), and room for many at once: every run and rerun shares this server, and a stream a
+      # failed run left behind counts as live until it has been away 2 minutes.
+      LIVEKIT_PUBLIC_URL: ws://127.0.0.1:7880
+      STREAM_RECORDING: 'off'
+      STREAM_MAX_LIVE: 50
     depends_on:
       - matrix
 

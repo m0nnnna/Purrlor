@@ -1,0 +1,462 @@
+/* Live streams (docs/streaming.md): the badge, the player, the profile card, the watch page, the chat
+   and the streamer's bar. Colours come from the theme's tokens. */
+
+.nu-live-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--nu-color-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.nu-live-badge--replay {
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-profile-view__live {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.nu-golive-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- Go live --- */
+
+.nu-golive {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nu-golive__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nu-golive__field input {
+  padding: 8px 10px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 6px;
+  background: var(--nu-color-bg-secondary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-golive__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nu-golive__hint {
+  margin: 0;
+  color: var(--nu-color-text-muted);
+  font-size: 13px;
+}
+
+.nu-golive__error {
+  margin: 0;
+  color: var(--nu-color-danger);
+}
+
+.nu-golive__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- The streamer's bar --- */
+
+.nu-livebar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 12px;
+  border: 1px solid var(--nu-color-border-strong);
+  border-radius: 10px;
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
+}
+
+.nu-livebar--error {
+  border-color: var(--nu-color-danger);
+}
+
+.nu-livebar__title {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nu-livebar__meta {
+  color: var(--nu-color-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.nu-livebar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 6px;
+  background: var(--nu-color-bg-tertiary);
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nu-livebar__button[aria-pressed='false'] {
+  color: var(--nu-color-text-muted);
+}
+
+.nu-livebar__button--stop {
+  border-color: var(--nu-color-danger);
+  background: var(--nu-color-danger);
+  color: #fff;
+}
+
+.nu-livebar__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .nu-livebar {
+    bottom: 72px;
+    flex-wrap: wrap;
+  }
+}
+
+/* --- The player --- */
+
+.nu-stream-player {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+  color: #fff;
+}
+
+.nu-stream-player__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Audio only, or not playing yet: `display: block` above would otherwise win over `hidden`. */
+.nu-stream-player__video[hidden] {
+  display: none;
+}
+
+.nu-stream-player--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nu-color-text-secondary);
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-stream-player__start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  background: #000 center / cover no-repeat;
+  color: #fff;
+  cursor: pointer;
+}
+
+.nu-stream-player__start:disabled {
+  cursor: progress;
+}
+
+.nu-stream-player__play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 60%);
+}
+
+.nu-stream-player__label {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 60%);
+  font-weight: 600;
+}
+
+.nu-stream-player__audio-only {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  color: #ddd;
+}
+
+.nu-stream-player__controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.nu-stream-player__controls button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.nu-stream-player__controls button[aria-pressed='true'] {
+  background: rgb(255 255 255 / 25%);
+}
+
+.nu-stream-player__error {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 75%);
+  font-size: 13px;
+}
+
+/* --- On a profile, above the posts --- */
+
+.nu-stream-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 10px;
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-stream-card[data-nu-state='live'] {
+  border-color: var(--nu-color-danger);
+}
+
+.nu-stream-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nu-stream-card__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.nu-stream-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nu-stream-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nu-color-text-secondary);
+  font-size: 13px;
+}
+
+.nu-stream-downloads {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.nu-stream-downloads__error {
+  color: var(--nu-color-danger);
+  font-size: 13px;
+}
+
+/* --- The watch page --- */
+
+.nu-stream-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.nu-stream-page__missing {
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-stream-watch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.nu-stream-watch__info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.nu-stream-watch__title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.nu-stream-watch__owner {
+  margin: 0;
+}
+
+.nu-stream-watch__owner-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nu-color-text-link);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .nu-stream-watch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Chat --- */
+
+.nu-stream-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: min(70vh, 640px);
+  border: 1px solid var(--nu-color-border);
+  border-radius: 10px;
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-stream-chat--empty {
+  height: auto;
+  padding: 12px;
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-stream-chat__title {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--nu-color-border);
+  font-size: 14px;
+}
+
+.nu-stream-chat__lines {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nu-stream-chat__line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.nu-stream-chat__line .nu-avatar {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.nu-stream-chat__name {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.nu-stream-chat__quiet,
+.nu-stream-chat__closed {
+  color: var(--nu-color-text-muted);
+  font-size: 13px;
+}
+
+.nu-stream-chat__closed {
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--nu-color-border);
+}
+
+.nu-stream-chat__error {
+  margin: 0;
+  padding: 0 12px;
+  color: var(--nu-color-danger);
+  font-size: 13px;
+}
+
+.nu-stream-chat__composer {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--nu-color-border);
+}
+
+.nu-stream-chat__composer input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 6px;
+  background: var(--nu-color-bg-primary);
+  color: var(--nu-color-text-primary);
+}

@@ -34,6 +34,8 @@ import { PinnedMessagesPanel } from './PinnedMessagesPanel';
 import { ThreadsOverviewModal } from './ThreadsOverviewModal';
 import { TopicBanner } from './TopicBanner';
 import { HomeView } from '../home/HomeView';
+import { openStreamAtom } from '../streaming/streamerState';
+import { StreamWatchView } from '../streaming/StreamWatchView';
 import { TypingIndicator } from './TypingIndicator';
 import { NoSpacesYet, useInNoSpace } from '../onboarding/WelcomeGuideHost';
 import { isDemoMode } from '../../demo/demoMode';
@@ -93,6 +95,7 @@ export function MainPane() {
   const socialSpaceId = useAtomValue(socialSpaceIdAtom);
   const profileUserId = useAtomValue(profileUserIdAtom);
   const openPost = useAtomValue(openPostAtom);
+  const openStream = useAtomValue(openStreamAtom);
   // The same test as MainPaneContent's `feed === 'global'`: open, and not showing one Space's Posts.
   const globalShown = globalFeedOpen && !(socialSpaceId && mx.getRoom(socialSpaceId));
   const visited = useRef(false);
@@ -100,7 +103,7 @@ export function MainPane() {
 
   return (
     <>
-      {visited.current && <GlobalFeedView hidden={!globalShown || !!profileUserId || !!openPost} />}
+      {visited.current && <GlobalFeedView hidden={!globalShown || !!profileUserId || !!openPost || !!openStream} />}
       <MainPaneContent />
     </>
   );
@@ -117,6 +120,7 @@ function MainPaneContent() {
   const [socialSpaceId, setSocialSpaceId] = useAtom(socialSpaceIdAtom);
   const [profileUserId, setProfileUserId] = useAtom(profileUserIdAtom);
   const [openPost, setOpenPost] = useAtom(openPostAtom);
+  const [openStream, setOpenStream] = useAtom(openStreamAtom);
   const room = useRoom(selectedRoomId);
   const channelType = useChannelType(room);
   const encrypted = useRoomEncrypted(room);
@@ -160,6 +164,12 @@ function MainPaneContent() {
     setOpenPost(null);
   }, [selectedRoomId, selectedSpaceId, spaceView, section, profileUserId, setOpenPost]);
 
+  // A stream's watch page, the same way, except that it opens over its owner's profile, so opening
+  // that profile underneath it doesn't close it; its own Back and the owner's name do.
+  useEffect(() => {
+    setOpenStream(null);
+  }, [selectedRoomId, selectedSpaceId, spaceView, section, setOpenStream]);
+
   // Feeds are a merge across many rooms rather than one selected room, so they take precedence
   // over whatever channel happens to still be selected behind them. A profile sits over a feed,
   // and a post's page over either. What's underneath stays mounted, just hidden, so Back lands on
@@ -170,6 +180,14 @@ function MainPaneContent() {
   const socialSpace = globalFeedOpen && socialSpaceId ? mx.getRoom(socialSpaceId) : null;
   const feedSpace = socialSpace ?? (!inHome && spaceView === 'feed' && selectedSpaceId ? mx.getRoom(selectedSpaceId) : null);
   const feed = socialSpace ? 'space' : globalFeedOpen ? 'global' : feedSpace ? 'space' : null;
+  if (openStream) {
+    return (
+      <>
+        {profileUserId && <ProfileView key={profileUserId} userId={profileUserId} hidden />}
+        <StreamWatchView />
+      </>
+    );
+  }
   // Home is its own page; a profile or post opened from it sits over it, as over any section.
   if (inHome && !profileUserId && !openPost) return <HomeView />;
   const calendarSpace = spaceView === 'events' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;

@@ -8,6 +8,7 @@ import { ProfilePageLayout } from '../profilePage/ProfilePageLayout';
 import { PageOwnerContext } from '../profilePage/PageOwnerContext';
 import { PageTargetContext } from '../profilePage/PageTargetContext';
 import { ProfilePageFrame } from '../profilePage/ProfilePageFrame';
+import { PublicProfileStream } from '../streaming/PublicStreamView';
 import { PublicPostCard } from './PublicPostCard';
 import { usePublicPosts } from './usePublicPosts';
 import '../feed/FeedView.css';
@@ -104,6 +105,7 @@ function PublicProfile({
               }
               posts={
                 <div className={page ? 'nu-profile-page__posts' : 'nu-profile-view__posts'}>
+                  <PublicProfileStream userId={answer.userId} />
                   <PublicPosts userId={answer.userId} onSignIn={onSignIn} />
                 </div>
               }
