@@ -154,8 +154,10 @@ export function createDemoClient(): MatrixClient {
     // --- sending -----------------------------------------------------------------------------
     sendEvent: async (roomId: string, ...rest: unknown[]) => {
       // Real signature is overloaded on whether a threadId is passed; normalise both shapes.
+      // A thread ID is an event ID ('$…') or null; `(roomId, type, content)` has a type there,
+      // and read as a thread it sent reactions with no type, so none ever showed.
       const [maybeThreadId, maybeType, maybeContent] = rest;
-      const isThreaded = typeof maybeThreadId === 'string' || maybeThreadId === null;
+      const isThreaded = maybeThreadId === null || (typeof maybeThreadId === 'string' && maybeThreadId.startsWith('$'));
       const type = (isThreaded ? maybeType : maybeThreadId) as string;
       const content = (isThreaded ? maybeContent : maybeType) as Record<string, unknown>;
       return { event_id: appendToTimeline(roomId, demoEvent(roomId, { type, content })) };
@@ -166,12 +168,19 @@ export function createDemoClient(): MatrixClient {
         event_id: appendToTimeline(roomId, demoEvent(roomId, { type: EventType.RoomMessage, content })),
       };
     },
-    sendTextMessage: async (roomId: string, body: string) => ({
-      event_id: appendToTimeline(
-        roomId,
-        demoEvent(roomId, { type: EventType.RoomMessage, content: { msgtype: 'm.text', body } })
-      ),
-    }),
+    // `(roomId, body)` or `(roomId, threadId, body)`, the composer's; the thread read as the body
+    // sent empty messages.
+    sendTextMessage: async (roomId: string, ...rest: unknown[]) => {
+      const [first, second] = rest;
+      const isThreaded = rest.length > 1 && (first == null || (typeof first === 'string' && first.startsWith('$')));
+      const body = String((isThreaded ? second : first) ?? '');
+      return {
+        event_id: appendToTimeline(
+          roomId,
+          demoEvent(roomId, { type: EventType.RoomMessage, content: { msgtype: 'm.text', body } })
+        ),
+      };
+    },
     sendStickerMessage: async (roomId: string, ...rest: unknown[]) => {
       const content = (rest.find((a) => typeof a === 'object' && a !== null) ?? {}) as Record<string, unknown>;
       return { event_id: appendToTimeline(roomId, demoEvent(roomId, { type: EventType.Sticker, content })) };

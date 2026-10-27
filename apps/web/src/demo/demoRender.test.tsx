@@ -164,6 +164,17 @@ describe('MessageTimeline against the demo world', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(open()).toHaveLength(0);
   });
+
+  it('shows a reaction picked from a message’s actions on that message', async () => {
+    const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+    const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+    fireEvent.click(within(message).getByRole('button', { name: 'Message actions' }));
+    fireEvent.click(within(message).getByRole('button', { name: 'Add reaction' }));
+    // The picker's panel is in the page's body, not the message (ReactionPicker.tsx).
+    fireEvent.click(within(document.body).getByRole('button', { name: '👍' }));
+    await waitFor(() => expect(within(message).getByRole('button', { name: /You reacted with 👍/ })).toBeInTheDocument());
+    expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
+  });
 });
 
 describe('FeedView against the demo world', () => {

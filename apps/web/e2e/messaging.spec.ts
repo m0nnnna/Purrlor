@@ -30,7 +30,8 @@ test('react to a message', async ({ page }) => {
 
   const target = message(page, 'react to this');
   await clickMessageAction(target, 'reaction-picker-toggle');
-  await role(target, 'reaction-picker-panel').getByRole('button', { name: '👍' }).click();
+  // The panel is in the page's body, not the message (ReactionPicker.tsx).
+  await role(page, 'reaction-picker-panel').getByRole('button', { name: '👍' }).click();
   await expect(role(target, 'reaction-pill')).toContainText('1');
 
   await eventually(

@@ -3,9 +3,8 @@
 }
 
 .nu-reaction-picker__panel {
-  position: absolute;
-  top: calc(100% + var(--nu-space-1));
-  right: 0;
+  /* In the page's body, placed by its 😀 from ReactionPicker.tsx (left and top). */
+  position: fixed;
   /* Fits its six columns: a fixed 200px was 14px short, and the grid's scroll box clipped the
      last column. */
   width: max-content;
@@ -17,7 +16,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--nu-space-1);
-  z-index: 50;
+  /* Over the app, under a modal (Modal.css). */
+  z-index: 120;
 }
 
 .nu-reaction-picker__panel--full {
@@ -97,18 +97,20 @@
   color: var(--nu-color-text-primary);
 }
 
-/* Phones: the toolbar's 😀 sits at the screen's left edge, and a panel lined up with its right
-   edge opened off the screen, one column of emoji showing. Centred on the screen instead. */
+/* Phones: centred on the screen, over a dimmed page, and never taller than what's showing of it
+   (dvh: a phone's browser bars take some of 100vh). */
 @media (max-width: 900px) {
   .nu-reaction-picker__panel {
-    position: fixed;
     top: 50%;
     left: 50%;
-    right: auto;
     transform: translate(-50%, -50%);
     max-width: calc(100vw - 2 * var(--nu-space-4));
     max-height: 70vh;
+    max-height: 70dvh;
     overflow-y: auto;
+    box-shadow:
+      0 10px 26px rgba(0, 0, 0, 0.35),
+      0 0 0 100vmax rgba(0, 0, 0, 0.45);
   }
 
   .nu-reaction-picker__panel--full .nu-emoji-picker {
