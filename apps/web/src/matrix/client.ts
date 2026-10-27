@@ -6,6 +6,7 @@ import { secretStorageCallbacks } from './secretStorageCallbacks';
 import { setHomeServer } from './homeServer';
 import { installMemberNameFallback } from './displayName';
 import { installDecryptionRetry } from './decryptRetry';
+import { installPrunedEncryptedGuard } from './prunedEncrypted';
 import { claimSession } from './sessionLock';
 
 // All four databases below (this app's two, plus the Rust crypto engine's own two — see
@@ -210,6 +211,8 @@ export async function startClient(mx: MatrixClient): Promise<void> {
   installMemberNameFallback();
   // Before the first sync, so messages it brings in that can't be decrypted yet are retried too.
   installDecryptionRetry(mx);
+  // Deleted encrypted messages whose server left out that they were deleted (prunedEncrypted.ts).
+  installPrunedEncryptedGuard(mx);
   // 30 events per room from sync rather than the SDK's 8: with only 8, a room whose latest events
   // were reactions, edits or state changes opened empty and had to ask for history first.
   await mx.startClient({ lazyLoadMembers: true, threadSupport: true, initialSyncLimit: 30 });
