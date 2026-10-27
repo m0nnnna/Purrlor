@@ -126,14 +126,18 @@ export function isGuestIdentity(identity: string): boolean {
   return identity.startsWith('guest-');
 }
 
-/** The streamer: sends their screen, its sound and their microphone, and receives nothing. */
+/**
+ * The streamer: sends their screen, its sound and their microphone. `canSubscribe` stays on: without
+ * it LiveKit never brings up the connection that clients wait for, and joining times out. Nobody
+ * else in a stream room sends anything, so there is nothing to receive anyway.
+ */
 export function streamerGrant(room: string): VideoGrant {
   return {
     room,
     roomJoin: true,
     canPublish: true,
     canPublishSources: [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO, TrackSource.MICROPHONE],
-    canSubscribe: false,
+    canSubscribe: true,
     canPublishData: false,
     canUpdateOwnMetadata: false,
   };

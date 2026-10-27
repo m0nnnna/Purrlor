@@ -93,10 +93,11 @@ describe('ids and titles', () => {
 });
 
 describe('grants', () => {
-  it('lets the streamer send their screen, its sound and their microphone, and receive nothing', () => {
+  it('lets the streamer send their screen, its sound and their microphone', () => {
     const grant = streamerGrant('stream-x');
     assert.equal(grant.canPublish, true);
-    assert.equal(grant.canSubscribe, false);
+    // Off, LiveKit never connects them (checked against a real server).
+    assert.equal(grant.canSubscribe, true);
     assert.equal(grant.canPublishData, false);
     assert.deepEqual(grant.canPublishSources, [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO, TrackSource.MICROPHONE]);
   });

@@ -116,7 +116,7 @@ channels (`matrix-…`): a voice token never names a stream room and the other w
 
 | Who | Identity | Grants | Token lifetime |
 | --- | --- | --- | --- |
-| Streamer | their Matrix ID | `canPublish` (sources: screen share, screen-share audio, microphone), `canSubscribe: false`, `canPublishData: false`, `canUpdateOwnMetadata: false` | 12 h |
+| Streamer | their Matrix ID | `canPublish` (sources: screen share, screen-share audio, microphone), `canSubscribe` (LiveKit never connects a client without it; nobody else in the room sends anything), `canPublishData: false`, `canUpdateOwnMetadata: false` | 12 h |
 | Signed-in viewer | their Matrix ID, `#`, 8 random hex digits | `canSubscribe`, `hidden`, nothing else | 5 min (only for joining) |
 | Signed-out viewer | `guest-` + 16 random characters | `canSubscribe`, `hidden`, nothing else | 5 min |
 
