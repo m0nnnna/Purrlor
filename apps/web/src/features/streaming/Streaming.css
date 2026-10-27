@@ -232,25 +232,88 @@
 
 .nu-stream-player__controls {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 10px 8px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 75%));
+  transition: opacity 0.2s;
+}
+
+/* Playing and the mouse is still: the controls and the cursor get out of the way. */
+.nu-stream-player[data-nu-idle='true'] .nu-stream-player__controls {
+  opacity: 0;
+}
+
+.nu-stream-player[data-nu-idle='true'] {
+  cursor: none;
 }
 
 .nu-stream-player__controls button {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
+  gap: 6px;
+  min-width: 36px;
+  height: 36px;
+  justify-content: center;
+  padding: 0 8px;
   border: 0;
   border-radius: 6px;
-  background: rgb(0 0 0 / 65%);
+  background: none;
   color: #fff;
+  font-size: 14px;
   cursor: pointer;
 }
 
-.nu-stream-player__controls button[aria-pressed='true'] {
+.nu-stream-player__controls button:hover {
+  background: rgb(255 255 255 / 15%);
+}
+
+.nu-stream-player__controls button[data-nu-role='stream-audio-only'][aria-pressed='true'] {
   background: rgb(255 255 255 / 25%);
+}
+
+.nu-stream-player__volume {
+  width: 90px;
+  accent-color: #fff;
+  cursor: pointer;
+}
+
+.nu-stream-player__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.nu-stream-player__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nu-color-danger);
+}
+
+.nu-stream-player__spacer {
+  flex: 1;
+}
+
+/* Full screen: the whole player, so the controls come along, and no rounded corners. */
+.nu-stream-player:fullscreen {
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+@media (max-width: 480px) {
+  .nu-stream-player__volume,
+  .nu-stream-player__controls button[data-nu-role='stream-audio-only'] span {
+    display: none;
+  }
 }
 
 .nu-stream-player__error {
@@ -336,9 +399,17 @@
 
 .nu-stream-watch {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 16px;
-  max-width: 1400px;
+  /* In a flex column, auto margins alone would shrink the grid to its content. */
+  width: 100%;
+  max-width: 2400px;
+  margin: 0 auto;
+}
+
+/* As wide as the column allows, but never taller than the window leaves room for. */
+.nu-stream-watch .nu-stream-player {
+  width: min(100%, calc((100dvh - 200px) * 16 / 9));
   margin: 0 auto;
 }
 
@@ -379,7 +450,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: min(70vh, 640px);
+  height: min(calc(100dvh - 120px), 900px);
   border: 1px solid var(--nu-color-border);
   border-radius: 10px;
   background: var(--nu-color-bg-secondary);

@@ -235,6 +235,14 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M4 20V10M12 20V4M20 20v-7" />
     </>
   ),
+  volumeOff: (
+    <>
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      <path d="m22 9-6 6M16 9l6 6" />
+    </>
+  ),
+  maximize: <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" />,
+  minimize: <path d="M3 8h5V3M16 3v5h5M21 16h-5v5M8 21v-5H3" />,
   paw: (
     <g fill="currentColor" stroke="none">
       <ellipse cx="12" cy="16.2" rx="5.2" ry="4.4" />

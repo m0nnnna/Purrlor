@@ -37,24 +37,45 @@ export default function StreamPlayer({ base, stream, mx }: { base: string; strea
 }
 
 function LivePlayer({ base, stream, mx }: { base: string; stream: PublicStream; mx?: MatrixClient }) {
+  const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLDivElement>(null);
   const roomRef = useRef<Room>();
   const identityRef = useRef<string>();
   const leavingRef = useRef(false);
+  const idleRef = useRef<number>();
   const [phase, setPhase] = useState<'idle' | 'connecting' | 'playing'>('idle');
   const [error, setError] = useState<string>();
   const [audioOnly, setAudioOnly] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [hasVideo, setHasVideo] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [idle, setIdle] = useState(false);
+  const soundRef = useRef({ muted, volume });
+  soundRef.current = { muted, volume };
 
   useEffect(
     () => () => {
       leavingRef.current = true;
+      window.clearTimeout(idleRef.current);
       void roomRef.current?.disconnect();
     },
     []
   );
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === boxRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  useEffect(() => {
+    audioRef.current?.querySelectorAll('audio').forEach((element) => {
+      element.muted = muted;
+      element.volume = volume;
+    });
+  }, [muted, volume]);
 
   const play = async (resuming = false) => {
     setError(undefined);
@@ -69,7 +90,10 @@ function LivePlayer({ base, stream, mx }: { base: string; stream: PublicStream; 
           track.attach(videoRef.current);
           setHasVideo(true);
         } else if (track.kind === Track.Kind.Audio && audioRef.current) {
-          audioRef.current.append(track.attach());
+          const element = track.attach();
+          element.muted = soundRef.current.muted;
+          element.volume = soundRef.current.volume;
+          audioRef.current.append(element);
         }
       });
       room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
@@ -87,10 +111,20 @@ function LivePlayer({ base, stream, mx }: { base: string; stream: PublicStream; 
       await room.connect(url, token);
       await room.startAudio().catch(() => undefined);
       setPhase('playing');
+      wake();
     } catch (err) {
       setPhase('idle');
       setError(err instanceof StreamError ? refusalText(err) : 'Couldn’t connect to the stream. Try again in a moment.');
     }
+  };
+
+  /** Pausing a live stream leaves it, so nothing is sent while paused; play joins again at the live edge. */
+  const pause = () => {
+    const room = roomRef.current;
+    roomRef.current = undefined;
+    setPhase('idle');
+    setHasVideo(false);
+    void room?.disconnect();
   };
 
   const toggleAudioOnly = () => {
@@ -101,15 +135,49 @@ function LivePlayer({ base, stream, mx }: { base: string; stream: PublicStream; 
     );
   };
 
-  const toggleMuted = () => {
-    const next = !muted;
-    setMuted(next);
-    audioRef.current?.querySelectorAll('audio').forEach((element) => (element.muted = next));
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void boxRef.current?.requestFullscreen?.().catch(() => undefined);
   };
 
+  const changeVolume = (value: number) => {
+    setVolume(value);
+    setMuted(value === 0);
+  };
+
+  const toggleMuted = () => {
+    if (!silent) return setMuted(true);
+    setMuted(false);
+    if (volume === 0) setVolume(1);
+  };
+
+  /** The controls hide after 3 s without the mouse moving, while the stream plays. */
+  const wake = () => {
+    setIdle(false);
+    window.clearTimeout(idleRef.current);
+    idleRef.current = window.setTimeout(() => setIdle(true), 3000);
+  };
+
+  const silent = muted || volume === 0;
   return (
-    <div className="nu-stream-player" data-nu-role="stream-player" data-nu-phase={phase}>
-      <video ref={videoRef} className="nu-stream-player__video" data-nu-role="stream-video" playsInline muted hidden={phase !== 'playing' || audioOnly} />
+    <div
+      ref={boxRef}
+      className="nu-stream-player"
+      data-nu-role="stream-player"
+      data-nu-phase={phase}
+      data-nu-idle={phase === 'playing' && idle ? 'true' : undefined}
+      onMouseMove={wake}
+      onMouseLeave={() => setIdle(true)}
+    >
+      <video
+        ref={videoRef}
+        className="nu-stream-player__video"
+        data-nu-role="stream-video"
+        playsInline
+        muted
+        hidden={phase !== 'playing' || audioOnly}
+        onDoubleClick={toggleFullscreen}
+      />
       <div ref={audioRef} hidden />
       {phase !== 'playing' && (
         <button
@@ -129,15 +197,35 @@ function LivePlayer({ base, stream, mx }: { base: string; stream: PublicStream; 
       {phase === 'playing' && audioOnly && <div className="nu-stream-player__audio-only">Listening only. The video is off to save data.</div>}
       {phase === 'playing' && !audioOnly && !hasVideo && <div className="nu-stream-player__audio-only">Waiting for the picture…</div>}
       {phase === 'playing' && (
-        <div className="nu-stream-player__controls">
-          <button type="button" onClick={toggleMuted} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} data-nu-role="stream-mute">
-            <Icon name={muted ? 'headphonesOff' : 'headphones'} size={16} />
+        <div className="nu-stream-player__controls" data-nu-role="stream-controls">
+          <button type="button" onClick={pause} title="Pause" aria-label="Pause" data-nu-role="stream-pause">
+            <Icon name="pause" size={20} />
           </button>
+          <button type="button" onClick={toggleMuted} title={silent ? 'Unmute' : 'Mute'} aria-label={silent ? 'Unmute' : 'Mute'} aria-pressed={silent} data-nu-role="stream-mute">
+            <Icon name={silent ? 'volumeOff' : 'volume'} size={20} />
+          </button>
+          <input
+            type="range"
+            className="nu-stream-player__volume"
+            min={0}
+            max={1}
+            step={0.05}
+            value={silent ? 0 : volume}
+            onChange={(event) => changeVolume(Number(event.target.value))}
+            aria-label="Volume"
+            data-nu-role="stream-volume"
+          />
+          <span className="nu-stream-player__live">
+            <span className="nu-stream-player__live-dot" />
+            LIVE
+          </span>
+          <span className="nu-stream-player__spacer" />
           <button type="button" onClick={toggleAudioOnly} aria-pressed={audioOnly} data-nu-role="stream-audio-only">
-            {audioOnly ? 'Show video' : 'Audio only'}
+            <Icon name="headphones" size={18} />
+            <span>{audioOnly ? 'Show video' : 'Audio only'}</span>
           </button>
-          <button type="button" title="Full screen" onClick={() => void videoRef.current?.requestFullscreen?.().catch(() => undefined)} disabled={audioOnly}>
-            <Icon name="monitor" size={16} />
+          <button type="button" onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen' : 'Full screen'} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} data-nu-role="stream-fullscreen">
+            <Icon name={fullscreen ? 'minimize' : 'maximize'} size={20} />
           </button>
         </div>
       )}
