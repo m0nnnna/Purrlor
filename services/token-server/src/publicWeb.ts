@@ -654,10 +654,24 @@ export function pageItemPreview(
   const records = (value: unknown) => (Array.isArray(value) ? value.filter(isRecord) : []);
   const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : undefined);
   const mxc = (value: unknown) => (isMxc(value) ? value : undefined);
+  // Album IDs as the web client reads them (profilePage.ts): a missing or odd ID is `a<index>`,
+  // albums with nothing in them don't count, and a later album sharing an ID anywhere on the page
+  // gets `_` added, so each album has its own link.
+  const seen = { music: new Set<string>(), art: new Set<string>() };
+  const albumsOf = (block: Record<string, unknown>, which: 'music' | 'art') =>
+    (Array.isArray(block.albums) ? block.albums : []).flatMap((album: unknown, index): Record<string, unknown>[] => {
+      if (!isRecord(album)) return [];
+      const filled = which === 'music' ? records(album.tracks).length > 0 : !!text(album.title) && records(album.pieces).length > 0;
+      if (!filled) return [];
+      let albumId = typeof album.id === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(album.id) ? album.id : `a${index}`;
+      while (seen[which].has(albumId)) albumId = `${albumId}_`;
+      seen[which].add(albumId);
+      return [{ ...album, id: albumId }];
+    });
   for (const block of records(page?.blocks)) {
-    if (kind === 'music' && block.type === 'music') {
-      const album = records(block.albums).find((a) => a.id === id);
-      if (!album) continue;
+    if (block.type === 'music') {
+      const album = albumsOf(block, 'music').find((a) => a.id === id);
+      if (kind !== 'music' || !album) continue;
       const tracks = records(album.tracks);
       const albumTitle = text(album.title) ?? 'Untitled album';
       if (number !== undefined) {
@@ -673,9 +687,9 @@ export function pageItemPreview(
         image: mxc(album.cover),
       };
     }
-    if (kind === 'art' && (block.type === 'gallery' || block.type === 'art')) {
-      const album = records(block.albums).find((a) => a.id === id);
-      if (!album) continue;
+    if (block.type === 'gallery' || block.type === 'art') {
+      const album = albumsOf(block, 'art').find((a) => a.id === id);
+      if (kind !== 'art' || !album) continue;
       const pieces = records(album.pieces);
       const albumTitle = text(album.title) ?? 'Gallery';
       if (number !== undefined) {

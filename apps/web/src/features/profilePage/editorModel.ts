@@ -98,8 +98,9 @@ export function addBlock(page: ProfilePage, type: PageBlockType, side: PageSide 
       case 'commissions':
         return { id, type };
       case 'music':
-        // Ready for its first tracks: uploading goes into an album.
-        return { id, type, albums: [{ id: 'a0', tracks: [] }] };
+        // Ready for its first tracks: uploading goes into an album. Its ID is new to the page,
+        // since a link to an album names it by ID alone.
+        return { id, type, albums: [{ id: `a${Math.random().toString(36).slice(2, 8)}`, tracks: [] }] };
     }
   })();
   return { ...page, blocks: [...page.blocks, type === 'song' ? block : { ...block, side }] };

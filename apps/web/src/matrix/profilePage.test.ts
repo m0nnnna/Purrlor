@@ -216,6 +216,17 @@ describe('music blocks', () => {
     expect(music(tracks, { title: 'My songs' })).toEqual([{ id: 'm', type: 'music', title: 'My songs', albums: [{ id: 'a0', tracks }] }]);
   });
 
+  it('keeps album IDs unique across the page, so each album has its own link', () => {
+    const blocks = page({
+      blocks: [
+        { id: 'm1', type: 'music', albums: [{ id: 'a0', title: 'First', tracks: [track()] }] },
+        { id: 'm2', type: 'music', albums: [{ id: 'a0', title: 'Second', tracks: [track()] }] },
+        { id: 'm3', type: 'music', tracks: [track()] },
+      ],
+    })?.blocks;
+    expect(blocks?.map((block) => (block.type === 'music' ? block.albums.map((album) => album.id) : []))).toEqual([['a0'], ['a0_'], ['a0__']]);
+  });
+
   it('only keeps mxc:// files', () => {
     for (const url of ['https://example.org/song.mp3', 'http://purr.example.org/a', 'javascript:alert(1)', 'data:audio/mpeg;base64,AAAA', 'mxc://purr.example.org/../../etc', 'mxc://a/b c']) {
       expect(music([track({ url })])).toEqual([]);

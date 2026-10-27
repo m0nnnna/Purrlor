@@ -37,6 +37,11 @@ server to connect to (`purr.meowops.net` by default, or your own deployment); cl
 name in the title bar to switch later. It stays in the tray for notifications and can start with
 Windows. See [`apps/desktop/README.md`](apps/desktop/README.md).
 
+### Terminal client (Linux)
+Live in a terminal? Download **purrlor-tui-linux-amd64** (or `-arm64`) from the newest `tui-v*`
+release on the [releases page](https://github.com/m0nnnna/Purrlor/releases): one static binary with
+Spaces, channels, replies, reactions and end-to-end encryption. See [`apps/tui/README.md`](apps/tui/README.md).
+
 ### Android app
 Install **Purrlor.apk** from the [releases page](https://github.com/m0nnnna/Purrlor/releases). On
 first launch it asks which Purrlor server to open (`purr.meowops.net` by default, or your own

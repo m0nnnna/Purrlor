@@ -1,5 +1,5 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Direction, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
+import { Direction, EventStatus, M_POLL_START, type MatrixClient, type MatrixEvent, type Room, type RoomMember } from 'matrix-js-sdk';
 import { useAtom, useSetAtom } from 'jotai';
 import { useAutoGrow } from '../../components/useAutoGrow';
 import { Avatar, nameHue } from '../../components/Avatar';
@@ -52,6 +52,7 @@ import { WatchPartyCard } from '../calendar/WatchPartyCard';
 import { NOTICE_EVENT_KEY } from '../../matrix/watchParty';
 import { ReactionBar } from './ReactionBar';
 import { ReactionPicker } from './ReactionPicker';
+import { useSwipeToReply } from './useSwipeToReply';
 import { CollapsibleText } from './CollapsibleText';
 import { extractFirstUrl, renderMessageText } from './renderMessageText';
 import { ThreadPanel } from './ThreadPanel';
@@ -303,6 +304,8 @@ const MessageRow = memo(function MessageRow({
   // until event.status clears (see useRoomTimeline.ts's LocalEchoUpdated listener for the
   // re-render that unlocks this the moment it's safe).
   const isPending = event.status !== null;
+  // Gave up sending (Composer.tsx doesn't wait on a send, so this is where a failure shows).
+  const notSent = event.status === EventStatus.NOT_SENT;
   // Only plain m.text/m.notice bodies get a preview card — m.emote's body is a third-person
   // action line, not really "a message with a link in it" in the same sense, and media/edit
   // states render their own content instead of this branch at all.
@@ -372,6 +375,12 @@ const MessageRow = memo(function MessageRow({
   const ircMode = useIrcMode();
   const hasActions = !event.isDecryptionFailure() && !!eventId && !isEditing && !isPending;
   const closeActions = () => onActions(null);
+  const replyToThis = () => {
+    if (!eventId) return;
+    onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) });
+    closeActions();
+  };
+  const swipe = useSwipeToReply(hasActions ? replyToThis : undefined);
 
   return (
     <div
@@ -381,12 +390,21 @@ const MessageRow = memo(function MessageRow({
         mentionsMe && 'nu-timeline__message--mentions-me',
         isHighlighted && 'nu-timeline__message--highlighted',
         actionsOpen && hasActions && 'nu-timeline__message--actions-open',
+        isPending && !notSent && 'nu-timeline__message--sending',
+        notSent && 'nu-timeline__message--not-sent',
       ]
         .filter(Boolean)
         .join(' ')}
       data-nu-role="timeline-message"
       data-nu-event-id={eventId ?? undefined}
+      {...swipe.handlers}
     >
+      {/* Revealed from the left edge as a phone swipes the message right (useSwipeToReply.ts). */}
+      {swipe.swiping && (
+        <span className={['nu-timeline__message-swipe-reply', swipe.armed && 'nu-timeline__message-swipe-reply--armed'].filter(Boolean).join(' ')} aria-hidden="true">
+          <Icon name="reply" size={18} />
+        </span>
+      )}
       {ircMode ? (
         // IRC mode: the time in a column down the left on every line, as in the mockup's lists
         // (the picture is a tiny one in the name row instead). The day is on the divider above, so the time of day is enough here.
@@ -410,21 +428,33 @@ const MessageRow = memo(function MessageRow({
         </button>
       )}
       <div className="nu-timeline__message-body">
-        {/* First in the body and floated right (MessageTimeline.css), so text wraps around it. A
-            click or tap opens the message's actions underneath it (no hover, so it works on a
-            phone); opening another message's closes these. */}
+        {/* First in the body and floated right (MessageTimeline.css), so text wraps around it and
+            nothing is covered. Reply is one click on a computer (phones swipe the message right
+            instead, and keep the space for text); the ⋯ opens the rest underneath the message. */}
         {hasActions && (
-          <button
-            type="button"
-            className="nu-timeline__message-menu-toggle"
-            data-nu-role="timeline-message-menu"
-            title={actionsOpen ? 'Close message actions' : 'Message actions'}
-            aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
-            aria-expanded={actionsOpen}
-            onClick={() => onActions(actionsOpen ? null : eventId)}
-          >
-            <Icon name="more" size={16} />
-          </button>
+          <span className="nu-timeline__message-quick" data-nu-role="timeline-message-quick">
+            <button
+              type="button"
+              className="nu-timeline__message-menu-toggle nu-timeline__message-quick-reply"
+              data-nu-role="timeline-quick-reply"
+              title="Reply"
+              aria-label="Reply"
+              onClick={replyToThis}
+            >
+              <Icon name="reply" size={16} />
+            </button>
+            <button
+              type="button"
+              className="nu-timeline__message-menu-toggle"
+              data-nu-role="timeline-message-menu"
+              title={actionsOpen ? 'Close message actions' : 'Message actions'}
+              aria-label={actionsOpen ? 'Close message actions' : 'Message actions'}
+              aria-expanded={actionsOpen}
+              onClick={() => onActions(actionsOpen ? null : eventId)}
+            >
+              <Icon name="more" size={16} />
+            </button>
+          </span>
         )}
         {replyEventId && <ReplyPreview room={room} replyEventId={replyEventId} />}
         {(!isGrouped || editedEvent || isPinned) && (
@@ -606,6 +636,17 @@ const MessageRow = memo(function MessageRow({
             )}
           </button>
         )}
+        {notSent && (
+          <div className="nu-timeline__message-not-sent" data-nu-role="timeline-not-sent" role="status">
+            <span>Not sent</span>
+            <button type="button" data-nu-role="timeline-resend" onClick={() => void mx.resendEvent(event, room).catch((err: unknown) => console.error('Failed to send message', err))}>
+              Retry
+            </button>
+            <button type="button" data-nu-role="timeline-cancel-send" onClick={() => mx.cancelPendingEvent(event)}>
+              Delete
+            </button>
+          </div>
+        )}
         {readers.length > 0 && (
           <div className="nu-timeline__message-readers" data-nu-role="timeline-readers" title={readers.map((r) => r.name).join(', ')}>
             {readers.slice(0, 5).map((reader) => (
@@ -629,10 +670,7 @@ const MessageRow = memo(function MessageRow({
               data-nu-role="timeline-reply-action"
               title="Reply"
               aria-label="Reply"
-              onClick={() => {
-                onReply({ eventId, senderId: event.getSender(), senderName, preview: previewTextFor(event) });
-                closeActions();
-              }}
+              onClick={replyToThis}
             >
               <Icon name="reply" size={16} />
             </button>

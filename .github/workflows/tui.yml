@@ -1,0 +1,61 @@
+name: TUI
+
+# Builds the terminal client (apps/tui), a static Go binary. Pushing a tag named tui-vX.Y.Z
+# also publishes the Linux binaries as a GitHub release with that version.
+on:
+  push:
+    branches: [master]
+    tags: ['tui-v*']
+    paths: ['apps/tui/**', '.github/workflows/tui.yml']
+  pull_request:
+    paths: ['apps/tui/**', '.github/workflows/tui.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: apps/tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/tui/go.mod
+          cache-dependency-path: apps/tui/go.sum
+      - name: Vet and test
+        run: |
+          go vet -tags goolm ./...
+          go test -tags goolm ./...
+      - name: Build
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          version=dev
+          case "$GITHUB_REF" in refs/tags/tui-v*) version="${GITHUB_REF_NAME#tui-v}" ;; esac
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            GOOS=linux GOARCH=$arch go build -trimpath -tags goolm \
+              -ldflags "-s -w -X main.version=$version" -o "dist/purrlor-tui-linux-$arch" .
+          done
+          (cd dist && sha256sum purrlor-tui-linux-* > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: purrlor-tui
+          path: apps/tui/dist/*
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/tui-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#tui-v}"
+          # Not marked Latest: releases/latest stays on the apps most people download.
+          gh release create "$GITHUB_REF_NAME" dist/purrlor-tui-linux-amd64 dist/purrlor-tui-linux-arm64 dist/SHA256SUMS \
+            --title "Purrlor TUI $version" --verify-tag --latest=false \
+            --notes-file ../../docs/releases/$GITHUB_REF_NAME.md

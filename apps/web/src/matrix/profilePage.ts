@@ -595,6 +595,17 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
   let galleryPieces = 0;
   let tracks = 0;
   let musicAlbums = 0;
+  // A link names an album by its ID alone (`/@name/music/<album>`), so album IDs are kept unique
+  // across the page's blocks, not only within one: a later album sharing an ID gets `_` added,
+  // as within a block. The token server's link previews number them the same way.
+  const albumIds = { music: new Set<string>(), gallery: new Set<string>() };
+  const uniqueAlbums = <A extends { id: string }>(albums: A[], seenIds: Set<string>): A[] =>
+    albums.map((album) => {
+      let albumId = album.id;
+      while (seenIds.has(albumId)) albumId = `${albumId}_`;
+      seenIds.add(albumId);
+      return albumId === album.id ? album : { ...album, id: albumId };
+    });
   for (const [index, item] of raw.entries()) {
     if (blocks.length >= LIMITS.blocks) break;
     const rawId = isRecord(item) ? item.id : undefined;
@@ -616,6 +627,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
       if (!limited) continue;
       block = limited;
       galleryPieces += galleryPieceCount(block);
+      block = { ...block, albums: uniqueAlbums(block.albums, albumIds.gallery) };
     }
     if (block.type === 'music') {
       const limited = limitMusic(block, LIMITS.tracks - tracks, LIMITS.musicAlbums - musicAlbums);
@@ -623,6 +635,7 @@ function readBlocks(raw: unknown, backgroundImages: number): PageBlock[] {
       block = limited;
       tracks += musicTrackCount(block);
       musicAlbums += block.albums.length;
+      block = { ...block, albums: uniqueAlbums(block.albums, albumIds.music) };
     }
     images += blockImageCount(block);
     seen.add(id);
