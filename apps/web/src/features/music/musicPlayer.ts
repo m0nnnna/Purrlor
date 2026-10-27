@@ -1,22 +1,7 @@
 import { atom } from 'jotai';
-import type { MusicTrack } from '../../matrix/profilePage';
+import type { MusicQueue, RepeatMode } from './musicQueue';
 
-/** A track in the player's queue, with what the player shows beside it. */
-export type QueueItem = {
-  track: MusicTrack;
-  albumTitle?: string;
-  /** The album's cover, an mxc:// page image. */
-  cover?: string;
-  /** Whose page it's from, for "from <name>". */
-  ownerId?: string;
-};
-
-/**
- * What the app-wide player is playing: one album's tracks and which one is on. `source` names
- * where it came from (an owner, a block and an album) so a page can tell its own album is the one
- * playing. Null when nothing has been played, or the player was closed.
- */
-export type MusicQueue = { source: string; items: QueueItem[]; index: number };
+export type { MusicQueue, QueueItem, RepeatMode } from './musicQueue';
 
 export const musicQueueAtom = atom<MusicQueue | null>(null);
 
@@ -55,3 +40,63 @@ export function toggleMusic(): void {
 export function albumSource(ownerId: string | undefined, blockId: string, albumId: string): string {
   return `${ownerId ?? ''}/${blockId}/${albumId}`;
 }
+
+/** Whether the queue plays in a shuffled order, and what happens at the end of a track or the queue. Both are remembered on this device. */
+const SHUFFLE_KEY = 'nekous_music_shuffle';
+const REPEAT_KEY = 'nekous_music_repeat';
+
+export function readMusicShuffle(): boolean {
+  try {
+    return localStorage.getItem(SHUFFLE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function saveMusicShuffle(shuffle: boolean): void {
+  try {
+    localStorage.setItem(SHUFFLE_KEY, shuffle ? '1' : '0');
+  } catch {
+    // Not remembered this time; it still applies now.
+  }
+}
+
+export function readMusicRepeat(): RepeatMode {
+  try {
+    const stored = localStorage.getItem(REPEAT_KEY);
+    return stored === 'all' || stored === 'one' ? stored : 'off';
+  } catch {
+    return 'off';
+  }
+}
+
+export function saveMusicRepeat(repeat: RepeatMode): void {
+  try {
+    localStorage.setItem(REPEAT_KEY, repeat);
+  } catch {
+    // As above.
+  }
+}
+
+const shuffleBaseAtom = atom(readMusicShuffle());
+const repeatBaseAtom = atom(readMusicRepeat());
+
+/** Shuffle on or off. MusicPlayerHost keeps the queue's play order in step with it. */
+export const musicShuffleAtom = atom(
+  (get) => get(shuffleBaseAtom),
+  (_get, set, shuffle: boolean) => {
+    set(shuffleBaseAtom, shuffle);
+    saveMusicShuffle(shuffle);
+  }
+);
+
+export const musicRepeatAtom = atom(
+  (get) => get(repeatBaseAtom),
+  (_get, set, repeat: RepeatMode) => {
+    set(repeatBaseAtom, repeat);
+    saveMusicRepeat(repeat);
+  }
+);
+
+/** Whether the now-playing view is open. */
+export const musicNowPlayingOpenAtom = atom(false);

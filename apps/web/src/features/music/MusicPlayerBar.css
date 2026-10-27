@@ -61,6 +61,47 @@
   object-fit: cover;
 }
 
+.nu-music-player__open {
+  appearance: none;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--nu-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-music-player__open:hover .nu-music-player__text strong {
+  text-decoration: underline;
+}
+
+.nu-music-player__button--on {
+  color: var(--nu-color-accent);
+}
+
+.nu-music-player__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--nu-color-border);
+  pointer-events: none;
+}
+
+.nu-music-player__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--nu-color-accent);
+}
+
 .nu-music-player__text {
   display: flex;
   flex-direction: column;

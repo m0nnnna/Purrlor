@@ -1,0 +1,199 @@
+.nu-now-playing {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--nu-space-3);
+  padding: var(--nu-space-4);
+  min-width: 0;
+  color: var(--nu-color-text-primary);
+}
+
+.nu-now-playing__cover {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 280px);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-accent);
+}
+
+.nu-now-playing__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nu-now-playing__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  min-width: 0;
+}
+
+.nu-now-playing__text strong {
+  font-size: var(--nu-font-size-lg);
+  overflow-wrap: anywhere;
+}
+
+.nu-now-playing__text span {
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.nu-now-playing__seek {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: var(--nu-font-size-xs);
+}
+
+.nu-now-playing__seek input,
+.nu-now-playing__extras input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--nu-color-accent);
+}
+
+.nu-now-playing__transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nu-space-3);
+}
+
+.nu-now-playing__button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nu-color-text-secondary);
+  cursor: pointer;
+}
+
+.nu-now-playing__button:hover:not(:disabled) {
+  background: var(--nu-color-bg-elevated);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-now-playing__button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nu-now-playing__button--on {
+  color: var(--nu-color-accent);
+}
+
+.nu-now-playing__button--main {
+  width: 52px;
+  height: 52px;
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+}
+
+.nu-now-playing__button--main:hover:not(:disabled) {
+  background: var(--nu-color-accent);
+  color: var(--nu-color-on-accent);
+  filter: brightness(1.1);
+}
+
+.nu-now-playing__extras {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-2) var(--nu-space-4);
+}
+
+.nu-now-playing__extras .nu-music-player__volume {
+  flex: 1 1 140px;
+  max-width: 220px;
+}
+
+.nu-now-playing__queue h3 {
+  margin: 0 0 var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-now-playing__queue ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nu-now-playing__empty {
+  margin: 0;
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-now-playing__row {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-1);
+  min-width: 0;
+}
+
+.nu-now-playing__play {
+  appearance: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--nu-space-1) var(--nu-space-2);
+  border: none;
+  border-radius: var(--nu-radius-sm);
+  background: transparent;
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nu-now-playing__play:hover {
+  background: var(--nu-color-bg-elevated);
+}
+
+.nu-now-playing__play strong,
+.nu-now-playing__play span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-now-playing__play span {
+  font-size: var(--nu-font-size-xs);
+  color: var(--nu-color-text-muted);
+}
+
+/* A phone: the panel takes the whole screen. */
+@media (max-width: 640px) {
+  .nu-modal:has(.nu-now-playing) .nu-modal__panel {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+  }
+}

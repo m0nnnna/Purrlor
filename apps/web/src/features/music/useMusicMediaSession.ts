@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useAtom } from 'jotai';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { musicAudio, musicQueueAtom } from './musicPlayer';
+import { useMusicTransport } from './useMusicTransport';
 
 /**
  * Tells the system what the player is playing (the Media Session API), so the keyboard's media
@@ -11,6 +12,8 @@ import { musicAudio, musicQueueAtom } from './musicPlayer';
  */
 export function useMusicMediaSession(): void {
   const [queue, setQueue] = useAtom(musicQueueAtom);
+  const transport = useMusicTransport();
+  const { next, previous, canNext } = transport;
   const item = queue?.items[queue.index];
   const cover = useMediaUrl(item?.cover, { width: 256, height: 256, method: 'scale', blob: true });
 
@@ -27,19 +30,11 @@ export function useMusicMediaSession(): void {
       album: item.albumTitle ?? '',
       artwork: cover ? [{ src: cover, sizes: '256x256' }] : [],
     });
-    const go = (index: number) => {
-      if (index >= 0 && index < queue.items.length) setQueue({ ...queue, index });
-    };
     const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
       ['play', () => void musicAudio()?.play().catch(() => undefined)],
       ['pause', () => musicAudio()?.pause()],
-      // Back to the start of this track if it's been playing a while, as players do; otherwise the one before.
-      ['previoustrack', () => {
-        const audio = musicAudio();
-        if (audio && audio.currentTime > 3) audio.currentTime = 0;
-        else go(queue.index - 1);
-      }],
-      ['nexttrack', queue.index + 1 < queue.items.length ? () => go(queue.index + 1) : null],
+      ['previoustrack', previous],
+      ['nexttrack', canNext ? next : null],
       ['stop', () => setQueue(null)],
     ];
     for (const [action, handler] of handlers) {
@@ -58,5 +53,5 @@ export function useMusicMediaSession(): void {
         }
       }
     };
-  }, [queue, item, cover, setQueue]);
+  }, [queue, item, cover, setQueue, previous, next, canNext]);
 }

@@ -160,6 +160,27 @@ describe('the music block', () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 
+  it('opens the now-playing view from the player, with the song link, repeat one and a reorderable up next', () => {
+    renderPage(shelf);
+    fireEvent.click(all('music-album-card')[0]);
+    fireEvent.click(one('music-play-album'));
+    fireEvent.click(one('modal-close'));
+    fireEvent.click(one('music-player-open'));
+    expect(one('music-now-title').textContent).toBe('Opening');
+    expect(one('music-now-link').getAttribute('data-nu-link')).toBe('http://localhost:3000/@luna/music/lp/1');
+    expect(all('music-up-next-item')).toHaveLength(1);
+    fireEvent.click(one('music-repeat'));
+    fireEvent.click(one('music-repeat'));
+    expect(localStorage.getItem('nekous_music_repeat')).toBe('one');
+    act(() => void fireEvent.ended(audio() as HTMLAudioElement));
+    expect(audio()?.getAttribute('src')).toContain('/lp1');
+    fireEvent.click(one('music-up-next-play'));
+    expect(audio()?.getAttribute('src')).toContain('/lp2');
+    expect(one('music-now-title').textContent).toBe('Closing');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(all('music-now-playing')).toEqual([]);
+  });
+
   it('goes back and on from the player, and closing it stops the music', () => {
     renderPage(shelf);
     fireEvent.click(all('music-album-card')[0]);

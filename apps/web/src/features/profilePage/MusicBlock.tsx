@@ -83,7 +83,7 @@ function AlbumDialog({
     const next: MusicQueue = {
       source,
       index,
-      items: album.tracks.map((track) => ({ track, albumTitle: album.title, cover: album.cover, ownerId })),
+      items: album.tracks.map((track, i) => ({ track, albumTitle: album.title, cover: album.cover, ownerId, albumId: album.id, trackNumber: i + 1 })),
     };
     setQueue(next);
   };

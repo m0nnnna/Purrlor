@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useMediaUrl } from '../../matrix/hooks/useMediaUrl';
 import { readListenVolume } from '../voice/listenVolume';
 import { useMusicMediaSession } from './useMusicMediaSession';
-import { musicFailedAtom, musicPlayingAtom, musicQueueAtom, musicTimeAtom, registerMusicAudio } from './musicPlayer';
+import { NowPlayingView } from './NowPlayingView';
+import { musicFailedAtom, musicPlayingAtom, musicQueueAtom, musicShuffleAtom, musicTimeAtom, registerMusicAudio } from './musicPlayer';
+import { withShuffle } from './musicQueue';
+import { useMusicTransport } from './useMusicTransport';
 
 /**
  * The app's one audio element for page music, mounted once beside everything else (the app shell
@@ -19,7 +22,16 @@ export function MusicPlayerHost() {
   const setFailed = useSetAtom(musicFailedAtom);
   const item = queue?.items[queue.index];
   const src = useMediaUrl(item?.track.url);
+  const shuffle = useAtomValue(musicShuffleAtom);
+  const transport = useMusicTransport();
   useMusicMediaSession();
+
+  // Keep the queue's play order in step with shuffle: made when it's on, dropped when it's off.
+  useEffect(() => {
+    if (!queue) return;
+    const synced = withShuffle(queue, shuffle);
+    if (synced !== queue) setQueue(synced);
+  }, [queue, shuffle, setQueue]);
 
   // A new track: start from nothing, with the length the uploader measured until the file says.
   useEffect(() => {
@@ -31,8 +43,9 @@ export function MusicPlayerHost() {
   if (!queue || !item) return null;
 
   return (
+    <>
     <audio
-      key={`${queue.source}/${queue.index}`}
+      key={`${queue.source}/${item.albumId}/${item.trackNumber}/${item.track.url}`}
       ref={(element) => {
         registerMusicAudio(element);
         if (element) element.volume = readListenVolume();
@@ -52,13 +65,14 @@ export function MusicPlayerHost() {
         if (Number.isFinite(duration)) setTime((t) => ({ ...t, duration }));
       }}
       onEnded={() => {
-        if (queue.index + 1 < queue.items.length) setQueue({ ...queue, index: queue.index + 1 });
-        else setPlaying(false);
+        if (!transport.ended()) setPlaying(false);
       }}
       onError={() => {
         setFailed(true);
         setPlaying(false);
       }}
     />
+    <NowPlayingView />
+    </>
   );
 }
