@@ -221,6 +221,8 @@ export type PublicStream = {
   chatRoom: string | null;
   thumbnail: string | null;
   replay: { durationMs: number; url: string } | null;
+  /** Ended, and Egress is still finishing the replay's file. */
+  saving: boolean;
   expiresAt: number | null;
 };
 
@@ -238,6 +240,7 @@ export function publicStream(record: StreamRecord, extra: { viewers?: number; ha
     chatRoom: record.chatRoom,
     thumbnail: extra.hasThumbnail ? `${base}/thumbnail` : null,
     replay: record.replay ? { durationMs: record.replay.durationMs, url: `${base}/replay` } : null,
+    saving: record.state === 'ended' && !record.replay && record.egressId !== null,
     expiresAt: record.expiresAt,
   };
 }

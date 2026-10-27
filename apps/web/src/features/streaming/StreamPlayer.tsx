@@ -29,7 +29,7 @@ export default function StreamPlayer({ base, stream, mx }: { base: string; strea
       </div>
     ) : (
       <div className="nu-stream-player nu-stream-player--empty" data-nu-role="stream-player">
-        <p>This stream has ended.</p>
+        <p data-nu-role="stream-no-replay">{stream.saving ? 'This stream has ended. Its replay is being saved…' : 'This stream has ended. No replay was recorded.'}</p>
       </div>
     );
   }

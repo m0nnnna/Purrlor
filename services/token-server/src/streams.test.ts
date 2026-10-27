@@ -193,6 +193,9 @@ describe('what the public sees', () => {
     assert.deepEqual(ended.replay, { durationMs: 9, url: '/api/public/streams/k3J9x_Qm2PzL0aBc/replay' });
     assert.equal(ended.thumbnail, null);
     assert.equal('egressId' in ended, false);
+    assert.equal(ended.saving, false);
+    assert.equal(publicStream({ ...endedRecord(record(), 10_000, settings), egressId: 'EG_1' }, { hasThumbnail: false }).saving, true);
+    assert.equal(live.saving, false);
   });
 
   it('lists newest first, for one owner when asked', () => {

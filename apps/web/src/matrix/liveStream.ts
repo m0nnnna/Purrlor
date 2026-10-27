@@ -31,6 +31,8 @@ export type PublicStream = {
   /** Relative to the stream's server (`/api/public/streams/…`). */
   thumbnail: string | null;
   replay: { durationMs: number; url: string } | null;
+  /** Ended, and the replay's file is still being written. Missing from older servers. */
+  saving?: boolean;
   expiresAt: number | null;
 };
 
@@ -103,6 +105,7 @@ export function parseStream(raw: unknown): PublicStream | undefined {
     chatRoom: typeof raw.chatRoom === 'string' && raw.chatRoom.startsWith('!') ? raw.chatRoom : null,
     thumbnail,
     replay,
+    ...(raw.saving === true && { saving: true }),
     expiresAt: num(raw.expiresAt),
   };
 }

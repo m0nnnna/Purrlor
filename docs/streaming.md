@@ -247,11 +247,13 @@ Anyone. → `200 { "stream": … }` as below, or `404 { "code": "not_found" }` (
 { "id": "k3J9x_Qm2PzL0aBc", "owner": "@luna:purr.example", "title": "Drawing a commission",
   "state": "live", "liveAt": 1790000004000, "endedAt": null, "viewers": 37,
   "chatRoom": "!abc:purr.example", "thumbnail": "/api/public/streams/k3J9x_Qm2PzL0aBc/thumbnail",
-  "replay": null, "expiresAt": null }
+  "replay": null, "saving": false, "expiresAt": null }
 ```
 
 `viewers` is the number watching now (live only). `replay`, once ended and written, is `{
-"durationMs", "url": "/api/public/streams/<id>/replay" }`.
+"durationMs", "url": "/api/public/streams/<id>/replay" }`. `saving` is true while an ended stream's
+recording is still being written; ended with `replay: null` and `saving: false` means no replay
+was recorded.
 
 ### `GET /api/public/streams?owner=<user>`
 
