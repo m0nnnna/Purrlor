@@ -71,8 +71,8 @@ export async function warmRoomMedia(mx: MatrixClient, room: Room): Promise<void>
     const isImage = event.getType() === EventType.Sticker || (event.getType() === EventType.RoomMessage && content.msgtype === 'm.image');
     if (isImage && images < IMAGES_PER_ROOM && typeof content.url === 'string' && !event.isRedacted()) {
       images++;
-      const info = content.info as { mimetype?: string; w?: number; h?: number } | undefined;
-      const thumb = inlineThumbnailSize(info?.mimetype, info?.w, info?.h, INLINE_IMAGE_BOX.width, INLINE_IMAGE_BOX.height);
+      const info = content.info as { mimetype?: string; w?: number; h?: number; size?: number } | undefined;
+      const thumb = inlineThumbnailSize(info?.mimetype, info?.w, info?.h, INLINE_IMAGE_BOX.width, INLINE_IMAGE_BOX.height, info?.size);
       enqueue(
         thumb
           ? mx.mxcUrlToHttp(content.url, thumb.width, thumb.height, thumb.method, undefined, undefined, useAuth)
@@ -102,8 +102,8 @@ export async function warmPostMedia(mx: MatrixClient, posts: GlobalPost[]): Prom
     if (content && !content.warning && !content.sensitive) {
       content.attachments?.forEach((attachment) => {
         if (attachment.kind !== 'image' || !attachment.url) return;
-        const { mimetype, w, h } = attachment.info;
-        const thumb = inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX);
+        const { mimetype, w, h, size } = attachment.info;
+        const thumb = inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX, size);
         enqueue(
           thumb
             ? mx.mxcUrlToHttp(attachment.url, thumb.width, thumb.height, thumb.method, undefined, undefined, useAuth)

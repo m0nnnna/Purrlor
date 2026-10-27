@@ -521,6 +521,7 @@ const MessageRow = memo(function MessageRow({
             mimetype={content.info?.mimetype}
             width={content.info?.w}
             height={content.info?.h}
+            size={content.info?.size}
           />
         ) : content.msgtype === 'm.image' ? (
           <ImageMessage
@@ -530,6 +531,7 @@ const MessageRow = memo(function MessageRow({
             mimetype={content.info?.mimetype}
             width={content.info?.w}
             height={content.info?.h}
+            size={content.info?.size}
           />
         ) : content.msgtype === 'm.audio' && content['org.matrix.msc3245.voice'] ? (
           <VoiceMessage

@@ -13,8 +13,8 @@ import './MediaGrid.css';
 const TILE_PX = 240;
 
 function Tile({ attachment, covered }: { attachment: PostAttachment; covered: boolean }) {
-  const { mimetype, w, h } = attachment.info;
-  const thumbnail = attachment.kind === 'video' ? undefined : inlineThumbnailSize(mimetype, w, h, TILE_PX, TILE_PX);
+  const { mimetype, w, h, size } = attachment.info;
+  const thumbnail = attachment.kind === 'video' ? undefined : inlineThumbnailSize(mimetype, w, h, TILE_PX, TILE_PX, size);
   const src = useAttachmentUrl({ url: attachment.url, file: attachment.file, mimetype }, { direct: true, thumbnail });
   if (!src) return <span className="nu-media-grid__fill nu-media-grid__fill--loading" />;
   const className = covered ? 'nu-media-grid__fill nu-media-grid__fill--covered' : 'nu-media-grid__fill';

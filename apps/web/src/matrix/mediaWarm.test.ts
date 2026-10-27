@@ -41,17 +41,20 @@ afterEach(() => {
 });
 
 describe('warmRoomMedia', () => {
-  it('asks for what the timeline will: an inline thumbnail, a whole GIF, a 40px avatar, once each', async () => {
+  it('asks for what the timeline will: an inline thumbnail, a whole GIF or small photo, a 40px avatar, once each', async () => {
     const urls = stubFetch();
     const r = room([
       { type: 'm.room.message', content: { msgtype: 'm.image', url: 'mxc://a/big', info: { mimetype: 'image/jpeg', w: 4000, h: 3000 } }, avatar: 'mxc://a/face' },
+      { type: 'm.room.message', content: { msgtype: 'm.image', url: 'mxc://a/small', info: { mimetype: 'image/jpeg', w: 2000, h: 1500, size: 250_000 } }, avatar: 'mxc://a/face' },
       { type: 'm.room.message', content: { msgtype: 'm.image', url: 'mxc://b/anim', info: { mimetype: 'image/gif', w: 400, h: 300 } }, avatar: 'mxc://a/face' },
       { type: 'm.room.message', content: { msgtype: 'm.text', body: 'hi' } },
     ]);
     await warmRoomMedia(mx, r);
     await warmRoomMedia(mx, r);
-    await vi.waitFor(() => expect(urls).toHaveLength(3));
-    expect(urls.sort()).toEqual(['https://hs/a/big?w=800&h=600&m=scale', 'https://hs/a/face?w=96&h=96&m=crop', 'https://hs/b/anim'].sort());
+    await vi.waitFor(() => expect(urls).toHaveLength(4));
+    expect(urls.sort()).toEqual(
+      ['https://hs/a/big?w=800&h=600&m=scale', 'https://hs/a/small', 'https://hs/a/face?w=96&h=96&m=crop', 'https://hs/b/anim'].sort()
+    );
   });
 
   it('does nothing without the worker to keep a copy', async () => {

@@ -12,16 +12,19 @@ type ImageMessageProps = {
   /** The original image's pixel dimensions, from the event's own `info.w`/`info.h`. */
   width?: number;
   height?: number;
+  /** The original's size in bytes (`info.size`): a small photo loads whole, being smaller than
+   *  the server's thumbnail of it. */
+  size?: number;
 };
 
 const { width: MAX_WIDTH_PX, height: MAX_HEIGHT_PX } = INLINE_IMAGE_BOX;
 
-export function ImageMessage({ body, url, file, mimetype, width, height }: ImageMessageProps) {
+export function ImageMessage({ body, url, file, mimetype, width, height, size }: ImageMessageProps) {
   // A thumbnail inline (a fraction of the bytes, and another server sends its own small copy
   // rather than the original crossing over first); the whole file in the lightbox. If the
   // thumbnail won't load, the whole file instead.
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
-  const thumbnail = thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, width, height, MAX_WIDTH_PX, MAX_HEIGHT_PX);
+  const thumbnail = thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, width, height, MAX_WIDTH_PX, MAX_HEIGHT_PX, size);
   const src = useAttachmentUrl({ url, file, mimetype }, { direct: true, thumbnail });
   const [open, setOpen] = useState(false);
 

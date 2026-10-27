@@ -42,7 +42,7 @@ function EncryptedImage({ file, alt, className, style }: { file: EmbedFile; alt:
 }
 
 function PlainImage({ file, alt, className, style, box }: { file: EmbedFile; alt: string; className: string; style?: CSSProperties; box?: number }) {
-  const thumbnail = box ? inlineThumbnailSize(file.info.mimetype, file.info.w, file.info.h, box, box) : undefined;
+  const thumbnail = box ? inlineThumbnailSize(file.info.mimetype, file.info.w, file.info.h, box, box, file.info.size) : undefined;
   const src = useMediaUrl(file.url, thumbnail ? { width: thumbnail.width, height: thumbnail.height, method: 'scale' } : {});
   return src ? <img className={className} src={src} alt={alt} style={style} loading="lazy" /> : <span className={`${className} nu-embed__img--loading`} style={style} />;
 }

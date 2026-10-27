@@ -115,10 +115,24 @@ export const INLINE_IMAGE_BOX = { width: 360, height: 320 };
 /** Image types whose thumbnail would lose something: animation, or vector sharpness. */
 const KEEP_WHOLE = /^image\/(gif|webp|apng|png;\s*animated|svg\+xml)/;
 
+/** Photo types the homeserver's thumbnail is usually larger than: Continuwuity makes every
+ *  thumbnail a PNG (served as the original's type), and a lossless copy of a photo is several
+ *  times its JPEG. Measured on purr.meowops.net: a 253 KB JPEG's 800×600 "thumbnail" was 1052 KB. */
+const LOSSY = /^image\/(jpeg|jpg|pjpeg|avif)/;
+
+/** Bytes per thumbnail pixel an original may weigh and still load whole. The PNG thumbnails ran
+ *  0.8 to 3.5 bytes a pixel, so an original under 1 is smaller than its thumbnail. */
+const ORIGINAL_BYTES_PER_PIXEL = 1;
+
+/** How many times the thumbnail's pixels an original may have and still load whole: a small file
+ *  can still be a huge picture, and decoding one is the cost on a phone then, not the download. */
+const ORIGINAL_MAX_PIXELS = 9;
+
 /**
  * The thumbnail for an image shown inline in a box of `boxWidth` × `boxHeight` CSS pixels, or
  * undefined when the whole file should load: a type a thumbnail would flatten (GIF, WebP, which
- * can be animated), or an image no larger than the thumbnail. Twice the box, for sharp images on
+ * can be animated), an image no larger than the thumbnail, or a photo whose file (`size`, bytes)
+ * is smaller than the server's PNG thumbnail of it would be. Twice the box, for sharp images on
  * high-density screens, as one of the server's own thumbnail sizes (matrix/thumbnails.ts): the
  * largest at most, since asking for more got the whole original.
  */
@@ -127,11 +141,21 @@ export function inlineThumbnailSize(
   width: number | undefined,
   height: number | undefined,
   boxWidth: number,
-  boxHeight: number
+  boxHeight: number,
+  size?: number
 ): ThumbnailSize | undefined {
   if (!mimetype || KEEP_WHOLE.test(mimetype)) return undefined;
   const target = serverThumbnail(boxWidth * 2, boxHeight * 2, { capped: true })!;
   if (width && height && width <= target.width && height <= target.height) return undefined;
+  const targetPixels = target.width * target.height;
+  if (
+    LOSSY.test(mimetype) &&
+    size &&
+    size <= targetPixels * ORIGINAL_BYTES_PER_PIXEL &&
+    (!width || !height || width * height <= targetPixels * ORIGINAL_MAX_PIXELS)
+  ) {
+    return undefined;
+  }
   return target;
 }
 

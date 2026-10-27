@@ -15,13 +15,13 @@ function ratioStyle(attachment: PostAttachment): CSSProperties | undefined {
 
 function MediaItem({ attachment, single }: { attachment: PostAttachment; single: boolean }) {
   // An encrypted attachment is fetched and decrypted here with the key from the post itself.
-  const { mimetype, w, h } = attachment.info;
+  const { mimetype, w, h, size } = attachment.info;
   const source = { url: attachment.url, file: attachment.file, mimetype };
   // Images inline as a thumbnail about the feed's width (the whole file opens in the lightbox);
   // video streams from the media URL.
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const thumbnail =
-    attachment.kind === 'video' || thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX);
+    attachment.kind === 'video' || thumbnailFailed ? undefined : inlineThumbnailSize(mimetype, w, h, POST_MEDIA_PX, POST_MEDIA_PX, size);
   const src = useAttachmentUrl(source, { direct: true, thumbnail });
   const [open, setOpen] = useState(false);
   const videoRef = usePauseWhenOffscreen();
