@@ -682,3 +682,366 @@
   font-size: var(--nu-font-size-xs);
   color: var(--nu-color-text-muted);
 }
+
+/* --- Setup page and dashboard --- */
+
+.nu-stream-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--nu-color-bg-primary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-stream-overlay__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--nu-color-border);
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-stream-overlay__header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.nu-stream-overlay__back {
+  display: inline-flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nu-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+.nu-setup__column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.nu-setup__footer {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nu-setup__thumb {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.nu-setup__thumb-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 192px;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--nu-color-border-strong);
+  border-radius: 8px;
+  background: var(--nu-color-bg-secondary) center / cover;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-setup__thumb-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.nu-setup__sources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nu-setup__sources legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.nu-setup__source {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nu-setup__source[data-nu-checked='true'] {
+  border-color: var(--nu-color-border-strong);
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-setup__source span {
+  display: flex;
+  flex-direction: column;
+}
+
+.nu-setup__source small {
+  color: var(--nu-color-text-muted);
+}
+
+.nu-setup__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 10px;
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-setup__panel h2,
+.nu-setup__panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.nu-setup__copyrow {
+  display: flex;
+  gap: 6px;
+}
+
+.nu-setup__copyrow input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 6px;
+  background: var(--nu-color-bg-primary);
+  color: var(--nu-color-text-primary);
+  font-family: monospace;
+}
+
+.nu-setup__link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nu-color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.nu-setup__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.nu-setup__steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.nu-dash__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+}
+
+.nu-dash__main,
+.nu-dash__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.nu-dash__side .nu-stream-chat {
+  flex: 1;
+  height: auto;
+  min-height: 360px;
+}
+
+.nu-dash__spacer {
+  flex: 1;
+}
+
+.nu-dash__state {
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-dash__preview {
+  position: relative;
+  width: 100%;
+  max-height: 60vh;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #000;
+}
+
+.nu-dash__video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.nu-dash__waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: #cfd3d8;
+  text-align: center;
+}
+
+.nu-dash__orphan {
+  padding: 16px;
+  border: 1px solid var(--nu-color-border-strong);
+  border-radius: 10px;
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-dash__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 0;
+}
+
+.nu-dash__stats dt {
+  color: var(--nu-color-text-muted);
+  font-size: 12px;
+}
+
+.nu-dash__stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nu-dash__title {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.nu-dash__title .nu-golive__field {
+  flex: 1;
+}
+
+.nu-dash__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nu-dash__mod {
+  padding: 10px 12px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 10px;
+  background: var(--nu-color-bg-secondary);
+}
+
+.nu-dash__mod h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.nu-dash__mod ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nu-dash__mod li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.nu-stream-chat__mod {
+  display: none;
+  margin-left: auto;
+  gap: 2px;
+}
+
+.nu-stream-chat__line:hover .nu-stream-chat__mod,
+.nu-stream-chat__line:focus-within .nu-stream-chat__mod {
+  display: inline-flex;
+}
+
+.nu-stream-chat__mod button {
+  padding: 1px 5px;
+  border: 1px solid var(--nu-color-border);
+  border-radius: 4px;
+  background: var(--nu-color-bg-tertiary);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .nu-setup,
+  .nu-dash__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nu-stream-chat__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nu-stream-chat__mod {
+  flex-shrink: 0;
+}
+
+.nu-stream-chat__mod button {
+  white-space: nowrap;
+}
+
+.nu-stream-chat__line {
+  position: relative;
+}
+
+/* On hover over the line's right edge, so it doesn't push the message around. */
+.nu-stream-chat__mod {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--nu-color-bg-elevated);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+}

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteStream,
+  fetchMyStream,
+  fetchObsSettings,
+  fetchPreviewToken,
+  moderateStream,
+  startStream,
   fetchLiveStreams,
   fetchStream,
   formatDuration,
@@ -42,7 +47,9 @@ afterEach(() => {
 
 describe('reading what servers say', () => {
   it('takes a stream as given, and nothing that points off its own routes', () => {
-    expect(parseStream(live)).toEqual({ ...live, state: 'live' });
+    expect(parseStream(live)).toEqual({ ...live, state: 'live', source: 'browser' });
+    expect(parseStream({ ...live, source: 'obs' })?.source).toBe('obs');
+    expect(parseStream({ ...live, source: 'rtmp' })?.source).toBe('browser');
     expect(parseStream({ ...live, thumbnail: 'https://evil.example/x.png' })?.thumbnail).toBeNull();
     expect(parseStream({ ...live, replay: { durationMs: 5, url: 'https://evil.example/x.mp4' } })?.replay).toBeNull();
     expect(parseStream({ ...live, chatRoom: '#alias:x' })?.chatRoom).toBeNull();
@@ -142,5 +149,59 @@ describe('formatDuration', () => {
   it('shows hours only when there are some', () => {
     expect(formatDuration(65_000)).toBe('1:05');
     expect(formatDuration(3_723_000)).toBe('1:02:03');
+  });
+});
+
+describe('the dashboard’s calls', () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>, n: number) => JSON.parse((fetchMock.mock.calls[n] as [string, RequestInit])[1].body as string) as Record<string, unknown>;
+  const urlOf = (fetchMock: ReturnType<typeof vi.fn>, n: number) => (fetchMock.mock.calls[n] as [string])[0];
+
+  it('starts an OBS stream with its source, and a browser one without', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ stream: { ...live, source: 'obs' }, token: 't', url: 'wss://lk' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const started = await startStream({} as never, 'Drawing', 'obs');
+    await startStream({} as never, 'Drawing');
+    expect(started.stream.source).toBe('obs');
+    expect(bodyOf(fetchMock, 0)).toMatchObject({ title: 'Drawing', source: 'obs' });
+    expect(bodyOf(fetchMock, 1).source).toBeUndefined();
+  });
+
+  it('reads my stream, the OBS settings and a preview token', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ stream: { ...live, state: 'starting', source: 'obs' } })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ stream: null })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ url: 'https://purr.example/api/public/whip', key: 'pk_1' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ url: 'https://purr.example/api/public/whip', key: 'pk_2' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'obs_off', error: 'off' }), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'p', url: 'wss://lk' })));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await fetchMyStream({} as never))?.state).toBe('starting');
+    expect(await fetchMyStream({} as never)).toBeUndefined();
+    expect(await fetchObsSettings({} as never)).toEqual({ url: 'https://purr.example/api/public/whip', key: 'pk_1' });
+    expect((await fetchObsSettings({} as never, true)).key).toBe('pk_2');
+    expect(bodyOf(fetchMock, 3).reset).toBe(true);
+    expect(bodyOf(fetchMock, 2).reset).toBeUndefined();
+    const err = await fetchObsSettings({} as never).catch((e: unknown) => e);
+    expect((err as StreamError).code).toBe('obs_off');
+    expect(goLiveRefusalText(err)).toMatch(/isn’t set up/);
+    expect(await fetchPreviewToken({} as never, ID)).toEqual({ token: 'p', url: 'wss://lk' });
+    expect(urlOf(fetchMock, 5)).toBe(`/api/public/streams/${ID}/preview`);
+  });
+
+  it('moderates with the right fields for each action, and answers the running timeouts', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ timeouts: { '@bob:purr.example': 1790000304000, '@x:y': 'nope' } })));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await moderateStream({} as never, ID, { action: 'timeout', user: '@bob:purr.example', minutes: 5 })).toEqual({ '@bob:purr.example': 1790000304000 });
+    await moderateStream({} as never, ID, { action: 'delete', eventId: '$e' });
+    await moderateStream({} as never, ID, { action: 'ban', user: '@bob:purr.example' });
+    await moderateStream({} as never, ID, { action: 'untimeout', user: '@bob:purr.example' });
+    expect(urlOf(fetchMock, 0)).toBe(`/api/public/streams/${ID}/moderate`);
+    expect(bodyOf(fetchMock, 0)).toMatchObject({ action: 'timeout', user: '@bob:purr.example', minutes: 5 });
+    expect(bodyOf(fetchMock, 1)).toMatchObject({ action: 'delete', event_id: '$e' });
+    expect(bodyOf(fetchMock, 1).user).toBeUndefined();
+    expect(bodyOf(fetchMock, 2)).toMatchObject({ action: 'ban', user: '@bob:purr.example' });
+    expect(bodyOf(fetchMock, 2).minutes).toBeUndefined();
+    expect(bodyOf(fetchMock, 3).action).toBe('untimeout');
   });
 });

@@ -34,7 +34,11 @@ export type PublicStream = {
   /** Ended, and the replay's file is still being written. Missing from older servers. */
   saving?: boolean;
   expiresAt: number | null;
+  /** Where the picture comes from. Missing from older servers, which only have the browser. */
+  source: StreamSource;
 };
+
+export type StreamSource = 'browser' | 'obs';
 
 export type ChatMessage = { id: string; ts: number; sender: string; body: string };
 
@@ -107,6 +111,7 @@ export function parseStream(raw: unknown): PublicStream | undefined {
     replay,
     ...(raw.saving === true && { saving: true }),
     expiresAt: num(raw.expiresAt),
+    source: raw.source === 'obs' ? 'obs' : 'browser',
   };
 }
 
@@ -158,8 +163,13 @@ function readStreamAnswer(body: unknown): PublicStream {
 
 // --- The streamer's side (always this server) ---------------------------------------------------
 
-export async function startStream(mx: MatrixClient, title: string): Promise<{ stream: PublicStream; token: string; url: string }> {
-  return call('/api/public/streams', post({ openid_token: await getOpenIdTokenCached(mx), title }), (body) => {
+/** With `obs`, the token is a preview (viewer) token: the picture comes from OBS. */
+export async function startStream(
+  mx: MatrixClient,
+  title: string,
+  source: StreamSource = 'browser'
+): Promise<{ stream: PublicStream; token: string; url: string }> {
+  return call('/api/public/streams', post({ openid_token: await getOpenIdTokenCached(mx), title, ...(source === 'obs' && { source }) }), (body) => {
     const b = isRecord(body) ? body : {};
     if (typeof b.token !== 'string' || typeof b.url !== 'string') throw new StreamError(502, 'bad_answer', 'The server’s answer didn’t make sense');
     return { stream: readStreamAnswer(body), token: b.token, url: b.url };
@@ -172,6 +182,48 @@ export async function markStreamLive(mx: MatrixClient, id: string): Promise<Publ
 
 export async function stopStream(mx: MatrixClient, id: string): Promise<PublicStream> {
   return call(`/api/public/streams/${id}/stop`, post({ openid_token: await getOpenIdTokenCached(mx) }), readStreamAnswer);
+}
+
+/** The caller's stream that's starting or live, or undefined: how the dashboard is picked up after a reload. */
+export async function fetchMyStream(mx: MatrixClient): Promise<PublicStream | undefined> {
+  if (isDemoMode()) return undefined;
+  return call('/api/public/streams/mine', post({ openid_token: await getOpenIdTokenCached(mx) }), (body) =>
+    parseStream(isRecord(body) ? body.stream : undefined)
+  );
+}
+
+/** What goes in OBS: the WHIP address and the stream key. `reset` makes a new key (the old one stops working). Refused with `obs_off` without Ingress. */
+export async function fetchObsSettings(mx: MatrixClient, reset = false): Promise<{ url: string; key: string }> {
+  return call('/api/public/streams/obs', post({ openid_token: await getOpenIdTokenCached(mx), ...(reset && { reset: true }) }), (body) => {
+    const b = isRecord(body) ? body : {};
+    if (typeof b.url !== 'string' || typeof b.key !== 'string') throw new StreamError(502, 'bad_answer', 'The server’s answer didn’t make sense');
+    return { url: b.url, key: b.key };
+  });
+}
+
+/** A new preview token for the streamer's own OBS stream (after a reload). */
+export async function fetchPreviewToken(mx: MatrixClient, id: string): Promise<{ token: string; url: string }> {
+  return call(`/api/public/streams/${id}/preview`, post({ openid_token: await getOpenIdTokenCached(mx) }), (body) => {
+    const b = isRecord(body) ? body : {};
+    if (typeof b.token !== 'string' || typeof b.url !== 'string') throw new StreamError(502, 'bad_answer', 'The server’s answer didn’t make sense');
+    return { token: b.token, url: b.url };
+  });
+}
+
+export type ModerateAction =
+  | { action: 'delete'; eventId: string }
+  | { action: 'timeout'; user: string; minutes: number }
+  | { action: 'untimeout' | 'ban' | 'unban'; user: string };
+
+/** Moderates the stream's chat; answers with the timeouts running now (user to when it ends). Only the streamer can. */
+export async function moderateStream(mx: MatrixClient, id: string, what: ModerateAction): Promise<Record<string, number>> {
+  const { action } = what;
+  const extra =
+    what.action === 'delete' ? { event_id: what.eventId } : what.action === 'timeout' ? { user: what.user, minutes: what.minutes } : { user: what.user };
+  return call(`/api/public/streams/${id}/moderate`, post({ openid_token: await getOpenIdTokenCached(mx), action, ...extra }), (body) => {
+    const timeouts = isRecord(body) && isRecord(body.timeouts) ? body.timeouts : {};
+    return Object.fromEntries(Object.entries(timeouts).filter((entry): entry is [string, number] => typeof entry[1] === 'number'));
+  });
 }
 
 /** Changes a stream's title (live or ended). Only its streamer can. */
@@ -280,6 +332,12 @@ export function goLiveRefusalText(err: unknown): string {
       return 'Streaming is switched off on this server.';
     case 'not_local':
       return 'You can only go live on your own server.';
+    case 'hidden':
+      return 'Your account can’t go live right now.';
+    case 'obs_off':
+      return 'Streaming from OBS isn’t set up on this server.';
+    case 'obs_unavailable':
+      return 'OBS streaming isn’t answering right now. Try again in a moment.';
     case 'bad_title':
       return 'Give your stream a title (up to 120 characters).';
     default:

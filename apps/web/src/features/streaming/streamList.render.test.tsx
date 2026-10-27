@@ -24,6 +24,7 @@ const base = {
   thumbnail: null,
   replay: null,
   expiresAt: null,
+  source: 'browser' as const,
 };
 const live: PublicStream = { ...base, id: 'aaaaaaaaaaaaaaaa', title: 'On air', state: 'live', endedAt: null, viewers: 3 };
 const ended: PublicStream = {

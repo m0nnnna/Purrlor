@@ -2,20 +2,38 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Direction, MatrixEvent, RoomEvent, type MatrixClient } from 'matrix-js-sdk';
 import { Avatar } from '../../components/Avatar';
 import { serverOfUserId } from '../../matrix/homeServer';
-import { fetchChat, type ChatMessage, type PublicStream } from '../../matrix/liveStream';
+import { Icon } from '../../components/Icon';
+import { fetchChat, type ChatMessage, type ModerateAction, type PublicStream } from '../../matrix/liveStream';
+import { TIMEOUT_MINUTES, timeoutLabel } from './streamDashboard';
 
 const MAX_SHOWN = 200;
 const POLL_MS = 3_000;
 
 type Line = ChatMessage & { name: string; avatarUrl?: string };
 
+/** The streamer's way to moderate (Dashboard.tsx): never throws, says its own errors. */
+export type Moderate = (what: ModerateAction) => void;
+
 /**
  * A stream's chat (docs/streaming.md, "Chat"). Signed in, it's the stream's Matrix room, joined
  * while the chat is open and left after. Signed out, it's read through the stream's server every
  * 3 s, with a way to sign in to talk. Plain text either way; once the stream ends the room is
- * read-only and the chat says so.
+ * read-only and the chat says so. With `moderate` (the streamer's dashboard), each message from
+ * someone else also has Delete, Timeout and Ban.
  */
-export function StreamChat({ base, stream, mx, onSignIn }: { base: string; stream: PublicStream; mx?: MatrixClient; onSignIn?: () => void }) {
+export function StreamChat({
+  base,
+  stream,
+  mx,
+  onSignIn,
+  moderate,
+}: {
+  base: string;
+  stream: PublicStream;
+  mx?: MatrixClient;
+  onSignIn?: () => void;
+  moderate?: Moderate;
+}) {
   if (!stream.chatRoom) {
     return (
       <aside className="nu-stream-chat nu-stream-chat--empty" data-nu-role="stream-chat">
@@ -24,13 +42,13 @@ export function StreamChat({ base, stream, mx, onSignIn }: { base: string; strea
     );
   }
   return mx ? (
-    <MatrixChat stream={stream} roomId={stream.chatRoom} mx={mx} />
+    <MatrixChat stream={stream} roomId={stream.chatRoom} mx={mx} moderate={moderate} />
   ) : (
     <ReadOnlyChat base={base} stream={stream} onSignIn={onSignIn} />
   );
 }
 
-function ChatLines({ lines }: { lines: Line[] }) {
+function ChatLines({ lines, owner, moderate }: { lines: Line[]; owner?: string; moderate?: Moderate }) {
   const listRef = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   useEffect(() => {
@@ -53,6 +71,29 @@ function ChatLines({ lines }: { lines: Line[] }) {
           <Avatar name={line.name} mxcUrl={line.avatarUrl} size={20} />
           <span className="nu-stream-chat__name">{line.name}</span>
           <span className="nu-stream-chat__body">{line.body}</span>
+          {moderate && line.sender !== owner && (
+            <span className="nu-stream-chat__mod" data-nu-role="stream-chat-mod">
+              <button type="button" title="Delete this message" aria-label="Delete this message" data-nu-role="mod-delete" onClick={() => moderate({ action: 'delete', eventId: line.id })}>
+                <Icon name="trash" size={14} />
+              </button>
+              {TIMEOUT_MINUTES.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  title={`Time ${line.name} out for ${timeoutLabel(minutes)}`}
+                  aria-label={`Time ${line.name} out for ${timeoutLabel(minutes)}`}
+                  data-nu-role="mod-timeout"
+                  data-nu-minutes={minutes}
+                  onClick={() => moderate({ action: 'timeout', user: line.sender, minutes })}
+                >
+                  {minutes === 60 ? '1h' : `${minutes}m`}
+                </button>
+              ))}
+              <button type="button" title={`Ban ${line.name} from the chat`} aria-label={`Ban ${line.name} from the chat`} data-nu-role="mod-ban" onClick={() => moderate({ action: 'ban', user: line.sender })}>
+                Ban
+              </button>
+            </span>
+          )}
         </li>
       ))}
     </ol>
@@ -78,7 +119,7 @@ function toLine(mx: MatrixClient, event: MatrixEvent): Line | undefined {
   };
 }
 
-function MatrixChat({ stream, roomId, mx }: { stream: PublicStream; roomId: string; mx: MatrixClient }) {
+function MatrixChat({ stream, roomId, mx, moderate }: { stream: PublicStream; roomId: string; mx: MatrixClient; moderate?: Moderate }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [joined, setJoined] = useState(false);
   const [error, setError] = useState<string>();
@@ -134,7 +175,7 @@ function MatrixChat({ stream, roomId, mx }: { stream: PublicStream; roomId: stri
   return (
     <aside className="nu-stream-chat" data-nu-role="stream-chat">
       <h2 className="nu-stream-chat__title">Live chat</h2>
-      <ChatLines lines={lines} />
+      <ChatLines lines={lines} owner={stream.owner} moderate={moderate} />
       {error && <p className="nu-stream-chat__error">{error}</p>}
       {ended ? (
         <p className="nu-stream-chat__closed">The stream has ended, so the chat is closed.</p>
