@@ -1,0 +1,142 @@
+/* A message's actions on a phone (MessageActionSheet.tsx): over the app, under the reaction
+   picker's panel (ReactionPicker.css, 120) and a modal (Modal.css, 150). */
+.nu-message-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.nu-message-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--nu-color-backdrop);
+  animation: nu-message-sheet-fade 0.15s ease;
+}
+
+.nu-message-sheet__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  /* Never taller than what's showing of the screen (dvh: a phone's browser bars take some of vh). */
+  max-height: 80vh;
+  max-height: 80dvh;
+  overflow-y: auto;
+  padding: var(--nu-space-3) var(--nu-space-3) calc(var(--nu-space-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--nu-color-bg-elevated);
+  border-top: 1px solid var(--nu-color-border);
+  border-radius: var(--nu-radius-lg) var(--nu-radius-lg) 0 0;
+  box-shadow: 0 -10px 26px rgba(0, 0, 0, 0.35);
+  animation: nu-message-sheet-up 0.18s ease;
+}
+
+/* A grab handle, to read as a sheet. */
+.nu-message-sheet__panel::before {
+  content: '';
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--nu-color-border-strong);
+}
+
+.nu-message-sheet__reactions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nu-space-1);
+  padding-bottom: var(--nu-space-2);
+  border-bottom: 1px solid var(--nu-color-border);
+}
+
+.nu-message-sheet__reaction,
+.nu-message-sheet__reactions .nu-reaction-picker__toggle {
+  appearance: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+  line-height: 1;
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.nu-message-sheet__reaction:active,
+.nu-message-sheet__reactions .nu-reaction-picker__toggle:active {
+  background: var(--nu-color-hover);
+}
+
+.nu-message-sheet__items {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Each action as a row with its name: what a computer shows as an icon in the row under the
+   message (MessageTimeline.tsx gives the same buttons this class on a phone). */
+.nu-message-sheet__item {
+  appearance: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-3);
+  width: 100%;
+  min-height: 46px;
+  padding: 0 var(--nu-space-2);
+  font: inherit;
+  font-size: var(--nu-font-size-md);
+  text-align: left;
+  background: transparent;
+  color: var(--nu-color-text-primary);
+  border-radius: var(--nu-radius-md);
+  cursor: pointer;
+}
+
+.nu-message-sheet__item:active {
+  background: var(--nu-color-hover);
+}
+
+.nu-message-sheet__item > .nu-icon,
+.nu-message-sheet__item > svg {
+  flex: none;
+  color: var(--nu-color-text-muted);
+}
+
+.nu-message-sheet__item[aria-pressed='true'] > .nu-icon,
+.nu-message-sheet__item[aria-pressed='true'] > svg {
+  color: var(--nu-color-accent);
+}
+
+.nu-message-sheet__item.nu-timeline__message-delete-action {
+  color: var(--nu-color-danger);
+}
+
+/* "Remind me" is a Menu (components/Menu.tsx): its trigger stretches to a full row too. */
+.nu-message-sheet__items .nu-menu {
+  display: block;
+}
+
+@keyframes nu-message-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes nu-message-sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nu-message-sheet__backdrop,
+  .nu-message-sheet__panel {
+    animation: none;
+  }
+}

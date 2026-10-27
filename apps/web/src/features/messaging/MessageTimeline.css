@@ -343,13 +343,17 @@ button.nu-timeline__reply-preview:focus-visible {
   margin-top: var(--nu-space-1);
 }
 
-/* Reply and ⋯ at the top right of a message's body, floated so its first line wraps short of them
-   instead of being covered. They take up less than a line, so messages are no taller. */
-.nu-timeline__message-quick {
-  float: right;
+/* Reply and ⋯ in a column of their own at the right of the message (MessageTimeline.tsx), beside
+   its text rather than in it: nothing wraps around them and nothing is covered. Pulled into the
+   row's gap and padding, so the text loses as little width as it can. */
+.nu-timeline__message-side {
+  flex: none;
   display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
   gap: 1px;
-  margin: -2px 0 -10px var(--nu-space-2);
+  width: 57px;
+  margin: -1px calc(var(--nu-space-2) * -1) 0 calc(var(--nu-space-2) * -1);
 }
 
 /* Faint until the message is pointed at or its actions are open, but always there to tap: there's
@@ -427,7 +431,6 @@ button.nu-timeline__reply-preview:focus-visible {
 /* A message's actions, opened from its ⋯: a row under the message, in the feed, so it pushes the
    messages below down instead of covering them. One message's at a time (MessageTimeline.tsx). */
 .nu-timeline__message-actions {
-  clear: both;
   display: flex;
   flex-wrap: wrap;
   gap: 1px;
@@ -606,26 +609,36 @@ button.nu-timeline__reply-preview:focus-visible {
   line-height: 16px;
 }
 
-/* Touch screens: no hover. A tap would otherwise leave a message highlighted; the ⋯ is always
-   at full strength, and the targets are sized for fingers. */
+/* Touch screens: no hover. A tap would otherwise leave a message highlighted, and the targets
+   are sized for fingers. */
 @media (hover: none) {
   .nu-timeline__message:hover:not(.nu-timeline__message--mentions-me):not(.nu-timeline__message--actions-open) {
     background: none;
   }
 
-  .nu-timeline__message-quick {
-    margin: -5px -6px -12px var(--nu-space-1);
+  /* Phones press and hold a message for its actions (MessageActionSheet) and swipe it right to
+     reply, so the text gets the whole width. The column stays for screen readers. */
+  .nu-timeline__message-side {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .nu-timeline__message-menu-toggle {
-    opacity: 1;
-    width: 36px;
-    height: 28px;
+  /* A long press opens the sheet, not the browser's text selection or its picture menu: the
+     sheet's Copy text stands in for selecting. */
+  .nu-timeline__message {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
-  /* Phones swipe the message right to reply instead: the first line keeps its room. */
-  .nu-timeline__message-quick-reply {
-    display: none;
+  .nu-timeline__message textarea {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .nu-timeline__message-pin-action {

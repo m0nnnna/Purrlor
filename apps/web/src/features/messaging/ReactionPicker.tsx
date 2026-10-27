@@ -12,7 +12,7 @@ import './ReactionPicker.css';
  * usual Discord/Slack "quick reaction" range. "More…" opens the full Unicode picker
  * (components/EmojiPicker.tsx) for anything else.
  */
-const QUICK_REACTIONS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👀', '✅', '❌', '🤔'];
+export const QUICK_REACTIONS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👀', '✅', '❌', '🤔'];
 
 type Panel = 'quick' | 'emoji' | 'emotes';
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi, beforeAll } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { MatrixClientContext } from '../matrix/MatrixClientContext';
@@ -174,6 +174,74 @@ describe('MessageTimeline against the demo world', () => {
     fireEvent.click(within(document.body).getByRole('button', { name: '👍' }));
     await waitFor(() => expect(within(message).getByRole('button', { name: /You reacted with 👍/ })).toBeInTheDocument());
     expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
+  });
+
+  it('keeps Reply and the ⋯ in a column beside the message, not in its text', () => {
+    const onReply = vi.fn();
+    renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={onReply} />);
+    const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+    const side = message.querySelector<HTMLElement>(':scope > [data-nu-role="timeline-message-side"]')!;
+    expect(within(side).getByRole('button', { name: 'Message actions' })).toBeInTheDocument();
+    expect(message.querySelector('.nu-timeline__message-body [data-nu-role="timeline-message-menu"]')).toBeNull();
+    fireEvent.click(within(side).getByRole('button', { name: 'Reply' }));
+    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ senderName: expect.any(String) }));
+  });
+
+  describe('on a phone', () => {
+    let realMatchMedia: typeof window.matchMedia;
+    beforeAll(() => {
+      realMatchMedia = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query === '(hover: none)',
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })) as unknown as typeof window.matchMedia;
+    });
+    afterAll(() => {
+      window.matchMedia = realMatchMedia;
+    });
+
+    const pressAndHold = (target: HTMLElement) => {
+      fireEvent.touchStart(target, { touches: [{ clientX: 100, clientY: 100 }] });
+    };
+    const sheet = () => document.body.querySelector<HTMLElement>('[data-nu-role="message-action-sheet"]');
+
+    it('opens a message’s actions in a sheet from a long press, each with its name', async () => {
+      const { container } = renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+      const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+      pressAndHold(message);
+      await waitFor(() => expect(sheet()).not.toBeNull());
+      fireEvent.touchEnd(message);
+      expect(within(sheet()!).getByRole('button', { name: 'Reply' })).toHaveTextContent('Reply');
+      expect(within(sheet()!).getByRole('button', { name: 'Copy text' })).toHaveTextContent('Copy text');
+      // The sheet instead of the row under the message.
+      expect(container.querySelector('[data-nu-role="timeline-message-actions"]')).toBeNull();
+
+      fireEvent.click(document.body.querySelector('[data-nu-role="message-action-sheet-backdrop"]')!);
+      expect(sheet()).toBeNull();
+    });
+
+    it('reacts from the sheet’s quick reactions and closes it', async () => {
+      renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={() => {}} />);
+      const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+      pressAndHold(message);
+      await waitFor(() => expect(sheet()).not.toBeNull());
+      fireEvent.click(within(sheet()!).getByRole('button', { name: 'React with 👍' }));
+      expect(sheet()).toBeNull();
+      await waitFor(() => expect(within(message).getByRole('button', { name: /You reacted with 👍/ })).toBeInTheDocument());
+    });
+
+    it('replies from the sheet', async () => {
+      const onReply = vi.fn();
+      renderWithDemo(<MessageTimeline roomId={DEMO_ROOM_IDS.general} onReply={onReply} />);
+      const message = screen.getByText(/welcome to the café/).closest<HTMLElement>('[data-nu-role="timeline-message"]')!;
+      pressAndHold(message);
+      await waitFor(() => expect(sheet()).not.toBeNull());
+      fireEvent.click(within(sheet()!).getByRole('button', { name: 'Reply' }));
+      expect(onReply).toHaveBeenCalledTimes(1);
+      expect(sheet()).toBeNull();
+    });
   });
 });
 
