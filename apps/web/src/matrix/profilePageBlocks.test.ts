@@ -143,3 +143,40 @@ describe('the gallery block', () => {
     ]);
   });
 });
+
+describe('the videos block', () => {
+  const ID = (n: number) => `video${String(n).padStart(11, '0')}`;
+
+  it('keeps playlists of valid video ids, once each, and drops the rest', () => {
+    const block = page({
+      blocks: [
+        {
+          id: 'v',
+          type: 'videos',
+          title: 'Watch',
+          playlists: [
+            { id: 'one', title: 'First', videoIds: [ID(1), ID(1), 'short', 5, ID(2)] },
+            { id: 'one', videoIds: [ID(3)] },
+            { id: 'empty', videoIds: ['nope'] },
+            'junk',
+          ],
+        },
+      ],
+    })?.blocks[0] as Of<'videos'>;
+    expect(block.playlists.map((list) => list.id)).toEqual(['one', 'one_']);
+    expect(block.playlists[0]).toEqual({ id: 'one', title: 'First', videoIds: [ID(1), ID(2)] });
+  });
+
+  it('limits playlists and the videos in each', () => {
+    const many = Array.from({ length: LIMITS.playlistVideos + 20 }, (_, i) => ID(i));
+    const lists = Array.from({ length: LIMITS.playlists + 5 }, (_, i) => ({ id: `p${i}`, videoIds: many }));
+    const block = page({ blocks: [{ id: 'v', type: 'videos', playlists: lists }] })?.blocks[0] as Of<'videos'>;
+    expect(block.playlists).toHaveLength(LIMITS.playlists);
+    expect(block.playlists[0].videoIds).toHaveLength(LIMITS.playlistVideos);
+  });
+
+  it('drops a block with no playlist left', () => {
+    expect(page({ blocks: [{ id: 'v', type: 'videos', playlists: [{ id: 'a', videoIds: [] }] }] })?.blocks).toEqual([]);
+    expect(page({ blocks: [{ id: 'v', type: 'videos' }] })?.blocks).toEqual([]);
+  });
+});

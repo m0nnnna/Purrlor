@@ -60,7 +60,10 @@ export function AppShell() {
   // rooms, so there's no one member list that belongs beside them. With no room open at all there
   // are no members to list, and an empty column just looked unfinished.
   const globalFeedOpen = useAtomValue(globalFeedOpenAtom);
-  const onHome = useAtomValue(railSectionAtom) === 'home';
+  const section = useAtomValue(railSectionAtom);
+  const onHome = section === 'home';
+  // Watch is a page of its own, like Home, with no member list.
+  const onWatch = section === 'watch';
   const spaceView = useAtomValue(selectedSpaceViewAtom);
   const profileOpen = !!useAtomValue(profileUserIdAtom);
   const postOpen = !!useAtomValue(openPostAtom);
@@ -73,7 +76,7 @@ export function AppShell() {
   }, [selectedRoomId, spaceView, setMobileColumnOpen]);
   // On a phone the main pane only shows once there's something in it: a room, a Space's Posts,
   // or the global feed. The last two aren't rooms, so a room check alone left them invisible.
-  const mainPaneHasContent = onHome || !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
+  const mainPaneHasContent = onHome || onWatch || !!selectedRoomId || spaceView !== null || globalFeedOpen || profileOpen || postOpen;
   useOpenRoomFromNotification();
   useNavigationHistory();
   useVisualViewport();
@@ -97,7 +100,7 @@ export function AppShell() {
       data-nu-ticker={tickerOn ? 'on' : undefined}
       // The global feed's own side column (FeedSidebar) takes the member list's place.
       data-nu-side={globalFeedOpen && !profileOpen && !postOpen ? 'feed' : undefined}
-      data-nu-members-hidden={membersHidden || onHome || !selectedRoomId || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
+      data-nu-members-hidden={membersHidden || onHome || onWatch || !selectedRoomId || globalFeedOpen || profileOpen || postOpen || spaceView !== null}
     >
       <Wallpaper />
       <StatusClock />

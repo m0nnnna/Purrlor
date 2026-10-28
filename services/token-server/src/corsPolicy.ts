@@ -20,6 +20,10 @@ import type { Request } from 'express';
  * server's app (docs/streaming.md). Watching needs no credential at all (signed-out viewers watch),
  * and what a streamer does carries their OpenID token.
  *
+ * **WATCH (`/api/public/watch`) too**: playing a video asks its owner's server, from the viewer's
+ * own server's app (docs/watch.md). Public videos play with no credential at all; everything else
+ * carries the caller's OpenID token, and the catalogue answers this server's own people only.
+ *
  * Everything else keeps to `ALLOWED_ORIGINS` (comma-separated; `*` for any; `https://*.example.com`
  * for its subdomains).
  */
@@ -50,7 +54,9 @@ export function openToAnyOrigin(path: string): boolean {
     path === '/api/public/bugs' ||
     path === '/api/public/bugs/' ||
     path === '/api/public/streams' ||
-    path.startsWith('/api/public/streams/')
+    path.startsWith('/api/public/streams/') ||
+    path === '/api/public/watch' ||
+    path.startsWith('/api/public/watch/')
   );
 }
 

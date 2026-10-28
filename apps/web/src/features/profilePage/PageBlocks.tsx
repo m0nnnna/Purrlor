@@ -11,6 +11,7 @@ import { FriendsBlock, GuestbookBlock } from './SocialBlocks';
 import { GalleryBlock } from './GalleryBlock';
 import { MusicBlock } from './MusicBlock';
 import { CommissionsBlock } from './CommissionsBlock';
+import { VideosBlock } from '../watch/VideosBlock';
 import { ModulePreview } from './ModulePreview';
 import { PageOwnerContext } from './PageOwnerContext';
 import { PageTargetContext } from './PageTargetContext';
@@ -178,6 +179,8 @@ function BlockBody({ block }: { block: PageBlock }) {
       return <MusicBlock block={block} />;
     case 'commissions':
       return <CommissionsBlock />;
+    case 'videos':
+      return <VideosBlock block={block} />;
     default:
       return null;
   }
@@ -205,6 +208,8 @@ export function moduleTitle(block: PageBlock): string {
       return 'Commissions';
     case 'music':
       return 'Music';
+    case 'videos':
+      return 'Videos';
     default:
       return '';
   }

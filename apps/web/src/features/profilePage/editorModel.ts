@@ -70,6 +70,7 @@ export const BLOCK_LABELS: Record<PageBlockType, string> = {
   guestbook: 'Guestbook',
   commissions: 'Commissions',
   music: 'Music',
+  videos: 'Videos',
 };
 
 /** A new, empty block of a kind, at the end of a column (the profile song has no column). */
@@ -97,6 +98,8 @@ export function addBlock(page: ProfilePage, type: PageBlockType, side: PageSide 
         return { id, type, who: 'everyone', slowmode: 0, blockedWords: [] };
       case 'commissions':
         return { id, type };
+      case 'videos':
+        return { id, type, playlists: [{ id: 'p0', videoIds: [] }] };
       case 'music':
         // Ready for its first tracks: uploading goes into an album. Its ID is new to the page,
         // since a link to an album names it by ID alone.

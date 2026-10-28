@@ -8,7 +8,7 @@ import { adminStore } from './adminStore.js';
 import { clientIp } from './clientIp.js';
 import { pageStateFromRoom, type ControlDeps, type PageState } from './controlServer.js';
 import { getServiceClient } from './membership.js';
-import { byteLimit, MediaCache, TooLargeError } from './mediaCache.js';
+import { byteLimit, MediaCache, TooLargeError, type CachedCopy } from './mediaCache.js';
 import {
   addRoomMedia,
   isMxc,
@@ -43,6 +43,20 @@ import { FEDERATION_VERSION, cleanInstanceName, knownUserId, parsePeerStatus, pr
 import { joinFollowedProfile, leavePeer, peerStatus, syncPeer } from './peering.js';
 import { readPeerEmotes } from './peerEmotes.js';
 import { roomOriginServer } from './tenancy.js';
+import {
+  channelName,
+  livePointer,
+  MAX_VIEW_IDS,
+  parsePeerViews,
+  STORY_EVENT,
+  storySummary,
+  videosFromState,
+  viewKey,
+  watchSettings,
+  type LivePointer,
+  type StorySummary,
+  type Video,
+} from './watch.js';
 
 /**
  * The public web's HTTP side (publicWeb.ts has the rules). Everything here is read-only, needs no
@@ -81,6 +95,10 @@ const MAX_PROFILE_ROOMS = 500;
 const EVENTS_PER_ROOM = 100;
 const FEED_PAGE_SIZE = 20;
 const READ_CONCURRENCY = 4;
+/** Each profile room's latest stories read per refresh, apart from its posts so they can't crowd them out. */
+const STORIES_PER_ROOM = 20;
+/** Most of one peer's videos whose view counts are asked for per refresh (the newest). */
+const MAX_PEER_VIEW_IDS = 1000;
 
 // `||`, not `??`: docker-compose.yml passes `PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-}`, so unset in .env it
 // arrives as an empty string, and `??` kept that. Every instance without it then told its peers
@@ -102,7 +120,24 @@ const MEDIA_CACHE_BYTES = Number(process.env.PUBLIC_MEDIA_CACHE_BYTES) > 0 ? Num
  */
 const MEDIA_MAX_AGE_S = 600;
 
-export type ProfileRoom = { roomId: string; owner: string; state: RawEvent[]; posts: PublicPost[] };
+/** WATCH's settings (docs/watch.md, "Limits"), read once: the feed indexes `maxVideos` per person. */
+export const watchConfig = watchSettings(process.env);
+
+/**
+ * One profile room as read. `videos`, `live`, `story` and `name` are WATCH's (watch.ts): the
+ * owner's videos (newest first), their live pointer, whether they have a story up, and the
+ * channel's name.
+ */
+export type ProfileRoom = {
+  roomId: string;
+  owner: string;
+  state: RawEvent[];
+  posts: PublicPost[];
+  videos: Video[];
+  live?: LivePointer;
+  story?: StorySummary;
+  name?: string;
+};
 /**
  * `publicPages`: owners whose page switch is on in this snapshot. `homeHidden` and `homeOff`: peers'
  * people their own instance hides, or keeps off its public web, so this one does too.
@@ -114,6 +149,8 @@ export type FeedCache = {
   publicPages: Set<string>;
   homeHidden: Set<string>;
   homeOff: Set<string>;
+  /** View counts for peers' videos, from each peer (`<owner>|<id>` → n); absent when a peer didn't answer. */
+  peerViews: Map<string, number>;
 };
 
 export const mediaIndex = new MediaIndex();
@@ -135,7 +172,7 @@ let feedRefresh: Promise<FeedCache> | undefined;
  * What the public routes go by: this site's admin decisions, plus what peers decided about their
  * own people (FeedCache.homeHidden, homeOff).
  */
-async function effectiveLists(feed: FeedCache): Promise<AdminLists> {
+export async function effectiveLists(feed: FeedCache): Promise<AdminLists> {
   const lists = await adminStore.lists();
   return {
     ...lists,
@@ -144,12 +181,12 @@ async function effectiveLists(feed: FeedCache): Promise<AdminLists> {
   };
 }
 
-async function peerServers(): Promise<Set<string>> {
+export async function peerServers(): Promise<Set<string>> {
   return new Set((await adminStore.peers()).map((peer) => peer.serverName));
 }
 
 /** A user ID from a visitor's `:user`, on this server or an approved peer. */
-async function resolveUser(raw: string): Promise<string | undefined> {
+export async function resolveUser(raw: string): Promise<string | undefined> {
   return knownUserId(raw, await serverName(), await peerServers());
 }
 
@@ -183,21 +220,45 @@ async function listProfileRoomIds(mx: MatrixClient): Promise<string[]> {
   return ids.slice(0, MAX_PROFILE_ROOMS);
 }
 
+/** A room's latest events of `types`, newest first. */
+async function readTimeline(mx: MatrixClient, roomId: string, types: string[], limit: number): Promise<RawEvent[]> {
+  // Straight to /messages: the SDK's createMessagesRequest wants a Filter instance, and given a
+  // plain filter it throws before asking, which read every room as empty.
+  const query = new URLSearchParams({ dir: 'b', limit: String(limit), filter: JSON.stringify({ types }) });
+  const res = await fetch(`${mx.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${query}`, {
+    headers: { Authorization: `Bearer ${mx.getAccessToken()}` },
+  });
+  if (!res.ok) throw new Error(`messages: HTTP ${res.status}`);
+  const page = (await res.json()) as { chunk?: RawEvent[] };
+  return Array.isArray(page.chunk) ? page.chunk : [];
+}
+
 async function readProfileRoom(mx: MatrixClient, roomId: string, servers: ReadonlySet<string>): Promise<ProfileRoom | undefined> {
   try {
     const state = (await mx.roomState(roomId)) as unknown as RawEvent[];
     const owner = readProfileOwner(state);
     if (!owner || !servers.has(serverNameOf(owner)) || !ownerStillThere(state, owner)) return undefined;
-    // Straight to /messages: the SDK's createMessagesRequest wants a Filter instance, and given a
-    // plain filter it throws before asking, which read every room as empty.
-    const filter = JSON.stringify({ types: ['xyz.nekous.post', 'xyz.nekous.comment', 'm.reaction'] });
-    const query = new URLSearchParams({ dir: 'b', limit: String(EVENTS_PER_ROOM), filter });
-    const res = await fetch(`${mx.baseUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?${query}`, {
-      headers: { Authorization: `Bearer ${mx.getAccessToken()}` },
-    });
-    if (!res.ok) throw new Error(`messages: HTTP ${res.status}`);
-    const page = (await res.json()) as { chunk?: RawEvent[] };
-    return { roomId, owner, state, posts: publicPostsFromTimeline(Array.isArray(page.chunk) ? page.chunk : [], owner) };
+    const [events, stories] = await Promise.all([
+      readTimeline(mx, roomId, ['xyz.nekous.post', 'xyz.nekous.comment', 'm.reaction'], EVENTS_PER_ROOM),
+      // Stories are WATCH's only; a room whose stories can't be read still has its posts.
+      readTimeline(mx, roomId, [STORY_EVENT], STORIES_PER_ROOM).catch((err: unknown) => {
+        console.warn(`Watch: couldn't read the stories in ${roomId}: ${(err as Error).message}`);
+        return [];
+      }),
+    ]);
+    const live = livePointer(state, owner);
+    const story = storySummary(stories, owner, Date.now());
+    const name = channelName(state, owner);
+    return {
+      roomId,
+      owner,
+      state,
+      posts: publicPostsFromTimeline(events, owner),
+      videos: videosFromState(state, owner, watchConfig.maxVideos),
+      ...(live && { live }),
+      ...(story && { story }),
+      ...(name && { name }),
+    };
   } catch (err) {
     console.error(`Public web: couldn't read profile room ${roomId}: ${(err as Error).message}`);
     return undefined;
@@ -244,6 +305,49 @@ async function askPeers(peers: Peer[], owners: string[]): Promise<{ hidden: Set<
   return { hidden, publicOff };
 }
 
+/**
+ * View counts for peers' people's videos, asked of each peer (`GET /api/public/watch/views`, a
+ * hundred at a time, the newest first). A peer that doesn't answer, or doesn't have WATCH yet,
+ * just has no counts this time round.
+ */
+async function askPeersForViews(peers: Peer[], rooms: ProfileRoom[]): Promise<Map<string, number>> {
+  const views = new Map<string, number>();
+  await Promise.all(
+    peers.map(async (peer) => {
+      const keys = rooms
+        .filter((room) => serverOfUser(room.owner) === peer.serverName)
+        .flatMap((room) => room.videos.map((video) => ({ key: viewKey(room.owner, video.id), at: video.uploaded_at })))
+        .sort((a, b) => b.at - a.at)
+        .slice(0, MAX_PEER_VIEW_IDS)
+        .map((entry) => entry.key);
+      for (let i = 0; i < keys.length; i += MAX_VIEW_IDS) {
+        try {
+          const query = new URLSearchParams({ ids: keys.slice(i, i + MAX_VIEW_IDS).join(',') });
+          const res = await fetch(`${peer.url}/api/public/watch/views?${query}`, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5_000) });
+          if (!res.ok) {
+            void res.body?.cancel().catch(() => undefined);
+            // 404: a peer from before WATCH. Not worth a warning every minute.
+            if (res.status !== 404) console.warn(`Watch: ${peer.serverName} didn't give view counts: HTTP ${res.status}`);
+            return;
+          }
+          parsePeerViews(await res.json(), peer.serverName).forEach((n, key) => views.set(key, n));
+        } catch (err) {
+          console.warn(`Watch: couldn't ask ${peer.serverName} for view counts: ${(err as Error).message}`);
+          return;
+        }
+      }
+    })
+  );
+  return views;
+}
+
+/** Told about each new snapshot (watchRoutes.ts drops deleted videos' view counts from it). */
+const feedListeners: ((feed: FeedCache) => void)[] = [];
+
+export function onFeedRefresh(listener: (feed: FeedCache) => void): void {
+  feedListeners.push(listener);
+}
+
 async function refreshFeed(): Promise<FeedCache> {
   const mx = await getServiceClient();
   const serverName = serverNameOf(mx.getUserId() ?? '');
@@ -260,7 +364,7 @@ async function refreshFeed(): Promise<FeedCache> {
     (room): room is ProfileRoom => !!room
   );
   const remoteOwners = [...new Set(rooms.map((room) => room.owner).filter((owner) => serverOfUser(owner) !== serverName))];
-  const home = await askPeers(peers, remoteOwners);
+  const [home, peerViews] = await Promise.all([askPeers(peers, remoteOwners), askPeersForViews(peers, rooms)]);
   const cache: FeedCache = {
     at: Date.now(),
     rooms: new Map(rooms.map((room) => [room.roomId, room])),
@@ -268,6 +372,7 @@ async function refreshFeed(): Promise<FeedCache> {
     publicPages: new Set(),
     homeHidden: home.hidden,
     homeOff: home.publicOff,
+    peerViews,
   };
   // A person has one profile room; if a stray second one exists, the one with posts wins.
   for (const room of rooms) {
@@ -279,6 +384,13 @@ async function refreshFeed(): Promise<FeedCache> {
   const snapshot = new Map<string, MediaSource[]>();
   for (const room of cache.byOwner.values()) addRoomMedia(snapshot, room);
   mediaIndex.setSnapshot(snapshot);
+  for (const listener of feedListeners) {
+    try {
+      listener(cache);
+    } catch (err) {
+      console.error('Feed listener failed', err);
+    }
+  }
   return cache;
 }
 
@@ -388,9 +500,12 @@ const MEDIA_HEADERS = {
   'Cross-Origin-Resource-Policy': 'same-site',
 };
 
-/** A local copy (sound, video), whole or the one range asked for. */
-async function sendCopy(req: Request, res: Response, copy: { path: string; size: number; type: string }): Promise<void> {
-  res.set({ ...MEDIA_HEADERS, 'Content-Type': copy.type, 'Accept-Ranges': 'bytes' });
+/**
+ * A local copy (sound, video), whole or the one range asked for. `headers` override the media
+ * route's own (WATCH's play addresses are used from peers' apps, so other sites may load them).
+ */
+export async function sendCopy(req: Request, res: Response, copy: { path: string; size: number; type: string }, headers: Record<string, string> = {}): Promise<void> {
+  res.set({ ...MEDIA_HEADERS, ...headers, 'Content-Type': copy.type, 'Accept-Ranges': 'bytes' });
   const range = parseRange(req.get('range'), copy.size);
   if (range === 'unsatisfiable') return void res.status(416).set('Content-Range', `bytes */${copy.size}`).end();
   const { start, end } = range ?? { start: 0, end: copy.size - 1 };
@@ -398,6 +513,42 @@ async function sendCopy(req: Request, res: Response, copy: { path: string; size:
   res.set('Content-Length', String(Math.max(0, end - start + 1)));
   if (req.method === 'HEAD' || copy.size === 0) return void res.end();
   await pipeline(createReadStream(copy.path, { start, end }), res);
+}
+
+/** A file (or a thumbnail of it) from the homeserver, read as the service account: media needs a login. */
+async function fetchFromHomeserver(server: string, mediaId: string, thumbnail?: { width: number; height: number }): Promise<globalThis.Response> {
+  const mx = await getServiceClient();
+  const path = thumbnail
+    ? `/_matrix/client/v1/media/thumbnail/${encodeURIComponent(server)}/${encodeURIComponent(mediaId)}?width=${thumbnail.width}&height=${thumbnail.height}&method=scale&animated=true`
+    : `/_matrix/client/v1/media/download/${encodeURIComponent(server)}/${encodeURIComponent(mediaId)}`;
+  return fetch(`${mx.baseUrl}${path}`, { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } });
+}
+
+/** Copies a file the homeserver sent into the media cache. Undefined when it's over `maxBytes`. */
+async function storeCopy(mxc: string, type: string, body: NonNullable<globalThis.Response['body']>, maxBytes: number): Promise<CachedCopy | undefined> {
+  return mediaCache.store(mxc, type, body as never, maxBytes).catch((err: unknown) => {
+    if (err instanceof TooLargeError) return undefined;
+    throw err;
+  });
+}
+
+/**
+ * The media cache's copy of `mxc`, made now if there isn't one, served as `type` (WATCH's videos:
+ * the type their event names, one of two). Undefined when the homeserver doesn't have the file or
+ * it's over `maxBytes`. Whether the file may be served at all is the caller's to decide first.
+ */
+export async function copyFromHomeserver(mxc: string, type: string, maxBytes: number): Promise<CachedCopy | undefined> {
+  const ready = mediaCache.get(mxc) ?? (await mediaCache.copying(mxc)?.catch(() => undefined));
+  if (ready) return ready.size <= maxBytes ? ready : undefined;
+  const parts = splitMxc(mxc);
+  if (!parts) return undefined;
+  const upstream = await fetchFromHomeserver(parts.server, parts.mediaId);
+  const length = Number(upstream.headers.get('content-length') ?? NaN);
+  if (!upstream.ok || !upstream.body || length > maxBytes) {
+    void upstream.body?.cancel().catch(() => undefined);
+    return undefined;
+  }
+  return storeCopy(mxc, type, upstream.body, maxBytes);
 }
 
 function baseUrl(req: Request): string {
@@ -508,11 +659,7 @@ export function publicWebRouter(): Router {
       const copy = thumbnail ? undefined : mediaCache.get(mxc);
       if (copy) return void (await sendCopy(req, res, copy));
 
-      const mx = await getServiceClient();
-      const path = thumbnail
-        ? `/_matrix/client/v1/media/thumbnail/${encodeURIComponent(req.params.server)}/${encodeURIComponent(req.params.mediaId)}?width=${width}&height=${height}&method=scale&animated=true`
-        : `/_matrix/client/v1/media/download/${encodeURIComponent(req.params.server)}/${encodeURIComponent(req.params.mediaId)}`;
-      const upstream = await fetch(`${mx.baseUrl}${path}`, { headers: { Authorization: `Bearer ${mx.getAccessToken()}` } });
+      const upstream = await fetchFromHomeserver(req.params.server, req.params.mediaId, thumbnail ? { width, height } : undefined);
       const type = upstream.headers.get('content-type');
       const length = Number(upstream.headers.get('content-length') ?? NaN);
       if (!upstream.ok || !upstream.body || !isServableMediaType(type) || length > MAX_MEDIA_BYTES) {
@@ -522,10 +669,7 @@ export function publicWebRouter(): Router {
 
       // Sound and video: copied here first, so ranges work and the size is known before sending.
       if (!thumbnail && isSeekableMediaType(type)) {
-        const stored = await mediaCache.store(mxc, type!, upstream.body as never).catch((err: unknown) => {
-          if (err instanceof TooLargeError) return undefined;
-          throw err;
-        });
+        const stored = await storeCopy(mxc, type!, upstream.body, MAX_MEDIA_BYTES);
         if (!stored) return void res.status(404).end();
         return void (await sendCopy(req, res, stored));
       }

@@ -35,6 +35,9 @@ import { ThreadsOverviewModal } from './ThreadsOverviewModal';
 import { TopicBanner } from './TopicBanner';
 import { HomeView } from '../home/HomeView';
 import { openStreamAtom } from '../streaming/streamerState';
+import { VideoWatchView } from '../watch/VideoWatchView';
+import { WatchView } from '../watch/WatchView';
+import { openVideoAtom } from '../watch/watchState';
 import { StreamWatchView } from '../streaming/StreamWatchView';
 import { TypingIndicator } from './TypingIndicator';
 import { NoSpacesYet, useInNoSpace } from '../onboarding/WelcomeGuideHost';
@@ -121,6 +124,7 @@ function MainPaneContent() {
   const [profileUserId, setProfileUserId] = useAtom(profileUserIdAtom);
   const [openPost, setOpenPost] = useAtom(openPostAtom);
   const [openStream, setOpenStream] = useAtom(openStreamAtom);
+  const [openVideo, setOpenVideo] = useAtom(openVideoAtom);
   const room = useRoom(selectedRoomId);
   const channelType = useChannelType(room);
   const encrypted = useRoomEncrypted(room);
@@ -170,6 +174,11 @@ function MainPaneContent() {
     setOpenStream(null);
   }, [selectedRoomId, selectedSpaceId, spaceView, section, setOpenStream]);
 
+  // A video's page, the same: over its owner's profile or the Watch page it was opened from.
+  useEffect(() => {
+    setOpenVideo(null);
+  }, [selectedRoomId, selectedSpaceId, spaceView, section, setOpenVideo]);
+
   // Feeds are a merge across many rooms rather than one selected room, so they take precedence
   // over whatever channel happens to still be selected behind them. A profile sits over a feed,
   // and a post's page over either. What's underneath stays mounted, just hidden, so Back lands on
@@ -188,6 +197,17 @@ function MainPaneContent() {
       </>
     );
   }
+  if (openVideo) {
+    return (
+      <>
+        {profileUserId && <ProfileView key={profileUserId} userId={profileUserId} hidden />}
+        {!profileUserId && section === 'watch' && <WatchView hidden />}
+        <VideoWatchView />
+      </>
+    );
+  }
+  // Watch is its own page too, with the same rule for what sits over it.
+  if (section === 'watch' && !profileUserId && !openPost) return <WatchView />;
   // Home is its own page; a profile or post opened from it sits over it, as over any section.
   if (inHome && !profileUserId && !openPost) return <HomeView />;
   const calendarSpace = spaceView === 'events' && selectedSpaceId && !globalFeedOpen ? mx.getRoom(selectedSpaceId) : null;

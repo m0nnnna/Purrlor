@@ -568,10 +568,14 @@ export class MediaIndex {
   }
 }
 
-/** One profile room's contribution to the media snapshot. */
+/**
+ * One profile room's contribution to the media snapshot. A public video's thumbnail counts as the
+ * page's (servable while the page is public); the video file itself never does: it's only served
+ * through WATCH's play addresses (docs/watch.md).
+ */
 export function addRoomMedia(
   snapshot: Map<string, MediaSource[]>,
-  room: { owner: string; posts: PublicPost[]; state: RawEvent[] }
+  room: { owner: string; posts: PublicPost[]; state: RawEvent[]; videos?: { thumbnail: string; visibility: string }[] }
 ): void {
   const add = (url: string, kind: MediaSource['kind']) => {
     const sources = snapshot.get(url) ?? [];
@@ -579,7 +583,11 @@ export function addRoomMedia(
     snapshot.set(url, sources);
   };
   collectMxc(room.posts).forEach((url) => add(url, 'post'));
-  if (readPublicWeb(room.state)) pageMedia(readPageContent(room.state)).forEach((url) => add(url, 'page'));
+  if (!readPublicWeb(room.state)) return;
+  pageMedia(readPageContent(room.state)).forEach((url) => add(url, 'page'));
+  room.videos?.forEach((video) => {
+    if (video.visibility === 'public' && isMxc(video.thumbnail)) add(video.thumbnail, 'page');
+  });
 }
 
 /** What the admin has said about who and what may be public (`purrlor pages` and `takedown`). */

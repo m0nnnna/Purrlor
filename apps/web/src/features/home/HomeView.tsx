@@ -91,7 +91,8 @@ function LiveCard({ channel }: { channel: LiveVoiceChannel }) {
 /** A live stream's thumbnail is replaced this often (the server's newest picture comes about every 60 s). */
 const THUMBNAIL_REFRESH_MS = 60_000;
 
-function StreamCard({ stream }: { stream: PublicStream }) {
+/** `base` is the stream's server when it isn't this one (WATCH lists peers' streams too); its thumbnail path is relative to it. */
+export function StreamCard({ stream, base = '' }: { stream: PublicStream; base?: string }) {
   const setOpenStream = useSetAtom(openStreamAtom);
   const owner = useUserProfile(stream.owner);
   // A new `?t=` makes the browser fetch the newest picture instead of its cached one.
@@ -110,7 +111,7 @@ function StreamCard({ stream }: { stream: PublicStream }) {
       onClick={() => setOpenStream({ owner: stream.owner, streamId: stream.id })}
     >
       <span className="nu-home__stream-thumb">
-        {stream.thumbnail && <img src={`${stream.thumbnail}?t=${stamp}`} alt="" />}
+        {stream.thumbnail && <img src={`${base}${stream.thumbnail}?t=${stamp}`} alt="" />}
         <span className="nu-home__stream-badges">
           <span className="nu-live-badge">LIVE</span>
           {watching}

@@ -1,0 +1,316 @@
+/* WATCH (docs/watch.md): the page, video cards, the player, the video page, the upload dialog. */
+
+.nu-watch-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--nu-space-4);
+}
+
+.nu-watch-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-5, 24px);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.nu-watch-view__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+}
+
+.nu-watch-view__search {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-watch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--nu-space-4);
+}
+
+.nu-watch-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-1);
+  min-width: 0;
+}
+
+.nu-watch-card__open {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--nu-color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nu-watch-card__title {
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nu-watch-card__channel {
+  display: flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  font-size: var(--nu-font-size-sm);
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-watch-card__meta {
+  font-size: var(--nu-font-size-xs);
+  color: var(--nu-color-text-muted);
+}
+
+.nu-watch-card__actions {
+  display: flex;
+  gap: var(--nu-space-2);
+  margin-top: var(--nu-space-1);
+}
+
+.nu-watch-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--nu-radius-md);
+  background: var(--nu-color-bg-tertiary);
+}
+
+.nu-watch-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nu-watch-thumb__length,
+.nu-watch-thumb__private {
+  position: absolute;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nu-watch-thumb__length {
+  right: 6px;
+}
+
+.nu-watch-thumb__private {
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The Videos tab */
+.nu-watch-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-watch-tab__bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The player */
+.nu-watch-player {
+  position: relative;
+  width: 100%;
+  max-height: 75vh;
+  background: #000;
+  border-radius: var(--nu-radius-md);
+  overflow: hidden;
+}
+
+.nu-watch-player__video,
+.nu-watch-player__poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.nu-watch-player__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  cursor: pointer;
+}
+
+.nu-watch-player__play:hover:not(:disabled) {
+  background: var(--nu-color-accent);
+}
+
+.nu-watch-player__play:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.nu-watch-player__error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: var(--nu-font-size-sm);
+}
+
+/* The video page */
+.nu-watch-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.nu-watch-public {
+  padding: var(--nu-space-4);
+}
+
+.nu-watch-page__title {
+  margin: 0;
+  font-family: var(--nu-font-display);
+  font-size: var(--nu-font-size-xl);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-watch-page__meta {
+  margin: 0;
+  color: var(--nu-color-text-muted);
+  font-size: var(--nu-font-size-sm);
+}
+
+.nu-watch-page__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nu-space-3);
+}
+
+.nu-watch-page__channel {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nu-space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--nu-color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nu-watch-page__like--on {
+  border-color: var(--nu-color-accent);
+  color: var(--nu-color-accent);
+}
+
+.nu-watch-page__description {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-watch-page__signin,
+.nu-watch-page__missing {
+  color: var(--nu-color-text-muted);
+}
+
+.nu-watch-page__comments,
+.nu-watch-page__more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+/* On a profile page's videos block */
+.nu-profile-page__videos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-4);
+}
+
+.nu-profile-page__playlist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-2);
+}
+
+.nu-profile-page__playlist-title {
+  margin: 0;
+}
+
+/* The upload and edit dialogs */
+.nu-watch-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nu-space-3);
+}
+
+.nu-watch-form__thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nu-space-2);
+}
+
+.nu-watch-form__thumb img {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: var(--nu-radius-md);
+}
+
+.nu-watch-form__progress {
+  width: 100%;
+  height: 10px;
+}
+
+.nu-watch-form__actions,
+.nu-watch-form__confirm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nu-space-2);
+}

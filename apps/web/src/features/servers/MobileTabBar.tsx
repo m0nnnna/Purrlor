@@ -22,6 +22,7 @@ import './MobileTabBar.css';
 const ICONS = {
   home: 'M3 11l9-7 9 7v9H3zM9 20v-6h6v6',
   spaces: 'M7 3l4 2.3v4.6L7 12.2 3 9.9V5.3zM17 3l4 2.3v4.6l-4 2.3-4-2.3V5.3zM12 11.8l4 2.3v4.6L12 21l-4-2.3v-4.6z',
+  watch: 'M3 5h18v14H3zM10 9v6l5-3z',
   feed: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9',
   notify: 'M6 16V10a6 6 0 0 1 12 0v6l2 2H4zM10 21h4',
 } as const;
@@ -41,7 +42,7 @@ function Count({ n }: { n: number }) {
 
 /**
  * The phone layout's way around, from the Ultimit mockup's phone screen: a bar along the bottom
- * with Home (the dashboard), Chat (your DMs and Spaces: the channel list), Feed, Notify and You (your own profile). It stands in for the server rail, which on a phone took a
+ * with Home (the dashboard), Chat (your DMs and Spaces: the channel list), Watch, Feed, Notify and You (your own profile). It stands in for the server rail, which on a phone took a
  * strip off every screen and had no way to your own profile at all. Only below the responsive
  * breakpoint (styles/base/frame.css); hidden while the keyboard is up.
  */
@@ -69,6 +70,7 @@ export function MobileTabBar() {
   const onFeed = globalFeedOpen && !onNotify && !profileUserId;
   const onHome = section === 'home' && !profileUserId;
   const onChat = section === 'messages' && !profileUserId;
+  const onWatch = section === 'watch' && !profileUserId;
 
   const tabs = [
     {
@@ -98,6 +100,20 @@ export function MobileTabBar() {
         setProfileUserId(null);
         setSection('messages');
         setColumnOpen(true);
+      },
+    },
+    {
+      key: 'watch',
+      label: 'Watch',
+      aria: 'Watch',
+      active: onWatch,
+      icon: <Glyph name="watch" />,
+      count: 0,
+      go: () => {
+        setColumnOpen(false);
+        setProfileUserId(null);
+        setOpenPost(null);
+        setSection('watch');
       },
     },
     {

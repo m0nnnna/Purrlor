@@ -290,6 +290,25 @@ describe('which media may be served', () => {
     assert.equal(mayServeMedia('mxc://purr.example/secret', index.sources('mxc://purr.example/secret'), noLists(), new Set([OWNER])), false);
   });
 
+  it("serves a public video's thumbnail while the page is public, never a video file or a private one's", () => {
+    const videos = [
+      { url: 'mxc://purr.example/file', thumbnail: 'mxc://purr.example/thumb', visibility: 'public' },
+      { url: 'mxc://purr.example/file2', thumbnail: 'mxc://purr.example/thumb2', visibility: 'private' },
+    ];
+    const off = new Map<string, MediaSource[]>();
+    addRoomMedia(off, { owner: OWNER, posts: [], state: PAGE_STATE(false, PAGE), videos });
+    assert.equal(off.has('mxc://purr.example/thumb'), false);
+    const snapshot = new Map<string, MediaSource[]>();
+    addRoomMedia(snapshot, { owner: OWNER, posts: [], state: PAGE_STATE(true, PAGE), videos });
+    const index = new MediaIndex();
+    index.setSnapshot(snapshot);
+    const serve = (url: string) => mayServeMedia(url, index.sources(url), noLists(), new Set([OWNER]));
+    assert.equal(serve('mxc://purr.example/thumb'), true);
+    assert.equal(serve('mxc://purr.example/thumb2'), false);
+    assert.equal(serve('mxc://purr.example/file'), false);
+    assert.equal(mayServeMedia('mxc://purr.example/thumb', index.sources('mxc://purr.example/thumb'), { ...noLists(), publicOff: new Set([OWNER]) }, new Set([OWNER])), false);
+  });
+
   it('never serves a file for a hidden owner, a page an admin switched off, or a blocked file', () => {
     const snapshot = new Map<string, MediaSource[]>();
     const posts: PublicPost[] = [

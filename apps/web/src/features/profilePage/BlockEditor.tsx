@@ -23,7 +23,9 @@ import {
   type PageLink,
   type PageSide,
   type PageSpace,
+  type VideoPlaylist,
 } from '../../matrix/profilePage';
+import { fetchChannelVideos, type WatchVideo } from '../../matrix/videos';
 import { formatBytes } from '../../matrix/postMedia';
 import { parseWatchUrl } from '../voice/watchTogether';
 import { BLOCK_LABELS, findEmote } from './editorModel';
@@ -799,6 +801,73 @@ function CommissionsEditor({ block, onChange }: EditorProps<'commissions'>) {
   );
 }
 
+/** A videos block's editor: playlists, each a title and a pick from your own videos (the catalogue's view of your channel). */
+function VideosEditor({ block, onChange }: EditorProps<'videos'>) {
+  const mx = useMatrixClient();
+  const [mine, setMine] = useState<WatchVideo[]>();
+  useEffect(() => {
+    const me = mx.getUserId();
+    if (!me) return undefined;
+    let cancelled = false;
+    fetchChannelVideos(mx, me).then(
+      (videos) => !cancelled && setMine(videos),
+      () => !cancelled && setMine([])
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [mx]);
+  const setLists = (playlists: VideoPlaylist[]) => onChange({ ...block, playlists });
+  const update = (index: number, list: VideoPlaylist) => setLists(block.playlists.map((other, i) => (i === index ? list : other)));
+  const toggle = (index: number, id: string) => {
+    const list = block.playlists[index];
+    const has = list.videoIds.includes(id);
+    update(index, { ...list, videoIds: has ? list.videoIds.filter((other) => other !== id) : [...list.videoIds, id].slice(0, LIMITS.playlistVideos) });
+  };
+  return (
+    <>
+      <TitleField value={block.title} onChange={(title) => onChange({ ...block, title })} />
+      <p className="nu-field__hint">Your videos also show on the Videos tab whether or not the page has this block. Playlists with no videos are left out.</p>
+      {block.playlists.map((list, index) => (
+        <fieldset key={list.id} className="nu-block-editor__album" data-nu-role="page-editor-playlist">
+          <label className="nu-field">
+            Playlist name
+            <input
+              className="nu-field__input"
+              value={list.title ?? ''}
+              maxLength={LIMITS.title}
+              onChange={(evt) => update(index, { ...list, title: evt.target.value || undefined })}
+            />
+          </label>
+          {mine === undefined && <span className="nu-field__hint">Loading your videos…</span>}
+          {mine?.length === 0 && <span className="nu-field__hint">Upload a video on your Videos tab first.</span>}
+          {mine?.map((video) => (
+            <label key={video.id} className="nu-field__checkbox-row">
+              <input type="checkbox" checked={list.videoIds.includes(video.id)} onChange={() => toggle(index, video.id)} />
+              {video.title}
+            </label>
+          ))}
+          {block.playlists.length > 1 && (
+            <button type="button" className="nu-button nu-button--secondary" onClick={() => setLists(block.playlists.filter((_, i) => i !== index))}>
+              Remove playlist
+            </button>
+          )}
+        </fieldset>
+      ))}
+      {block.playlists.length < LIMITS.playlists && (
+        <button
+          type="button"
+          className="nu-button nu-button--secondary"
+          data-nu-role="page-editor-add-playlist"
+          onClick={() => setLists([...block.playlists, { id: `p${Math.random().toString(36).slice(2, 8)}`, videoIds: [] }])}
+        >
+          Add a playlist
+        </button>
+      )}
+    </>
+  );
+}
+
 function Fields({
   block,
   onChange,
@@ -838,6 +907,8 @@ function Fields({
       return <GuestbookEditor block={block} onChange={onChange} {...shared} />;
     case 'music':
       return <MusicEditor block={block} onChange={onChange} {...shared} />;
+    case 'videos':
+      return <VideosEditor block={block} onChange={onChange} {...shared} />;
     case 'commissions':
       return <CommissionsEditor block={block} onChange={onChange} {...shared} />;
     default:

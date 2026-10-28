@@ -75,6 +75,15 @@ export function reelFrom(source: FeedSource, events: Record<string, any>[], now:
   return { userId: source.owner, name: source.ownerName, avatarUrl: source.ownerAvatarUrl, stories };
 }
 
+/** One person's live stories as a reel, or undefined if they have none or their room can't be read (WATCH's row, for anyone). */
+export async function loadStoryReel(mx: MatrixClient, userId: string, now = Date.now()): Promise<StoryReel | undefined> {
+  const source = await loadUserProfileSource(mx, userId).catch(() => undefined);
+  if (!source) return undefined;
+  const events = await fetchStoryEvents(mx, source.roomId).catch(() => []);
+  const reel = reelFrom(source, events, now);
+  return reel.stories.length ? reel : undefined;
+}
+
 /**
  * Your own reel and those of the people you follow who have a live story. Read without joining
  * anything (profile rooms are world-readable), the way the global feed reads posts. Someone without

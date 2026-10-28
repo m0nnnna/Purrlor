@@ -810,6 +810,30 @@ export function ChannelList() {
     );
   }
 
+  // Watch is a page of its own as well; this column has just its nav.
+  if (section === 'watch') {
+    return (
+      <aside className="nu-channel-list" data-nu-role="channel-list">
+        <div className="nu-channel-list__header" data-nu-role="channel-list-header">
+          <span className="nu-channel-list__header-title">Watch</span>
+        </div>
+        <div className="nu-channel-list__body" data-nu-role="channel-list-body">
+          <div className="nu-channel-list__row">
+            <button type="button" className="nu-channel-list__item nu-channel-list__item--active" data-nu-role="watch-nav-overview" aria-current="page">
+              <span className="nu-channel-list__item-icon" aria-hidden="true">
+                <Icon name="play" size={18} />
+              </span>
+              <span className="nu-channel-list__item-name">Videos, stories and live</span>
+            </button>
+          </div>
+        </div>
+        <NowPlayingCard />
+        <MusicPlayerBar variant="card" />
+        <ActiveCallBar />
+      </aside>
+    );
+  }
+
   return (
     <aside className="nu-channel-list" data-nu-role="channel-list">
       {!isDirectMessagesView && space ? (

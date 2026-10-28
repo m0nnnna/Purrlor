@@ -11,7 +11,7 @@
     bottom: 0;
     z-index: 180;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     height: calc(var(--nu-mobile-tabs-height) + env(safe-area-inset-bottom));
     padding: 0 calc(env(safe-area-inset-right) + 6px) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + 6px);
     box-sizing: border-box;

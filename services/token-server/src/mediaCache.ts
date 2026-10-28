@@ -18,6 +18,8 @@ import type { ReadableStream } from 'node:stream/web';
 export class TooLargeError extends Error {}
 
 type Entry = { path: string; size: number; type: string; lastUsed: number };
+/** A local copy, as `get` and `store` hand it back. */
+export type CachedCopy = Entry;
 
 /** Counts bytes going past and fails the stream once there are more than `max`. */
 export function byteLimit(max: number): Transform {
@@ -63,22 +65,28 @@ export class MediaCache {
     return entry;
   }
 
+  /** The copy of `key` being made now, if one is. */
+  copying(key: string): Promise<Entry> | undefined {
+    return this.pending.get(key);
+  }
+
   /**
    * Copies `body` in as `key` (once, however many requests ask at the same time). Throws
-   * TooLargeError, and keeps nothing, for a file over the limit.
+   * TooLargeError, and keeps nothing, for a file over the limit: `maxFileBytes` unless the caller
+   * gives its own (WATCH's videos have theirs, docs/watch.md).
    */
-  store(key: string, type: string, body: ReadableStream<Uint8Array>): Promise<Entry> {
+  store(key: string, type: string, body: ReadableStream<Uint8Array>, maxFileBytes = this.maxFileBytes): Promise<Entry> {
     const existing = this.pending.get(key);
     if (existing) {
       void body.cancel().catch(() => undefined);
       return existing;
     }
-    const job = this.copy(key, type, body).finally(() => this.pending.delete(key));
+    const job = this.copy(key, type, body, maxFileBytes).finally(() => this.pending.delete(key));
     this.pending.set(key, job);
     return job;
   }
 
-  private async copy(key: string, type: string, body: ReadableStream<Uint8Array>): Promise<Entry> {
+  private async copy(key: string, type: string, body: ReadableStream<Uint8Array>, maxFileBytes: number): Promise<Entry> {
     await this.ready;
     const path = this.pathFor(key);
     const temp = `${path}.${process.pid}.${Date.now()}.part`;
@@ -90,7 +98,7 @@ export class MediaCache {
       },
     });
     try {
-      await pipeline(Readable.fromWeb(body as never), byteLimit(this.maxFileBytes), counter, createWriteStream(temp, { mode: 0o600 }));
+      await pipeline(Readable.fromWeb(body as never), byteLimit(maxFileBytes), counter, createWriteStream(temp, { mode: 0o600 }));
       await rename(temp, path);
     } catch (err) {
       await rm(temp, { force: true });

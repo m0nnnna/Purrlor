@@ -9,7 +9,7 @@ import { StoryComposer } from './StoryComposer';
 import { StoryViewer } from './StoryViewer';
 import './Stories.css';
 
-function Bubble({
+export function Bubble({
   reel,
   unseen,
   label,

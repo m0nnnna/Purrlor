@@ -11,6 +11,7 @@ const HOME: View = {
   profileUserId: null,
   openPost: null,
   mobileColumn: false,
+  openVideo: null,
   mobileMembers: false,
 };
 

@@ -128,14 +128,19 @@ export type PageBlock = PageBlockBase & (
   /** Albums of audio the owner uploaded, played by the page's own player. Nothing plays until
    *  pressed. The older music block, a flat `tracks` list, reads as a single album. */
   | { id: string; type: 'music'; title?: string; albums: MusicAlbum[] }
+  /** The owner's videos (matrix/videos.ts) arranged in playlists. An id with no video behind it is skipped when drawn. */
+  | { id: string; type: 'videos'; title?: string; playlists: VideoPlaylist[] }
 );
+
+/** A named run of the owner's videos, by id, in the order they chose. */
+export type VideoPlaylist = { id: string; title?: string; videoIds: string[] };
 
 /**
  * Where a block without a side goes: things about you on the left, things of yours and from other
  * people on the right, so a page made before sides comes out balanced rather than all on one side.
  */
 export function defaultSide(type: PageBlock['type']): PageSide {
-  return type === 'gallery' || type === 'music' || type === 'friends' || type === 'guestbook' || type === 'commissions'
+  return type === 'gallery' || type === 'music' || type === 'friends' || type === 'guestbook' || type === 'commissions' || type === 'videos'
     ? 'right'
     : 'left';
 }
@@ -180,6 +185,9 @@ export const LIMITS = {
   /** Music albums across a page. Their covers are small thumbnails and don't count toward `images`. */
   musicAlbums: 20,
   albumTracks: 30,
+  /** Playlists on a videos block, and videos in each. */
+  playlists: 20,
+  playlistVideos: 200,
   /** Earliest and latest release year an album may give. */
   minYear: 1900,
   maxYear: 2100,
@@ -222,6 +230,8 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/;
 /** `mxc://server/media-id`: the server part as the spec's server names allow, the ID as media IDs do. */
 const MXC_URL = /^mxc:\/\/[A-Za-z0-9.\-:[\]]{1,255}\/[A-Za-z0-9_-]{1,255}$/;
 const BLOCK_ID = /^[A-Za-z0-9_-]{1,16}$/;
+/** A video's id (matrix/videos.ts): exactly 16 of these. */
+const VIDEO_ID = /^[A-Za-z0-9_-]{16}$/;
 // Room version 12 room IDs have no server part (`!<hash>`); older ones do (`!opaque:server`).
 const ROOM_ID = /^![A-Za-z0-9._~=+/-]{1,255}(:[A-Za-z0-9.\-:[\]]{1,255})?$/;
 const USER_ID = /^@[a-z0-9._=\-/+]{1,200}:[A-Za-z0-9.\-:[\]]{1,200}$/;
@@ -459,6 +469,30 @@ function readMusicAlbums(raw: Record<string, unknown>): MusicAlbum[] {
     .slice(0, LIMITS.musicAlbums);
 }
 
+function readPlaylist(raw: unknown, index: number): VideoPlaylist | undefined {
+  if (!isRecord(raw)) return undefined;
+  const id = typeof raw.id === 'string' && BLOCK_ID.test(raw.id) ? raw.id : `p${index}`;
+  const title = readLine(raw.title, LIMITS.title);
+  const ids = Array.isArray(raw.videoIds) ? raw.videoIds.slice(0, LIMITS.playlistVideos * 4) : [];
+  const videoIds = [...new Set(ids.filter((value): value is string => typeof value === 'string' && VIDEO_ID.test(value)))].slice(0, LIMITS.playlistVideos);
+  return videoIds.length > 0 ? { id, ...(title && { title }), videoIds } : undefined;
+}
+
+/** A videos block's playlists: those with at least one valid id, with unique ids. */
+function readPlaylists(raw: Record<string, unknown>): VideoPlaylist[] {
+  const seen = new Set<string>();
+  return (Array.isArray(raw.playlists) ? raw.playlists.slice(0, LIMITS.playlists * 4) : [])
+    .map(readPlaylist)
+    .filter((list): list is VideoPlaylist => !!list)
+    .map((list) => {
+      let id = list.id;
+      while (seen.has(id)) id = `${id}_`;
+      seen.add(id);
+      return { ...list, id };
+    })
+    .slice(0, LIMITS.playlists);
+}
+
 function withTitle(raw: Record<string, unknown>): { title?: string } {
   const title = readLine(raw.title, LIMITS.title);
   return title ? { title } : {};
@@ -534,6 +568,10 @@ function readBlock(raw: unknown, id: string): PageBlock | undefined {
     case 'music': {
       const albums = readMusicAlbums(raw);
       return albums.length > 0 ? { id, type: 'music', ...withTitle(raw), albums } : undefined;
+    }
+    case 'videos': {
+      const playlists = readPlaylists(raw);
+      return playlists.length > 0 ? { id, type: 'videos', ...withTitle(raw), playlists } : undefined;
     }
     default:
       return undefined;

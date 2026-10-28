@@ -11,6 +11,7 @@ import {
   socialSpaceIdAtom,
   socialViewAtom,
 } from './state/selection';
+import { openVideoAtom } from '../features/watch/watchState';
 
 /**
  * Back goes to the previous screen, or closes the pop-up on top. What's showing lives in atoms
@@ -37,6 +38,7 @@ const VIEW_ATOMS = {
   socialSpaceId: socialSpaceIdAtom,
   profileUserId: profileUserIdAtom,
   openPost: openPostAtom,
+  openVideo: openVideoAtom,
   mobileColumn: mobileColumnOpenAtom,
   mobileMembers: mobileMemberListOpenAtom,
 } as const;

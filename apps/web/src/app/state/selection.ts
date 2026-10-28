@@ -23,11 +23,11 @@ export const channelComposerFocusAtom = atom(0);
 export const selectedSpaceViewAtom = atom<'feed' | 'events' | 'news' | null>(null);
 
 /**
- * The app's three top-level sections, picked in the server rail: the Home dashboard, the social
- * Feed, and Messages (DMs and Spaces). Each keeps its own place in the atoms below: going Home and
+ * The app's top-level sections, picked in the server rail: the Home dashboard, the social
+ * Feed, Messages (DMs and Spaces), and Watch (videos, stories and who's live). Each keeps its own place in the atoms below: going Home and
  * back to Messages returns to the same Space and room.
  */
-export type RailSection = 'home' | 'feed' | 'messages';
+export type RailSection = 'home' | 'feed' | 'messages' | 'watch';
 export const railSectionAtom = atom<RailSection>('home');
 
 /**

@@ -43,10 +43,11 @@ import { AccountSettingsModal } from '../../app/AccountSettingsModal';
 import { GoLiveButton } from '../streaming/GoLive';
 import { ProfileStreamCard } from '../streaming/StreamViews';
 import { StreamList } from '../streaming/StreamList';
+import { VideosTab } from '../watch/VideosTab';
 import { openStreamAtom, streamerAtom } from '../streaming/streamerState';
 import { streamToShow, useProfileStreams, useStreamBase } from '../streaming/useStream';
 
-type ProfileTab = 'posts' | 'media' | 'likes' | 'streams';
+type ProfileTab = 'posts' | 'media' | 'likes' | 'streams' | 'videos';
 
 /**
  * A person's page: banner, bio, Message and Follow, who they follow and who follows them, and
@@ -163,7 +164,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
   const listed = pinnedPost ? posts.filter((post) => post.eventId !== pinnedPost.eventId) : posts;
 
   const sentinelRef = useInfiniteScroll({
-    hasMore: feed.hasMore && tab !== 'likes' && tab !== 'streams',
+    hasMore: feed.hasMore && tab !== 'likes' && tab !== 'streams' && tab !== 'videos',
     loading: feed.loading || feed.loadingMore,
     onLoadMore: feed.loadMore,
   });
@@ -367,6 +368,7 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       {tabButton('posts', 'Posts')}
                       {tabButton('media', 'Media')}
                       {(isMe || (streams?.length ?? 0) > 0) && tabButton('streams', 'Streams')}
+                      {tabButton('videos', 'Videos')}
                       {isMe && tabButton('likes', 'Likes')}
                     </div>
 
@@ -427,6 +429,8 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       />
                     )}
 
+                    {tab === 'videos' && <VideosTab userId={userId} name={basic.name} isMe={isMe} />}
+
                     {tab === 'likes' && isMe && (
                       <>
                         <p className="nu-profile-view__private-note">
@@ -443,8 +447,8 @@ export function ProfileView({ userId, hidden = false }: { userId: string; hidden
                       </>
                     )}
 
-                    {tab !== 'likes' && tab !== 'streams' && feed.loading && posts.length === 0 && <PostSkeletons count={2} />}
-                    {tab !== 'likes' && tab !== 'streams' && (feed.loading || feed.loadingMore) && (
+                    {tab !== 'likes' && tab !== 'streams' && tab !== 'videos' && feed.loading && posts.length === 0 && <PostSkeletons count={2} />}
+                    {tab !== 'likes' && tab !== 'streams' && tab !== 'videos' && (feed.loading || feed.loadingMore) && (
                       <p className="nu-feed__status">{feed.loading ? 'Loading posts…' : 'Loading older posts…'}</p>
                     )}
                   </div>

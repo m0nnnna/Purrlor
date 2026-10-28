@@ -189,6 +189,12 @@ services:
       # local copies of sound and video may use (default 1 GiB, in the data volume).
       - PUBLIC_MEDIA_MAX_BYTES=${PUBLIC_MEDIA_MAX_BYTES:-}
       - PUBLIC_MEDIA_CACHE_BYTES=${PUBLIC_MEDIA_CACHE_BYTES:-}
+      # WATCH (docs/watch.md, "Limits"): one video's largest size (bytes; default 500 MiB), videos
+      # per person (default 500), and how long a play address works (seconds; default 6 hours).
+      # Bigger videos also need the homeserver's MATRIX_MAX_UPLOAD_BYTES and nginx raised.
+      - WATCH_MAX_BYTES=${WATCH_MAX_BYTES:-}
+      - WATCH_MAX_VIDEOS=${WATCH_MAX_VIDEOS:-}
+      - WATCH_PLAY_TTL_S=${WATCH_PLAY_TTL_S:-}
       # Multiplies the public web's per-address rate limits. Raise it (to 20, say) when a relay in
       # front hides visitors' addresses, so every visitor arrives from one (docs/public-web.md).
       - PUBLIC_WEB_RATE_SCALE=${PUBLIC_WEB_RATE_SCALE:-}

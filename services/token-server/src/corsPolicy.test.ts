@@ -16,7 +16,7 @@ describe('originAllowed', () => {
     assert.equal(originAllowed('https://anything.example', parseAllowedOrigins(undefined)), true);
   });
 
-  it('opens voice and bug reports, and nothing else', () => {
+  it('opens voice, bug reports, streams and WATCH, and nothing else', () => {
     assert.equal(openToAnyOrigin('/api/livekit/token'), true);
     assert.equal(openToAnyOrigin('/api/livekit/rooms/participants'), true);
     assert.equal(openToAnyOrigin('/api/public/bugs'), true);
@@ -26,6 +26,9 @@ describe('originAllowed', () => {
     assert.equal(openToAnyOrigin('/api/public/streams'), true);
     assert.equal(openToAnyOrigin('/api/public/streams/k3J9x_Qm2PzL0aBc/token'), true);
     assert.equal(openToAnyOrigin('/api/public/streamsx'), false);
+    assert.equal(openToAnyOrigin('/api/public/watch/play'), true);
+    assert.equal(openToAnyOrigin('/api/public/watch/file/abc.def'), true);
+    assert.equal(openToAnyOrigin('/api/public/watchx'), false);
   });
 });
 

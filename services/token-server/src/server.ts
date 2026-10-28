@@ -10,7 +10,7 @@ import { grantsForPowerLevel } from './grants.js';
 import { toVoiceParticipant, type VoiceParticipant } from './voiceParticipant.js';
 import { livekitRoomName } from './livekitRoomName.js';
 import { handleWebhook } from './webhooks.js';
-import { controlDeps, publicWebRouter, serverName } from './publicWebRoutes.js';
+import { controlDeps, publicWebRouter, serverName, watchConfig } from './publicWebRoutes.js';
 import { embedsRouter } from './embedRoutes.js';
 import { adminStore } from './adminStore.js';
 import { controlApp, listenOnControlSocket } from './controlServer.js';
@@ -27,6 +27,8 @@ import { StreamStore, streamSettings } from './streams.js';
 import { Streams, streamCardHandler, streamsRouter, whipLimited } from './streamRoutes.js';
 import { StreamKeys, whipRouter } from './whip.js';
 import { recorderFromEnv } from './recordings.js';
+import { loadWatchKey, ViewCounter } from './watch.js';
+import { Watch, watchRouter } from './watchRoutes.js';
 
 // The build this is (a commit, set by the image build), for `purrlor metrics` and error reports.
 const VERSION = process.env.PURRLOR_VERSION || undefined;
@@ -204,6 +206,26 @@ const streams = new Streams({
 });
 streams.start().catch((err: unknown) => console.error('Streams not started', err));
 
+/**
+ * WATCH (watchRoutes.ts, docs/watch.md): everyone's videos, stories and who's live, from the profile
+ * rooms the public web reads. Play addresses are signed with a key kept in /data/watch-key.
+ */
+const watchViews = new ViewCounter(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'watch-views.json'));
+watchViews.load().catch((err: unknown) => console.error('Watch views not loaded', err));
+const watchKey = loadWatchKey(join(process.env.PURRLOR_DATA_DIR ?? '/data', 'watch-key'));
+watchKey.catch((err: unknown) => console.error('Watch key not loaded: videos won’t play', err));
+const watch = new Watch({
+  settings: watchConfig,
+  views: watchViews,
+  key: watchKey,
+  caller: voiceCaller,
+  serverName,
+  streamLive: (owner, streamId) => {
+    const record = streams.record(streamId);
+    return record?.owner === owner && record.state === 'live';
+  },
+});
+
 /** One request can ask about this many channels at most — the channel list asks about one. */
 const MAX_PARTICIPANT_ROOMS = 50;
 
@@ -311,6 +333,7 @@ app.use(
 );
 app.use('/api/public/embeds', embedsRouter());
 app.use('/api/public/streams', streamsRouter(streams));
+app.use('/api/public/watch', watchRouter(watch));
 if (process.env.INGRESS_WHIP_URL) app.use('/api/public/whip', whipRouter(streams.whipTarget(), whipLimited));
 app.get(
   '/api/public/card/:user/live/:id',

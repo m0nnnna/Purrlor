@@ -33,6 +33,7 @@ import './ServerRail.css';
 const RAIL_ICONS = {
   home: 'M3 11l9-7 9 7v9H3zM9 20v-6h6v6',
   chat: 'M4 4h16v12H9l-5 4zM8 8.5h8M8 12h5',
+  watch: 'M3 5h18v14H3zM10 9v6l5-3z',
   settings:
     'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1',
   feed: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9',
@@ -60,7 +61,7 @@ function Emblem() {
   );
 }
 
-/** The app's main navigation: Home, Feed and Chat (Direct messages and Spaces live in its column), then Notifications, Discover and Create, with your profile and settings at the foot. */
+/** The app's main navigation: Home, Feed, Chat and Watch (Direct messages and Spaces live in its column), then Notifications, Discover and Create, with your profile and settings at the foot. */
 export function ServerRail() {
   const mx = useMatrixClient();
   const invites = useInvites();
@@ -121,6 +122,12 @@ export function ServerRail() {
     setOpenPost(null);
     setProfileUserId(null);
     setSection('messages');
+  };
+  const goWatch = () => {
+    setMobileColumnOpen(false);
+    setOpenPost(null);
+    setProfileUserId(null);
+    setSection('watch');
   };
   // Your profile sits on the social side, like everyone's (as MobileTabBar's You tab does).
   const openOwnProfile = () => {
@@ -199,6 +206,23 @@ export function ServerRail() {
         </span>
         <span className="nu-server-rail__label" aria-hidden="true">
           Chat
+        </span>
+      </button>
+      {/* Watch: videos, everyone's stories and who's live (features/watch/WatchView.tsx). */}
+      <button
+        type="button"
+        className={section === 'watch' ? 'nu-server-rail__item nu-server-rail__item--watch nu-server-rail__item--active' : 'nu-server-rail__item nu-server-rail__item--watch'}
+        data-nu-role="server-rail-watch"
+        title="Watch"
+        aria-label="Watch"
+        aria-current={section === 'watch' ? 'page' : undefined}
+        onClick={goWatch}
+      >
+        <span className="nu-server-rail__icon">
+          <RailIcon name="watch" />
+        </span>
+        <span className="nu-server-rail__label" aria-hidden="true">
+          Watch
         </span>
       </button>
       <div className="nu-server-rail__divider" />
