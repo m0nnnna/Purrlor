@@ -142,6 +142,17 @@ describe('openid validation cache', () => {
     assert.deepEqual(seen, ['example.org:8448', 'evil.example:8448']);
   });
 
+  it('refuses a server vouching for a user on another server', async () => {
+    clearFederationDelegationCache();
+    await withFetch(
+      () => ok('@admin:purr.example'),
+      async () => {
+        const local = { serverName: 'purr.example', baseUrl: 'http://matrix:8008/' };
+        await assert.rejects(validateOpenIdToken({ access_token: 'forged', matrix_server_name: 'evil.example' }, local), /another server/);
+      }
+    );
+  });
+
   it('does not remember a failure', async () => {
     clearFederationDelegationCache();
     let calls = 0;
