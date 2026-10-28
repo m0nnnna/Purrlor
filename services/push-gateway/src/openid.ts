@@ -133,6 +133,10 @@ export async function validateOpenIdToken(
   if (!data.sub) {
     throw new Error('OpenID validation response missing sub');
   }
+  // A homeserver can only vouch for its own users: otherwise any server could answer for an admin here.
+  if (typeof data.sub !== 'string' || data.sub.slice(data.sub.indexOf(':') + 1).toLowerCase() !== serverName.toLowerCase()) {
+    throw new Error('OpenID validation response names a user on another server');
+  }
 
   const lifetimeMs = typeof input.expires_in === 'number' && input.expires_in > 0 ? input.expires_in * 1000 : VALIDATION_TTL_MS;
   if (validations.size >= MAX_VALIDATIONS) {

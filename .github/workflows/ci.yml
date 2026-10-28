@@ -50,6 +50,8 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # watch.spec.ts makes its test clip with ffmpeg.
+      - run: sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npm run e2e:homeserver
       - run: npm run build
       - run: npm run e2e
