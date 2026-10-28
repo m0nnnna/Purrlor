@@ -586,18 +586,54 @@ public sealed class MainForm : Form
         if (e.Button != MouseButtons.Left) return;
         if (WindowState == FormWindowState.Maximized)
         {
-            double ratio = Math.Clamp((double)e.X / Math.Max(1, titleBar.Width), 0.05, 0.95);
-            ToggleMaximize();
-            Left = Math.Max(0, Cursor.Position.X - (int)(Width * ratio));
-            Top = Math.Max(0, Cursor.Position.Y - TitleBarHeight / 2);
+            // A plain click (or the first half of a double-click) on a maximized title bar must not
+            // restore the window: only dragging it does, like a system caption.
+            var drag = SystemInformation.DragSize;
+            var start = Cursor.Position;
+            void OnMove(object? s, MouseEventArgs ev)
+            {
+                var p = Cursor.Position;
+                if ((ev.Button & MouseButtons.Left) == 0) { Detach(); return; }
+                if (Math.Abs(p.X - start.X) < drag.Width && Math.Abs(p.Y - start.Y) < drag.Height) return;
+                Detach();
+                double ratio = Math.Clamp((double)e.X / Math.Max(1, titleBar.Width), 0.05, 0.95);
+                ToggleMaximize(force: true);
+                Left = Math.Max(0, p.X - (int)(Width * ratio));
+                Top = Math.Max(0, p.Y - TitleBarHeight / 2);
+                ReleaseCapture(); SendMessage(Handle, 0x00A1, (IntPtr)2, IntPtr.Zero);
+            }
+            void Detach()
+            {
+                titleBar.MouseMove -= OnMove; titleLabel.MouseMove -= OnMove; serverLabel.MouseMove -= OnMove;
+            }
+            titleBar.MouseMove += OnMove; titleLabel.MouseMove += OnMove; serverLabel.MouseMove += OnMove;
+            return;
         }
         ReleaseCapture(); SendMessage(Handle, 0x00A1, (IntPtr)2, IntPtr.Zero);
     }
 
-    private void UpdateMaximizedBounds() { try { MaximizedBounds = Screen.FromControl(this).WorkingArea; } catch { } }
-
-    private void ToggleMaximize()
+    // MaximizedBounds is relative to the monitor the window maximizes on, not to the desktop: the
+    // raw WorkingArea of a second monitor would push the window off its own screen.
+    private void UpdateMaximizedBounds()
     {
+        try
+        {
+            var screen = Screen.FromControl(this);
+            var wa = screen.WorkingArea;
+            MaximizedBounds = new Rectangle(wa.X - screen.Bounds.X, wa.Y - screen.Bounds.Y, wa.Width, wa.Height);
+        }
+        catch { }
+    }
+
+    private long lastToggleTick;
+
+    // A press that arrives while the last maximize/restore is still settling would flip it straight
+    // back, which is what a rapid second click (or a double-click) used to do.
+    private void ToggleMaximize(bool force = false)
+    {
+        long now = Environment.TickCount64;
+        if (!force && now - lastToggleTick < 350) return;
+        lastToggleTick = now;
         bool maximize = WindowState != FormWindowState.Maximized;
         if (maximize) UpdateMaximizedBounds();
         WindowState = maximize ? FormWindowState.Maximized : FormWindowState.Normal;
@@ -946,7 +982,8 @@ public sealed class MainForm : Form
             if ((style & WS_VISIBLE) != 0)
             {
                 SetWindowLong(Handle, GWL_STYLE, style & ~WS_VISIBLE);
-                try { base.WndProc(ref m); } finally { SetWindowLong(Handle, GWL_STYLE, style); }
+                // Put back only the visible bit: the rest (WS_MAXIMIZE) may have changed meanwhile.
+                try { base.WndProc(ref m); } finally { SetWindowLong(Handle, GWL_STYLE, GetWindowLong(Handle, GWL_STYLE) | WS_VISIBLE); }
                 return;
             }
         }
