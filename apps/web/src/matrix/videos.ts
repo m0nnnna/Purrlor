@@ -250,10 +250,10 @@ export async function prepareVideo(mx: MatrixClient, file: File): Promise<Prepar
   return { file, mimetype, ...probe };
 }
 
-type Probe = { duration: number; w: number; h: number; thumbnail?: Blob };
+export type Probe = { duration: number; w: number; h: number; thumbnail?: Blob };
 
 /** Length, picture size and a frame at ~10% from a `<video>` element; undefined if the browser can't read the file in a few seconds. */
-export function probeVideo(file: File): Promise<Probe | undefined> {
+export function probeVideo(file: Blob): Promise<Probe | undefined> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
@@ -350,25 +350,72 @@ export async function publishVideo(
     }),
     mx.uploadContent(thumbnail, { type: 'image/jpeg', name: 'thumbnail.jpg' }),
   ]);
-  const roomId = await ensureProfileRoom(mx, displayName);
-  await gateVideoEvents(mx, roomId).catch(() => undefined);
-  const id = newVideoId();
-  const fields: VideoFields = {
+  const video = await sendNewVideo(mx, owner, title, uploadedThumb.content_uri, details, displayName, {
     url: uploadedFile.content_uri,
     mimetype: prepared.mimetype,
     size: prepared.file.size,
     duration: prepared.duration,
     w: prepared.w,
     h: prepared.h,
+  });
+  onProgress?.(1);
+  return video;
+}
+
+/** A file that is already on Matrix media, and what is known of it. */
+export type UploadedVideo = { url: string; mimetype: VideoType; size: number; duration: number; w: number; h: number };
+
+async function sendNewVideo(
+  mx: MatrixClient,
+  owner: string,
+  title: string,
+  thumbnail: string,
+  details: VideoDetails,
+  displayName: string,
+  file: UploadedVideo
+): Promise<WatchVideo> {
+  const roomId = await ensureProfileRoom(mx, displayName);
+  await gateVideoEvents(mx, roomId).catch(() => undefined);
+  const id = newVideoId();
+  const fields: VideoFields = {
+    ...file,
     title,
     description: details.description.slice(0, VIDEO_LIMITS.description),
-    thumbnail: uploadedThumb.content_uri,
+    thumbnail,
     visibility: details.visibility,
     uploadedAt: Date.now(),
   };
   const { event_id: eventId } = await sendVideoEvent(mx, roomId, id, buildVideoContent(fields));
-  onProgress?.(1);
   return videoFrom(owner, roomId, id, fields, eventId);
+}
+
+/**
+ * Publishes a video whose file is already uploaded (a post's plain attachment): only the thumbnail
+ * goes up, and the event reuses the file's `mxc` URL.
+ */
+export async function publishUploadedVideo(
+  mx: MatrixClient,
+  file: UploadedVideo,
+  thumbnail: Blob,
+  details: VideoDetails,
+  displayName: string
+): Promise<WatchVideo> {
+  const owner = mx.getUserId();
+  const title = cleanTitle(details.title);
+  if (!owner) throw new Error('You’re not signed in.');
+  if (!title) throw new Error('Give the video a title.');
+  const uploadedThumb = await mx.uploadContent(thumbnail, { type: 'image/jpeg', name: 'thumbnail.jpg' });
+  return sendNewVideo(mx, owner, title, uploadedThumb.content_uri, details, displayName, file);
+}
+
+/** A post's video as a WATCH video: the post's text as title (first 100 characters, else the file's name) and description. */
+export function postVideoDetails(postText: string, fileName: string): VideoDetails {
+  const text = postText.trim();
+  return {
+    title: cleanTitle(text) ?? titleFromFileName(fileName),
+    description: [...text].slice(0, VIDEO_LIMITS.description).join(''),
+    visibility: 'public',
+  };
 }
 
 /** Changes a video's title, description, visibility or thumbnail: the whole event again, with `anchor` set and `uploaded_at` kept. */

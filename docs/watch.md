@@ -220,3 +220,10 @@ goes through `play`).
 - **Upload**: MP4 or WebM under the limit. The app reads the duration and size from a `<video>`
   element, grabs a thumbnail from a frame about 10% in (or the person picks a picture), uploads the
   file and the thumbnail to Matrix media, then sends the event. A progress bar shows the upload.
+- **From a post**: a post going to the global feed or a profile (plain uploads, not a members-only
+  Space) with an MP4 or WebM offers **Also add to WATCH**, on by default. After the post is sent
+  each such video also gets an event in the poster's profile room that reuses the post's `mxc` URL
+  (no second upload); only the thumbnail, a frame about 10% in, is uploaded. The title is the
+  post's text cut to 100 characters (else the file name), the description the post's text, and it is
+  public. A video over the size limit is skipped with a note; if publishing fails the post stands
+  and the composer shows the error.

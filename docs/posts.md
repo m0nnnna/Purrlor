@@ -185,6 +185,11 @@ Each attachment records its width and height, so the post reserves its space bef
 loads. `readAttachments` drops anything malformed (a non-`mxc` URL, an unsupported type, more than
 four) rather than rendering it.
 
+**Also on WATCH.** A post with an MP4 or WebM that goes somewhere public (the global feed or a
+profile, or a public Space: the same plain uploads) offers **Also add to WATCH**, on by default.
+Never for encrypted media. The video is then published as an `xyz.nekous.video` event reusing the
+post's `mxc` URL (docs/watch.md, "The app"); the post doesn't depend on it.
+
 ## Private Spaces
 
 A Space that isn't public (not listed in the directory) keeps its posts, and their media, to its

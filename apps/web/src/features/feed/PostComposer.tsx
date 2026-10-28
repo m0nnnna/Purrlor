@@ -11,6 +11,8 @@ import { buildMessageFormatting } from '../../matrix/messageFormatting';
 import { nameOrFallback } from '../../matrix/displayName';
 import { ACCEPTED_MEDIA_TYPES, formatBytes } from '../../matrix/postMedia';
 import { publishToTarget, type PostTarget } from '../../matrix/postPublishing';
+import { publishPostVideos, watchTypeOf, type PostVideo } from '../../matrix/postWatch';
+import { probeVideo, type Probe } from '../../matrix/videos';
 import { useWithLibraryEmotes } from '../../matrix/hooks/useEmoteLibrary';
 import { useOwnProfile } from '../../matrix/hooks/useOwnProfile';
 import { useComposerEmbeds } from '../../matrix/hooks/useComposerEmbeds';
@@ -75,8 +77,19 @@ export function PostComposer({
   const [warningOpen, setWarningOpen] = useState(false);
   const [warning, setWarning] = useState('');
   const [sensitive, setSensitive] = useState(false);
+  // "Also add to WATCH": on unless switched off, for a public post with an MP4/WebM in it.
+  const [alsoWatch, setAlsoWatch] = useState(true);
   const media = useStagedMedia(setError);
   const { staged, preparing } = media;
+  // Each WATCH-able video is measured (length, size, thumbnail) as it's attached, so posting isn't held up by it.
+  const probes = useRef(new Map<string, Promise<Probe | undefined>>());
+  useEffect(() => {
+    for (const item of staged) {
+      if (watchTypeOf(item) && !probes.current.has(item.previewUrl)) probes.current.set(item.previewUrl, probeVideo(item.file));
+    }
+    const live = new Set(staged.map((item) => item.previewUrl));
+    for (const key of probes.current.keys()) if (!live.has(key)) probes.current.delete(key);
+  }, [staged]);
   // The focus effect below runs once per request, so it reaches the latest staging function by ref.
   const addSharedFiles = useRef(media.addPicked);
   addSharedFiles.current = media.addPicked;
@@ -135,6 +148,7 @@ ${shared}` : shared));
   // Link embeds (docs/embeds.md). Feed rooms aren't encrypted rooms, so posts always get them; their
   // pictures are encrypted wherever the post isn't public, like its media.
   const postIsPublic = !(privately && canPrivate) && !!target && (target.target.kind === 'global' || target.isPublic);
+  const offerWatch = postIsPublic && staged.some((item) => watchTypeOf(item));
   const embeds = useComposerEmbeds(text, !(privately && canPrivate), !postIsPublic);
 
   const handleSubmit = async (evt: FormEvent) => {
@@ -143,6 +157,7 @@ ${shared}` : shared));
     if ((!body && staged.length === 0) || tooLong || posting || preparing || !target || waitingOnPublicness) return;
     setPosting(true);
     setError(undefined);
+    let watchNotes: string[] = [];
     try {
       const keepPrivate = privately && canPrivate;
       // Plain uploads only where the post itself is public; everything else is encrypted, so the
@@ -170,6 +185,21 @@ ${shared}` : shared));
           target.isPublic
         );
         onPublished?.(source);
+        if (destinationIsPublic && alsoWatch) {
+          // The post stands whatever happens here.
+          const videos: PostVideo[] = [];
+          attachments.forEach((attachment, i) => {
+            const probe = probes.current.get(staged[i]?.previewUrl);
+            if (probe && watchTypeOf(staged[i])) videos.push({ attachment, probe });
+          });
+          if (videos.length) {
+            try {
+              watchNotes = (await publishPostVideos(mx, videos, body, displayName || mx.getUserId() || '')).notes;
+            } catch (err) {
+              watchNotes = [`Couldn’t add the video to WATCH: ${err instanceof Error ? err.message : 'something went wrong'}.`];
+            }
+          }
+        }
       }
       setText('');
       mention.reset();
@@ -178,6 +208,7 @@ ${shared}` : shared));
       setWarning('');
       setWarningOpen(false);
       setSensitive(false);
+      if (watchNotes.length) setError(`Posted. ${watchNotes.join(' ')}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t post that');
     } finally {
@@ -253,6 +284,12 @@ ${shared}` : shared));
           <label className="nu-post-composer__private" data-nu-role="feed-composer-sensitive" title="Blur the media until someone chooses to see it">
             <input type="checkbox" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />
             Sensitive
+          </label>
+        )}
+        {offerWatch && (
+          <label className="nu-post-composer__private" data-nu-role="post-composer-watch-toggle" title="Also show the video on WATCH, from your profile">
+            <input type="checkbox" checked={alsoWatch} onChange={(e) => setAlsoWatch(e.target.checked)} />
+            Also add to WATCH
           </label>
         )}
         <input

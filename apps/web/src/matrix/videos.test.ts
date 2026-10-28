@@ -12,6 +12,8 @@ import {
   isVideoId,
   newVideoId,
   parseWatchVideo,
+  postVideoDetails,
+  publishUploadedVideo,
   playVideo,
   readVideoContent,
   titleFromFileName,
@@ -38,6 +40,8 @@ const fields: VideoFields = {
 const ID = 'abcDEF0123456789';
 
 afterEach(() => vi.restoreAllMocks());
+
+vi.mock('./profileFeed', () => ({ ensureProfileRoom: async () => '!r:x.test' }));
 
 describe('video ids', () => {
   it('makes 16-character ids from the allowed alphabet', () => {
@@ -231,5 +235,24 @@ describe('formatLength', () => {
     expect(formatLength(7)).toBe('0:07');
     expect(formatLength(247)).toBe('4:07');
     expect(formatLength(3723)).toBe('1:02:03');
+  });
+});
+
+describe('a post as a WATCH video', () => {
+  it('takes the post text as title and description, the file name when there is none', () => {
+    expect(postVideoDetails('  Hello\nworld  ', 'a.mp4')).toEqual({ title: 'Hello world', description: 'Hello\nworld', visibility: 'public' });
+    expect(postVideoDetails('x'.repeat(300), 'a.mp4').title).toHaveLength(100);
+    expect(postVideoDetails('y'.repeat(6000), 'a.mp4').description).toHaveLength(5000);
+    expect(postVideoDetails('', 'my_clip.mp4')).toMatchObject({ title: 'my clip', description: '' });
+  });
+
+  it('reuses the uploaded file’s url and uploads only the thumbnail', async () => {
+    const sendStateEvent = vi.fn(async () => ({ event_id: '$e' }));
+    const uploadContent = vi.fn(async () => ({ content_uri: 'mxc://x.test/thumb' }));
+    const mx = { getUserId: () => '@me:x', uploadContent, sendStateEvent, getRoom: () => undefined, getAccountData: () => undefined };
+    const file = { url: 'mxc://x.test/file', mimetype: 'video/mp4' as const, size: 9, duration: 5, w: 4, h: 3 };
+    await publishUploadedVideo(mx as never, file, new Blob(['t']), postVideoDetails('Hi', 'a.mp4'), 'Me');
+    expect(uploadContent).toHaveBeenCalledTimes(1);
+    expect((sendStateEvent.mock.calls[0] as unknown[])[2]).toMatchObject({ url: 'mxc://x.test/file', thumbnail: 'mxc://x.test/thumb', visibility: 'public', title: 'Hi' });
   });
 });
