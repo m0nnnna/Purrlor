@@ -227,7 +227,8 @@ services:
       - METRICS_TOKEN=${PURRLOR_METRICS_TOKEN:-}
       - HTTP_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
       - HTTPS_PROXY=${CONTAINER_PROXY:-${OUTBOUND_PROXY:-}}
-      - NO_PROXY=${OUTBOUND_NO_PROXY:-}
+      # Ingress is only ever reached inside the stack, so it never goes through the proxy.
+      - NO_PROXY=${OUTBOUND_NO_PROXY:-},ingress
       - NODE_USE_ENV_PROXY=1
     volumes:
       - token-server-data:/data

@@ -326,7 +326,7 @@ done
 # Every in-stack hostname, plus loopback: container-to-container traffic (token-server ->
 # livekit:7880, token-server -> matrix:8008) and this script's own health checks must never be
 # sent to the proxy.
-DEFAULT_NO_PROXY="localhost,127.0.0.1,::1,livekit,token-server,push-gateway,web,matrix"
+DEFAULT_NO_PROXY="localhost,127.0.0.1,::1,livekit,token-server,push-gateway,web,matrix,ingress"
 OUTBOUND_PROXY=""
 OUTBOUND_NO_PROXY=""
 # What this host itself (apk/apt, Docker's image pulls, certbot renewal) sends through the proxy:

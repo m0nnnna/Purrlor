@@ -432,7 +432,7 @@ A few things to know:
 - **The proxy must be reachable from containers.** `127.0.0.1` inside a container is the
   container itself — use the host's LAN address, or the Docker bridge address (usually
   `172.17.0.1`) with the proxy listening there.
-- **Keep the in-stack names in `OUTBOUND_NO_PROXY`** (`livekit`, `token-server`, `push-gateway`,
+- **Keep the in-stack names in `OUTBOUND_NO_PROXY`** (`livekit`, `ingress`, `token-server`, `push-gateway`,
   `web`, `matrix`, plus loopback). The script's default does; without them the token server
   would send its calls to LiveKit and the homeserver to the proxy.
 - **HTTP(S) proxies only.** SOCKS isn't supported by Node's proxy support.
