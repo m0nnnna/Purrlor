@@ -354,14 +354,23 @@ export async function changeScreen(): Promise<void> {
 }
 
 /** Shows the stream's own picture in `video` (muted): the shared screen, or for OBS the preview room. Returns the undo. */
-export function attachPreview(video: HTMLVideoElement): () => void {
+export function attachPreview(video: HTMLVideoElement, sound?: HTMLElement): () => void {
   const session = current;
   if (!session) return () => undefined;
   const { room } = session;
   const attached: Array<{ detach: (el: HTMLVideoElement) => unknown }> = [];
+  const heard: Array<{ detach: () => HTMLMediaElement[] }> = [];
   const take = (track: { attach: (el: HTMLVideoElement) => unknown; detach: (el: HTMLVideoElement) => unknown }) => {
     track.attach(video);
     attached.push(track);
+  };
+  // OBS's sound, for the dashboard's Listen switch. A browser stream's own sound isn't played back: it would echo.
+  const hear = (track: Track) => {
+    if (!sound) return;
+    const element = track.attach();
+    element.muted = true;
+    sound.append(element);
+    heard.push(track);
   };
   if (session.source === 'browser') {
     const local = room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.videoTrack;
@@ -370,12 +379,17 @@ export function attachPreview(video: HTMLVideoElement): () => void {
   }
   const onSubscribed = (track: RemoteTrack) => {
     if (track.kind === Track.Kind.Video) take(track);
+    else if (track.kind === Track.Kind.Audio) hear(track);
   };
-  room.remoteParticipants.forEach((p) => p.videoTrackPublications.forEach((pub) => pub.videoTrack && take(pub.videoTrack)));
+  room.remoteParticipants.forEach((p) => {
+    p.videoTrackPublications.forEach((pub) => pub.videoTrack && take(pub.videoTrack));
+    p.audioTrackPublications.forEach((pub) => pub.audioTrack && hear(pub.audioTrack));
+  });
   room.on(RoomEvent.TrackSubscribed, onSubscribed);
   return () => {
     room.off(RoomEvent.TrackSubscribed, onSubscribed);
     attached.forEach((track) => track.detach(video));
+    heard.forEach((track) => track.detach().forEach((element) => element.remove()));
   };
 }
 

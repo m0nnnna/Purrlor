@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { Icon } from '../../components/Icon';
+import { ShareLinkButton } from '../../components/ShareLinkButton';
 import { useBackCloses } from '../../app/navigationHistory';
-import { formatDuration, moderateStream, StreamError, type ModerateAction, type PublicStream } from '../../matrix/liveStream';
+import { formatDuration, moderateStream, StreamError, watchPath, type ModerateAction, type PublicStream } from '../../matrix/liveStream';
+import { publicPagePath } from '../../matrix/publicWeb';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { streamerSession } from './GoLive';
 import { describeHealth, runningTimeouts, TITLE_MAX, titleOk, type Health } from './streamDashboard';
@@ -38,7 +40,13 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
   const [timeouts, setTimeouts] = useState<Record<string, number>>({});
   const [banned, setBanned] = useState<string[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const soundRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [hasPicture, setHasPicture] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [volume, setVolume] = useState(0.5);
+  const [previewOff, setPreviewOff] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const phase = status.phase;
   const live = status.phase === 'live';
@@ -60,7 +68,7 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
     let cancelled = false;
     void streamerSession().then((session) => {
       if (cancelled) return;
-      undo = session.attachPreview(video);
+      undo = session.attachPreview(video, soundRef.current ?? undefined);
     });
     const onPlaying = () => setHasPicture(true);
     video.addEventListener('loadeddata', onPlaying);
@@ -71,6 +79,25 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
       setHasPicture(false);
     };
   }, [phase, source, orphan]);
+
+  // Listening in: OBS's sound, off by default so it doesn't echo into a microphone OBS is capturing.
+  useEffect(() => {
+    soundRef.current?.querySelectorAll('audio').forEach((element) => {
+      element.muted = !listening;
+      element.volume = volume;
+    });
+  }, [listening, volume, hasPicture]);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === previewRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void previewRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
 
   // How the picture is doing, from WebRTC's stats, every 2 s.
   useEffect(() => {
@@ -150,8 +177,50 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
               </p>
             </div>
           ) : (
-            <div className="nu-dash__preview">
-              <video ref={videoRef} className="nu-dash__video" data-nu-role="dashboard-preview" muted playsInline autoPlay />
+            <div ref={previewRef} className="nu-dash__preview">
+              <video ref={videoRef} className="nu-dash__video" data-nu-role="dashboard-preview" muted playsInline autoPlay hidden={previewOff} onDoubleClick={toggleFullscreen} />
+              <div ref={soundRef} hidden />
+              {previewOff && <div className="nu-dash__waiting">The preview is off. Your stream is still going.</div>}
+              {hasPicture && (
+                <div className="nu-stream-player__controls nu-dash__player" data-nu-role="dashboard-player">
+                  {source === 'obs' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setListening(!listening)}
+                        title={listening ? 'Stop listening' : 'Listen to your stream'}
+                        aria-label={listening ? 'Stop listening' : 'Listen to your stream'}
+                        aria-pressed={listening}
+                        data-nu-role="dashboard-listen"
+                      >
+                        <Icon name={listening ? 'volume' : 'volumeOff'} size={18} />
+                      </button>
+                      <input
+                        type="range"
+                        className="nu-stream-player__volume"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={listening ? volume : 0}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          setVolume(next || volume);
+                          setListening(next > 0);
+                        }}
+                        aria-label="Preview volume"
+                        data-nu-role="dashboard-volume"
+                      />
+                    </>
+                  )}
+                  <span className="nu-stream-player__spacer" />
+                  <button type="button" onClick={() => setPreviewOff(!previewOff)} aria-pressed={previewOff} data-nu-role="dashboard-preview-toggle">
+                    {previewOff ? 'Show preview' : 'Hide preview'}
+                  </button>
+                  <button type="button" onClick={toggleFullscreen} title={fullscreen ? 'Exit full screen' : 'Full screen'} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} data-nu-role="dashboard-fullscreen">
+                    <Icon name={fullscreen ? 'minimize' : 'maximize'} size={18} />
+                  </button>
+                </div>
+              )}
               {!hasPicture && (
                 <div className="nu-dash__waiting" data-nu-role="dashboard-waiting">
                   {source === 'obs' ? (waiting ? 'Waiting for OBS… press Start Streaming in OBS' : 'Waiting for the picture…') : 'Waiting for the picture…'}
@@ -175,6 +244,7 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
               </div>
             </dl>
           )}
+          {live && <SharePanel stream={stream} />}
           {live && (
             <form
               className="nu-dash__title"
@@ -252,6 +322,31 @@ function DashboardPage({ stream }: { stream: PublicStream }) {
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** Other sites the watch page can be posted to. Each opens the site's own "post this" page in a new tab. */
+const SHARE_SITES: { name: string; url: (link: string, text: string) => string }[] = [
+  { name: 'X', url: (link, text) => `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link)}` },
+  { name: 'Bluesky', url: (link, text) => `https://bsky.app/intent/compose?text=${encodeURIComponent(`${text} ${link}`)}` },
+  { name: 'Reddit', url: (link, text) => `https://www.reddit.com/submit?url=${encodeURIComponent(link)}&title=${encodeURIComponent(text)}` },
+  { name: 'Facebook', url: (link) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}` },
+];
+
+/** The watch page's link, to copy (or the phone's share sheet) or to post on another site. */
+function SharePanel({ stream }: { stream: PublicStream }) {
+  const link = `${window.location.origin}${watchPath(publicPagePath(stream.owner), stream.id)}`;
+  const text = `Live now: ${stream.title}`;
+  return (
+    <div className="nu-dash__share" data-nu-role="dashboard-share">
+      <input className="nu-field__input" readOnly value={link} aria-label="Your stream’s link" onFocus={(event) => event.target.select()} data-nu-role="dashboard-share-link" />
+      <ShareLinkButton url={link} title={text} label="Copy link" role="dashboard-share-copy" />
+      {SHARE_SITES.map((site) => (
+        <a key={site.name} className="nu-button nu-button--secondary" href={site.url(link, text)} target="_blank" rel="noopener noreferrer" data-nu-role={`dashboard-share-${site.name.toLowerCase()}`}>
+          {site.name}
+        </a>
+      ))}
     </div>
   );
 }

@@ -91,6 +91,9 @@ describe('the dashboard', () => {
     await waitFor(() => expect(container.querySelector('[data-nu-role="dashboard-health"]')?.textContent).toBe('1280×720 · 30 fps · 2.4 Mbps'));
     // OBS: no browser-only controls.
     expect(container.querySelector('[data-nu-role="dashboard-change-screen"]')).toBeNull();
+    const link = (container.querySelector('[data-nu-role="dashboard-share-link"]') as HTMLInputElement).value;
+    expect(link).toMatch(new RegExp(`/live/${stream.id}$`));
+    expect(container.querySelector('[data-nu-role="dashboard-share-bluesky"]')?.getAttribute('href')).toContain(encodeURIComponent(link));
 
     await waitFor(() => expect(container.querySelectorAll('[data-nu-role="stream-chat-line"]')).toHaveLength(2));
     const lines = container.querySelectorAll('[data-nu-role="stream-chat-line"]');

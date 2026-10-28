@@ -427,7 +427,11 @@ Everything it needs is above:
   (browser, or OBS with the `url` and key to copy and a button to make a new key).
 - **Preview and health**: for a browser stream, its own tracks; for OBS, the preview token. Its
   resolution, frame rate and bitrate come from the client's WebRTC stats, and `viewers` from `GET
-  /:id`.
+  /:id`. The preview has its own controls: listen to OBS's sound (off by default, so it can't echo
+  into a microphone OBS captures; a browser stream's own sound is never played back), hide the
+  preview, full screen.
+- **Sharing**: while live, the watch page's link to copy (the share sheet on a phone), and buttons
+  that open X's, Bluesky's, Reddit's and Facebook's own "post this" pages with it.
 - **While live**: the title (`POST /:id/title`), and for a browser stream, switching what's shared
   (another screen or window, the microphone on or off, the shared sound on or off) by replacing
   its own tracks: nothing on the server changes.
