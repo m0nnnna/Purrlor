@@ -1,0 +1,103 @@
+{
+  "name": "purrlor-desktop",
+  "productName": "Purrlor",
+  "version": "2.0.0",
+  "description": "Purrlor for Windows and Linux",
+  "author": {
+    "name": "MeowOps",
+    "email": "floofywolf@gmail.com"
+  },
+  "homepage": "https://github.com/m0nnnna/Purrlor",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/main.js",
+  "desktopName": "purrlor.desktop",
+  "purrlor": {
+    "updateRepository": "m0nnnna/Purrlor",
+    "updatePublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE/jEyOY0h+ikyiv7H4+c+uO+djfL9ecSMgnibq3BGqp1gsR5zvW3+D2W/t7jdGTOCac2zdKVn+KrpQyuMYN6X8A=="
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "dist:win": "node scripts/build.mjs && electron-builder --win dir && node scripts/installer.mjs",
+    "dist:linux": "node scripts/build.mjs && electron-builder --linux AppImage deb",
+    "sign-update": "node scripts/sign-update.mjs"
+  },
+  "dependencies": {
+    "uiohook-napi": "1.5.5"
+  },
+  "devDependencies": {
+    "@fontsource/chakra-petch": "5.3.0",
+    "@fontsource/michroma": "5.3.0",
+    "@types/node": "24.19.0",
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.6.3",
+    "vitest": "3.2.6"
+  },
+  "build": {
+    "appId": "net.meowops.purrlor",
+    "productName": "Purrlor",
+    "copyright": "MeowOps",
+    "directories": {
+      "output": "dist-app",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
+    "electronLanguages": [
+      "en-US"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "executableName": "Purrlor"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "executableName": "purrlor",
+      "syncDesktopName": true,
+      "category": "Network",
+      "synopsis": "Chat, voice, video and posts on Purrlor",
+      "description": "The Purrlor desktop app: messaging, voice and video calls, screen sharing and encryption, with a tray icon, notifications and voice keybinds.",
+      "maintainer": "MeowOps <floofywolf@gmail.com>",
+      "desktop": {
+        "entry": {
+          "Name": "Purrlor",
+          "Comment": "Chat, voice and video on Purrlor",
+          "Categories": "Network;InstantMessaging;Chat;",
+          "StartupWMClass": "purrlor",
+          "Keywords": "chat;matrix;voice;video;"
+        }
+      }
+    },
+    "appImage": {
+      "artifactName": "Purrlor-x86_64.AppImage"
+    },
+    "deb": {
+      "artifactName": "purrlor_amd64.deb",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ],
+      "recommends": [
+        "libappindicator3-1"
+      ]
+    }
+  }
+}

@@ -30,12 +30,14 @@ local encryption keys), and the `nu-` CSS prefix that custom themes target. Don'
 
 ## Using Purrlor
 
-### Desktop app (Windows)
-Prefer an app to a browser tab? Install **Purrlor-Setup.exe** from the
-[releases page](https://github.com/m0nnnna/Purrlor/releases). On first launch it asks which Purrlor
-server to connect to (`purr.meowops.net` by default, or your own deployment); click the server
-name in the title bar to switch later. It stays in the tray for notifications and can start with
-Windows. See [`apps/desktop/README.md`](apps/desktop/README.md).
+### Desktop app (Windows and Linux)
+Prefer an app to a browser tab? From the newest `desktop-v*` release on the
+[releases page](https://github.com/m0nnnna/Purrlor/releases), install **Purrlor-Setup.exe** on
+Windows, **purrlor_amd64.deb** on Ubuntu and Debian, or **Purrlor-x86_64.AppImage** on other Linux.
+On first launch it asks which Purrlor server to connect to (`purr.meowops.net` by default, or your
+own deployment); click the server name in the title bar to switch later. It stays in the tray for
+notifications, can start when you sign in, and keeps itself up to date. See
+[`apps/desktop/README.md`](apps/desktop/README.md).
 
 ### Terminal client (Linux)
 Live in a terminal? Download **purrlor-tui-linux-amd64** (or `-arm64`) from the newest `tui-v*`

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'" />
+    <title>Purrlor</title>
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body>
+    <header class="titlebar" id="titlebar">
+      <div class="titlebar__brand">
+        <img class="titlebar__logo" src="logo.png" alt="" />
+        <span class="titlebar__name">Purrlor</span>
+      </div>
+      <div class="titlebar__title" id="title"></div>
+      <div class="titlebar__actions">
+        <button class="pill pill--update" id="update-pill" hidden type="button">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0 3.2-3.2M8 10 4.8 6.8M3 13h10" /></svg>
+          <span id="update-pill-text">Restart to update</span>
+        </button>
+        <button class="pill pill--server" id="server-pill" hidden type="button" title="Change server">
+          <span class="pill__dot" id="server-dot"></span>
+          <span id="server-name"></span>
+          <svg class="pill__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <img class="stage__backdrop" id="backdrop" alt="" hidden />
+
+      <!-- Loading -->
+      <section class="screen screen--center" id="screen-loading" hidden>
+        <div class="loader">
+          <div class="loader__glow"></div>
+          <img class="loader__logo" src="logo.png" alt="" />
+        </div>
+        <p class="loader__label">Connecting to <strong id="loading-server"></strong></p>
+        <div class="progress"><div class="progress__bar"></div></div>
+        <p class="loader__slow" id="loading-slow" hidden>
+          This is taking a while.
+          <button class="link" type="button" data-action="change-server">Change server</button>
+        </p>
+      </section>
+
+      <!-- First run: which server -->
+      <section class="screen screen--welcome" id="screen-connect" hidden>
+        <div class="welcome">
+          <div class="welcome__hero">
+            <div class="welcome__mark">
+              <div class="loader__glow"></div>
+              <img src="logo.png" alt="" />
+            </div>
+            <h1 class="welcome__name">Purrlor</h1>
+            <p class="welcome__tagline">Chat, voice, video and posts, on the server you choose.</p>
+          </div>
+          <div class="welcome__panel" id="connect-home"></div>
+        </div>
+      </section>
+
+      <!-- Couldn't load / the page crashed -->
+      <section class="screen screen--center" id="screen-error" hidden>
+        <div class="state-icon" id="error-icon"></div>
+        <h2 class="state-title" id="error-title"></h2>
+        <p class="state-detail" id="error-detail"></p>
+        <div class="button-row">
+          <button class="button button--primary" type="button" data-action="retry" id="error-retry">Try again</button>
+          <button class="button button--secondary" type="button" data-action="change-server">Change server</button>
+        </div>
+        <p class="state-countdown" id="error-countdown"></p>
+      </section>
+
+      <!-- Modals over the page -->
+      <div class="modal" id="modal" hidden>
+        <div class="modal__scrim" data-action="scrim"></div>
+        <div class="modal__card" id="modal-card" role="dialog" aria-modal="true"></div>
+      </div>
+    </main>
+
+    <template id="connect-form">
+      <form class="connect" novalidate>
+        <h2 class="connect__heading">Which Purrlor server do you use?</h2>
+        <p class="connect__hint">
+          The address you open Purrlor at in your browser. If that server lets you choose, its sign-in screen then asks for your Matrix homeserver.
+        </p>
+        <label class="field">
+          <span class="field__label">Server address</span>
+          <span class="field__control">
+            <span class="field__prefix">https://</span>
+            <input class="field__input" name="address" type="text" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="purr.example.com" />
+          </span>
+        </label>
+        <div class="suggestions">
+          <button class="chip" type="button" data-suggest="purr.meowops.net">purr.meowops.net</button>
+        </div>
+        <div class="connect__status" role="status" aria-live="polite"></div>
+        <div class="button-row button-row--end">
+          <button class="button button--secondary connect__cancel" type="button" hidden>Cancel</button>
+          <button class="button button--primary connect__submit" type="submit">
+            <span class="button__spinner" aria-hidden="true"></span>
+            <span class="connect__submit-label">Connect</span>
+          </button>
+        </div>
+      </form>
+    </template>
+
+    <script src="shell.js"></script>
+  </body>
+</html>

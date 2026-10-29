@@ -1,8 +1,8 @@
 /**
  * Talking to the Purrlor desktop app (apps/desktop), when this page is running inside it.
  *
- * The desktop app hosts this page in WebView2, which gives it `window.chrome.webview`: a message
- * channel to the app around it. A browser has no such object, so `desktopBridge()` is null there
+ * The desktop app gives this page `window.chrome.webview`: a message channel to the app around it
+ * (WebView2's own in desktop 1.x; desktop 2.0's Electron preload provides the same shape). A browser has no such object, so `desktopBridge()` is null there
  * and everything desktop-only stays hidden. The app only answers messages from the server it was
  * pointed at (see apps/desktop/README.md, "The bridge"), and this side only trusts replies from it.
  *
@@ -21,6 +21,8 @@ type WebViewChannel = {
 /** What the desktop app tells the page about itself and its own settings. */
 export type DesktopInfo = {
   version: string;
+  /** Desktop 2.0 on: Node's process.platform ('win32', 'linux'). Older apps are all Windows. */
+  platform?: string;
   settings: DesktopSettings;
   /** Desktop 1.2.0 on. */
   update?: DesktopUpdate;
@@ -38,6 +40,7 @@ export type DesktopUpdate = {
 };
 
 export type DesktopSettings = {
+  /** Start in the tray when you sign in to the computer (on Linux too, despite the name). */
   startWithWindows: boolean;
   /** The window's close button hides Purrlor in the tray (true) or quits it (false). */
   closeToTray: boolean;

@@ -56,7 +56,7 @@ export function DesktopSettings() {
               checked={info.settings.startWithWindows}
               onChange={(e) => void set('startWithWindows', e.target.checked)}
             />
-            Start Purrlor with Windows (in the tray)
+            {info.platform === 'linux' ? 'Start Purrlor when you log in (in the tray)' : 'Start Purrlor with Windows (in the tray)'}
           </label>
           <div className="nu-field">
             <label className="nu-field__checkbox-row">
