@@ -1,0 +1,38 @@
+.nu-spoiler-media {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: var(--nu-radius-md);
+  overflow: hidden;
+}
+
+.nu-spoiler-media--covered .nu-spoiler-media__content {
+  filter: blur(28px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.nu-spoiler-media__reveal {
+  appearance: none;
+  border: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nu-space-1);
+  background: color-mix(in srgb, var(--nu-color-bg-primary) 45%, transparent);
+  color: var(--nu-color-text-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nu-spoiler-media__hint {
+  font-size: var(--nu-font-size-sm);
+  font-weight: 600;
+  color: var(--nu-color-text-secondary);
+  text-decoration: underline;
+}

@@ -48,6 +48,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     },
   },
   {
+    name: 'spoiler',
+    usage: '/spoiler <text>',
+    description: 'Send text hidden until clicked',
+    execute: async ({ mx, roomId, threadId }, args) => {
+      const text = requireArg(args, '/spoiler <text>');
+      // The spoiler markdown (||text||) can't hold a "|" or a line break.
+      if (/[|\n]/.test(text)) throw new Error('A spoiler can’t contain “|” or line breaks.');
+      await mx.sendTextMessage(roomId, threadId, `||${text}||`);
+    },
+  },
+  {
     name: 'nick',
     usage: '/nick <name>',
     description: 'Change your display name (everywhere, not just this channel)',

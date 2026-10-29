@@ -357,3 +357,18 @@
   border-radius: var(--nu-radius-full);
   animation: nu-spin 0.7s linear infinite;
 }
+
+.nu-composer__attachment-spoiler {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 2px;
+  display: inline-flex;
+  color: var(--nu-color-text-muted);
+  cursor: pointer;
+}
+
+.nu-composer__attachment-spoiler:hover,
+.nu-composer__attachment-spoiler--on {
+  color: var(--nu-color-text-primary);
+}

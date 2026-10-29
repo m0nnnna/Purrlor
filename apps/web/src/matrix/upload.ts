@@ -10,6 +10,10 @@ import type {
 import { buildVoiceMessageContent, type VoiceMessageLocation } from './voiceMessage';
 import { buildReplyContent, type ReplyTarget } from './replies';
 
+/** MSC4193's spoiler flag on a media event (the key Element reads and writes too): the client
+ *  blurs the media until the reader chooses to see it. */
+export const SPOILER_KEY = 'page.codeberg.everypizza.msc4193.spoiler';
+
 type MediaLocation = { url: string } | { file: EncryptedAttachmentInfo & { url: string } };
 
 /**
@@ -76,13 +80,14 @@ export async function sendFileMessage(
   roomId: string,
   threadId: string | null,
   file: File,
-  replyTo?: ReplyTarget
+  replyTo?: ReplyTarget,
+  spoiler = false
 ): Promise<void> {
   const mimetype = file.type || 'application/octet-stream';
   const dimensions = await readImageDimensions(file);
   const info = { mimetype, size: file.size, ...dimensions };
   const location = await uploadAttachmentBytes(mx, roomId, file);
-  const content = buildMediaContent(mimetype, file.name, location, info);
+  const content = { ...buildMediaContent(mimetype, file.name, location, info), ...(spoiler && { [SPOILER_KEY]: true }) };
   await mx.sendMessage(roomId, threadId, replyTo ? { ...content, ...buildReplyContent(replyTo, mx.getUserId()) } : content);
 }
 

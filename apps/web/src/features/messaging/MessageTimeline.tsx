@@ -39,6 +39,8 @@ import { saveMessage, unsaveMessage } from '../../matrix/savedMessages';
 import { UserProfileModal } from '../profile/UserProfileModal';
 import { EditHistoryModal } from './EditHistoryModal';
 import { FileMessage } from './FileMessage';
+import { SpoilerMedia } from './SpoilerMedia';
+import { SPOILER_KEY } from '../../matrix/upload';
 import { ForwardMessageModal } from './ForwardMessageModal';
 import { ImageMessage } from './ImageMessage';
 import { LinkPreviewCard } from './LinkPreviewCard';
@@ -726,6 +728,7 @@ const MessageRow = memo(function MessageRow({
             size={content.info?.size}
           />
         ) : content.msgtype === 'm.image' ? (
+          <SpoilerMedia spoiler={content[SPOILER_KEY] === true}>
           <ImageMessage
             body={String(content.body ?? '')}
             url={content.url}
@@ -735,6 +738,7 @@ const MessageRow = memo(function MessageRow({
             height={content.info?.h}
             size={content.info?.size}
           />
+          </SpoilerMedia>
         ) : content.msgtype === 'm.audio' && content['org.matrix.msc3245.voice'] ? (
           <VoiceMessage
             body={String(content.body ?? '')}
@@ -745,6 +749,7 @@ const MessageRow = memo(function MessageRow({
             waveform={content['org.matrix.msc1767.audio']?.waveform}
           />
         ) : content.msgtype === 'm.video' || content.msgtype === 'm.audio' || content.msgtype === 'm.file' ? (
+          <SpoilerMedia spoiler={content[SPOILER_KEY] === true && content.msgtype === 'm.video'}>
           <FileMessage
             msgtype={content.msgtype}
             body={String(content.body ?? '')}
@@ -753,6 +758,7 @@ const MessageRow = memo(function MessageRow({
             mimetype={content.info?.mimetype}
             size={content.info?.size}
           />
+          </SpoilerMedia>
         ) : content.msgtype === 'm.emote' ? (
           <div className="nu-timeline__message-text nu-timeline__message-text--emote">
             * {senderName}{' '}

@@ -78,6 +78,8 @@ export function Composer({
   const members = useRoomMembers(roomId);
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  // The attachments to send blurred (a spoiler): keyed by the File, so removing another shifts nothing.
+  const [spoilered, setSpoilered] = useState<ReadonlySet<File>>(new Set());
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [commandError, setCommandError] = useState<string>();
@@ -241,7 +243,7 @@ export function Composer({
         setUploading(true);
         try {
           for (const file of filesToSend) {
-            await sendFileMessage(mx, roomId, threadId, file, filesSent === 0 ? replyTo : undefined);
+            await sendFileMessage(mx, roomId, threadId, file, filesSent === 0 ? replyTo : undefined, spoilered.has(file));
             filesSent += 1;
           }
         } finally {
@@ -484,6 +486,23 @@ export function Composer({
           {attachments.map((file, index) => (
             <div key={`${index}:${file.name}`} className="nu-composer__attachment" data-nu-role="composer-attachment">
               <span className="nu-composer__attachment-name">{file.name}</span>
+              {/^(image|video)\//.test(file.type) && (
+                <button
+                  type="button"
+                  className={spoilered.has(file) ? 'nu-composer__attachment-spoiler nu-composer__attachment-spoiler--on' : 'nu-composer__attachment-spoiler'}
+                  data-nu-role="composer-attachment-spoiler"
+                  title={spoilered.has(file) ? 'Sent as a spoiler (blurred) — click to undo' : 'Mark as spoiler (blurred until clicked)'}
+                  aria-label={`Mark ${file.name} as spoiler`}
+                  aria-pressed={spoilered.has(file)}
+                  onClick={() => {
+                    const next = new Set(spoilered);
+                    if (!next.delete(file)) next.add(file);
+                    setSpoilered(next);
+                  }}
+                >
+                  <Icon name="eyeOff" size={14} />
+                </button>
+              )}
               <button
                 type="button"
                 className="nu-composer__attachment-remove"
