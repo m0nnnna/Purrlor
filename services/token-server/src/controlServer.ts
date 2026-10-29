@@ -19,6 +19,8 @@ import {
 import { REAL_IP_FROM } from './clientIp.js';
 import { diagnose, ipWatch, MAX_WATCH_SECONDS, type IpWatch } from './ipWatch.js';
 import { isMxc, pageMedia, PROFILE_PAGE_EVENT, type RawEvent } from './publicWeb.js';
+import { BADGE_COLOR, BADGE_ID, BADGE_TEXT, deleteBadge, readOwnBadges, setBadge, setGrants } from './badges.js';
+import { getServiceClient } from './membership.js';
 import { knownUserId, normalizePeerUrl, parseInstanceInfo, type Peer } from './peers.js';
 import type { Streams } from './streamRoutes.js';
 import { isStreamId, type StreamRecord } from './streams.js';
@@ -634,6 +636,77 @@ export function controlApp(deps: ControlDeps): express.Express {
       reply(req, res, results.some((r) => r.lastError) ? 207 : 200, text, { results });
     })
   );
+
+  // --- Badges (badges.ts) -----------------------------------------------------------------------
+
+  app.get(
+    '/badges',
+    route(async (req, res) => {
+      const dir = await readOwnBadges(await getServiceClient(), await deps.serverName());
+      const lines = [
+        `Badges (${dir.badges.length}):`,
+        ...dir.badges.map((b) => `  ${b.id}  [${b.text}]  ${b.color}  held by ${Object.values(dir.grants).filter((ids) => ids.includes(b.id)).length}`),
+        `Given (${Object.keys(dir.grants).length} people):`,
+        ...Object.entries(dir.grants).map(([user, ids]) => `  ${user}  ${ids.join(' ')}`),
+      ];
+      reply(req, res, 200, dir.badges.length ? lines.join('\n') : 'No badges. Make one: purrlor badges create <id> <4 characters> <#rrggbb>', { ...dir });
+    })
+  );
+
+  app.post(
+    '/badges/create',
+    route(async (req, res, actor, body) => {
+      const reason = needReason(body);
+      const id = one(body.id) ?? '';
+      const text = one(body.text) ?? '';
+      const color = one(body.color) ?? '';
+      if (!BADGE_ID.test(id)) throw new ControlError(400, 'The id is 1-32 of a-z, 0-9 and "-".');
+      if (!BADGE_TEXT.test(text)) throw new ControlError(400, 'A badge is exactly 4 letters, digits or one of !?*+$#&.');
+      if (!BADGE_COLOR.test(color)) throw new ControlError(400, 'The colour is #rrggbb, like #aa66ff.');
+      const mx = await getServiceClient();
+      const dir = await readOwnBadges(mx, await deps.serverName());
+      if (!dir.badges.some((b) => b.id === id) && dir.badges.length >= 200) throw new ControlError(400, 'That is as many badges as one instance can have (200).');
+      await setBadge(mx, await deps.serverName(), id, text, color);
+      await deps.store.audit({ actor, action: 'badges.create', target: `${id} [${text}] ${color}`, reason, result: 'ok' });
+      reply(req, res, 200, `Badge ${id} is [${text}] ${color}.`);
+    })
+  );
+
+  app.post(
+    '/badges/delete',
+    route(async (req, res, actor, body) => {
+      const reason = needReason(body);
+      const id = one(body.id) ?? '';
+      const server = await deps.serverName();
+      const mx = await getServiceClient();
+      if (!(await readOwnBadges(mx, server)).badges.some((b) => b.id === id)) throw new ControlError(404, `No badge ${id} ('purrlor badges' lists them).`);
+      await deleteBadge(mx, server, id);
+      await deps.store.audit({ actor, action: 'badges.delete', target: id, reason, result: 'ok' });
+      reply(req, res, 200, `Deleted badge ${id}; it is gone from everyone who had it.`);
+    })
+  );
+
+  for (const kind of ['grant', 'revoke'] as const) {
+    app.post(
+      `/badges/${kind}`,
+      route(async (req, res, actor, body) => {
+        const reason = needReason(body);
+        const id = one(body.id) ?? '';
+        const userId = one(body.user) ?? '';
+        const server = await deps.serverName();
+        if (!/^@[^:\s]+:/.test(userId) || !userId.endsWith(`:${server}`)) throw new ControlError(400, `${userId || 'The user'} isn't someone on ${server} (@name:${server}).`);
+        const mx = await getServiceClient();
+        const dir = await readOwnBadges(mx, server);
+        if (!dir.badges.some((b) => b.id === id)) throw new ControlError(404, `No badge ${id} ('purrlor badges' lists them).`);
+        const have = dir.grants[userId] ?? [];
+        const next = kind === 'grant' ? [...new Set([...have, id])] : have.filter((x) => x !== id);
+        if (next.length === have.length && next.every((x, i) => x === have[i])) return reply(req, res, 200, `${userId} ${kind === 'grant' ? 'already has' : "doesn't have"} ${id}.`);
+        if (!(await setGrants(mx, server, userId, next))) throw new ControlError(400, 'Someone can hold at most 5 badges.');
+        await deps.store.audit({ actor, action: `badges.${kind}`, target: `${userId} ${id}`, reason, result: 'ok' });
+        reply(req, res, 200, `${kind === 'grant' ? 'Gave' : 'Took'} ${id} ${kind === 'grant' ? 'to' : 'from'} ${userId}.`);
+      })
+    );
+  }
 
   // --- Bug reports ------------------------------------------------------------------------------
 

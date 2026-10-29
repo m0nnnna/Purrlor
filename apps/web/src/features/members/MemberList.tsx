@@ -7,6 +7,7 @@ import { mobileMemberListOpenAtom } from '../../app/state/mobile';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { RoleBadge } from '../../components/RoleBadge';
+import { UserBadges } from '../../components/UserBadges';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
 import { useRoomMembers } from '../../matrix/hooks/useRoomMembers';
 import { handleFor, roleFor, type RoleLevel } from '../../matrix/roles';
@@ -102,6 +103,7 @@ function MemberRow({
             {member.name}
           </span>
           <RoleBadge role={role} />
+          <UserBadges userId={member.userId} />
         </span>
         <span className="nu-member-list__item-status">{presenceInfo.statusMsg || handleFor(member.userId)}</span>
       </span>

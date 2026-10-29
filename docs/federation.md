@@ -150,6 +150,20 @@ Not done yet: finding a peer's person by name in search (a full `@name:server` I
 user ID is typed), and a peer's person whose extended profile doesn't come through federation and
 who isn't in the first pages of their instance's directory.
 
+## Badges
+
+A badge is a 4-character coloured pill beside someone's name: a "this person is special" mark.
+Admins make and give them with `purrlor badges` (`create <id> <4 characters> <#rrggbb>`, `delete`,
+`grant <id> <@user:server>`, `revoke`, each with a reason, in the audit log). People can't create,
+choose, hide or change their badges, and the app has nothing that writes them; someone holds at most 5.
+
+They live in each instance's badge room, `#purrlor-badges:<server>` (type `xyz.nekous.badges`),
+which the service bot creates and is the only one able to write to (state events
+`xyz.nekous.badge` and `xyz.nekous.badge_grant`). Peers' bots join it during each sync like an emote
+library, kept only if it's really theirs, and a room only speaks for people on its own server.
+`GET /api/public/badges` answers `{ "badges": { "@luna:purr.example": [{ "id", "text", "color" }] } }`
+for this server and its peers (`services/token-server/src/badges.ts`).
+
 ## Emotes and stickers
 
 Each instance's **global emote library** (`#purrlor-emotes:<server>`, `docs/api.md`) is shared with

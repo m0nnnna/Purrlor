@@ -5,6 +5,7 @@ import { pickPeerRooms, serverOfUser, type DirectoryEntry, type Peer } from './p
 import { FEED_MARKER_EVENT, PROFILE_ROOM_TYPE, readProfileOwner, type RawEvent } from './publicWeb.js';
 import { roomOriginServer } from './tenancy.js';
 import { EMOTE_LIBRARY_ROOM_TYPE, forgetPeerEmotes, joinPeerLibrary } from './peerEmotes.js';
+import { BADGE_ROOM_TYPE, forgetBadges, joinPeerBadges } from './badges.js';
 
 /**
  * The bot's side of peering (docs/federation.md): it joins approved peers' public rooms, so this
@@ -72,7 +73,7 @@ function countByType(mx: MatrixClient, roomIds: string[]) {
     const type = mx.getRoom(roomId)?.getType();
     if (type === PROFILE_ROOM_TYPE) profiles += 1;
     else if (type === 'm.space') spaces += 1;
-    else if (type === EMOTE_LIBRARY_ROOM_TYPE) libraries += 1;
+    else if (type === EMOTE_LIBRARY_ROOM_TYPE || type === BADGE_ROOM_TYPE) libraries += 1;
   }
   return { profiles, spaces, feeds: roomIds.length - profiles - spaces - libraries };
 }
@@ -232,6 +233,10 @@ export async function syncPeer(mx: MatrixClient, peer: Peer): Promise<PeerStatus
     await joinPeerLibrary(mx, server).catch((err: unknown) =>
       console.warn(`Peering: couldn't join ${server}'s emote library: ${(err as Error).message}`)
     );
+    // And its badge room (badges.ts), so its people's badges show here.
+    await joinPeerBadges(mx, server).catch((err: unknown) =>
+      console.warn(`Peering: couldn't join ${server}'s badge room: ${(err as Error).message}`)
+    );
     Object.assign(status, countByType(mx, joinedRoomsOf(mx, server)), { lastSync: new Date().toISOString() });
   } catch (err) {
     Object.assign(status, countByType(mx, joinedRoomsOf(mx, server)), { lastError: (err as Error).message });
@@ -262,6 +267,7 @@ export async function leavePeer(server: string): Promise<number> {
   }
   peerStatus.delete(server);
   forgetPeerEmotes();
+  forgetBadges();
   return rooms.length;
 }
 

@@ -184,6 +184,7 @@ Federation with other Purrlor instances (root; docs/federation.md):
   purrlor peers add <address>          federate with another Purrlor instance (each side adds the other)
   purrlor peers remove <server name>   stop: the bot leaves its rooms, its people disappear here
   purrlor peers sync                   read the peers' directories now instead of within ten minutes
+  purrlor badges                       the badges (4-letter coloured pills) and who has them; create, delete, grant, revoke
   Options: --reason "why" (else asked), --yes (skip the confirmation). A <file> is its mxc:// address
   or the public media link.
 HELP
@@ -2085,6 +2086,42 @@ from Everyone, Discover and the public web here."
   esac
 }
 
+# cmd_badges: the pills admins make and give out (docs/federation.md, "Badges"). People can't change them.
+cmd_badges() {
+  local usage="Usage: purrlor badges [list] | create <id> <4 characters> <#rrggbb> | delete <id> | grant <id> <@user:server> | revoke <id> <@user:server>
+  (everything but list takes --reason \"why\")"
+  need_root badges "$@"
+  local action="${1:-list}"
+  [ "$#" -eq 0 ] || shift
+  parse_opts "$@"
+  case "$action" in
+    list)
+      [ "${#POS[@]}" -eq 0 ] || die "$usage"
+      ctl GET /badges
+      ;;
+    create)
+      [ "${#POS[@]}" -eq 3 ] || die "$usage"
+      printf '%s' "${POS[0]}" | grep -Eq '^[a-z0-9-]{1,32}$' || die "The id is 1-32 of a-z, 0-9 and '-'."
+      [ "${#POS[1]}" -eq 4 ] || die "A badge is exactly 4 characters."
+      printf '%s' "${POS[2]}" | grep -Eq '^#[0-9a-fA-F]{6}$' || die "The colour is #rrggbb, like #aa66ff."
+      need_reason
+      ctl POST /badges/create --data-urlencode "id=${POS[0]}" --data-urlencode "text=${POS[1]}" --data-urlencode "color=${POS[2]}" --data-urlencode "reason=$REASON"
+      ;;
+    delete)
+      [ "${#POS[@]}" -eq 1 ] || die "$usage"
+      need_reason
+      confirm "Delete badge ${POS[0]}: everyone who has it loses it, here and on peers."
+      ctl POST /badges/delete --data-urlencode "id=${POS[0]}" --data-urlencode "reason=$REASON"
+      ;;
+    grant | revoke)
+      [ "${#POS[@]}" -eq 2 ] || die "$usage"
+      need_reason
+      ctl POST "/badges/$action" --data-urlencode "id=${POS[0]}" --data-urlencode "user=${POS[1]}" --data-urlencode "reason=$REASON"
+      ;;
+    *) die "$usage" ;;
+  esac
+}
+
 cmd_pages() {
   local usage="Usage: purrlor pages list | show <name> | hide <name> | unhide <name> | off <name> | on <name>
   (hide and off take --reason \"why\"; add --yes to skip the confirmation)"
@@ -2314,6 +2351,7 @@ case "${1:-help}" in
   emotes) shift; cmd_emotes "$@" ;;
   pages) shift; cmd_pages "$@" ;;
   peers) shift; cmd_peers "$@" ;;
+  badges) shift; cmd_badges "$@" ;;
   takedown) shift; cmd_takedown "$@" ;;
   reports) shift; cmd_reports "$@" ;;
   audit) shift; cmd_audit "$@" ;;

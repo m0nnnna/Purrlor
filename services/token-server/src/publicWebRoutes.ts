@@ -42,6 +42,7 @@ import { validateOpenIdToken } from './openid.js';
 import { FEDERATION_VERSION, cleanInstanceName, knownUserId, parsePeerStatus, profilePath, serverOfUser, type Peer } from './peers.js';
 import { joinFollowedProfile, leavePeer, peerStatus, syncPeer } from './peering.js';
 import { readPeerEmotes } from './peerEmotes.js';
+import { readAllBadges } from './badges.js';
 import { roomOriginServer } from './tenancy.js';
 import {
   channelName,
@@ -804,6 +805,18 @@ export function publicWebRouter(): Router {
   // A signed-in person here followed (or opened) a peer's person the bot isn't reading yet.
   // Peers' emotes and stickers (peerEmotes.ts), for this server's own people only: a peer's
   // library isn't public on its own side, so it isn't here either.
+  // Badges admins gave (badges.ts), this server's and its peers', by user ID. Public: a badge is
+  // shown beside someone's name wherever they post.
+  router.get('/badges', async (_req, res) => {
+    try {
+      const value = await readAllBadges(await serverName(), await adminStore.peers());
+      res.set('Cache-Control', 'public, max-age=60').json(value);
+    } catch (err) {
+      console.error('Badges failed', err);
+      res.status(503).json({ error: 'Not available right now' });
+    }
+  });
+
   router.post('/peers/emotes', async (req, res) => {
     if (limited(req, res, pageLimiter)) return;
     try {

@@ -1,0 +1,12 @@
+.nu-user-badge {
+  flex: none;
+  align-self: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  user-select: none;
+}

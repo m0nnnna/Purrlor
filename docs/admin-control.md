@@ -150,6 +150,10 @@ here keeps them off this site's public web, whatever their own instance does.
 | `POST /peers/add` (url, reason) | Asks `<url>/api/public/instance`, and saves it as a peer if it's a Purrlor instance that federates and isn't this one. Adding one already there refreshes its address and name. Starts its first sync. `502` if it can't be reached |
 | `POST /peers/remove/:server` (reason) | Takes it off the list and has the bot leave every room created on that server. `404` if it isn't a peer |
 | `POST /peers/sync` | Reads every peer's directory now and joins what's new (otherwise every ten minutes). `207` if any failed |
+| `GET /badges` | The badges (id, 4-character text, colour) and who has which |
+| `POST /badges/create` (id, text, color, reason) | Makes a badge, or changes an existing one's text and colour. `text` is exactly 4 letters, digits or `!?*+$#&`; `color` is `#rrggbb` |
+| `POST /badges/delete` (id, reason) | Deletes it: everyone who had it loses it. `404` if there's no such badge |
+| `POST /badges/grant`, `/badges/revoke` (id, user, reason) | Gives or takes a badge for someone on this server (at most 5 each) |
 
 ### Bug reports
 

@@ -12,6 +12,7 @@ import { webhookProfile } from '../../matrix/webhooks';
 import { readVoiceServerConfig } from '../../matrix/voice';
 import { findParentSpaceId } from '../../matrix/spaceChildren';
 import { RoleBadge } from '../../components/RoleBadge';
+import { UserBadges } from '../../components/UserBadges';
 import { pendingJumpTargetAtom } from '../../app/state/selection';
 import { useIrcMode } from '../../app/density';
 import { useMatrixClient } from '../../matrix/MatrixClientContext';
@@ -661,6 +662,7 @@ const MessageRow = memo(function MessageRow({
                   {senderName}
                 </button>
                 <RoleBadge role={role} />
+                {!webhook && <UserBadges userId={event.getSender() ?? undefined} />}
                 {webhook && (
                   <span className="nu-timeline__app-badge" data-nu-role="timeline-webhook-badge" title="Posted by a webhook">
                     APP
