@@ -3,20 +3,21 @@
 !include "FileFunc.nsh"
 !include "Sections.nsh"
 
+; Packs electron-builder's dist-app\win-unpacked (scripts/installer.mjs runs this). The install
+; folder, uninstall key and the /S /RELAUNCH /TRAY switches are the 1.x installer's, so a 1.x app's
+; auto-update installs this straight over itself.
+
 !define APPNAME "Purrlor"
 !ifndef APPVERSION
   !define APPVERSION "0.0.0"
 !endif
 !define EXE_NAME "Purrlor.exe"
-!define OUTFILE "..\dist\Purrlor-Setup.exe"
+!define OUTFILE "..\dist-app\Purrlor-Setup.exe"
 ; Programs go under Programs\; %LOCALAPPDATA%\Purrlor is the app's settings and browser data,
 ; which an upgrade or uninstall must leave alone (that's where people's sign-ins live).
 !define INSTALLDIR "$LOCALAPPDATA\Programs\Purrlor"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Purrlor"
-; Microsoft's documented registry key for the Evergreen WebView2 Runtime.
-!define WEBVIEW2_KEY "Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-; Keep the icon next to this .nsi file and run makensis from this directory.
 Icon "purrlor.ico"
 UninstallIcon "purrlor.ico"
 
@@ -49,24 +50,23 @@ VIAddVersionKey "LegalCopyright" "MeowOps"
 !insertmacro MUI_LANGUAGE "English"
 
 ; Purrlor keeps running in the tray after its window is closed, so an upgrade or uninstall has to
-; stop it first or its files are locked.
+; stop it first or its files are locked. Electron runs several Purrlor.exe processes; this stops all.
 !macro StopPurrlor
-  nsExec::Exec 'taskkill /IM "${EXE_NAME}" /F'
+  nsExec::Exec 'taskkill /IM "${EXE_NAME}" /F /T'
   Pop $0
-  Sleep 500
+  Sleep 800
 !macroend
 
 Section "Purrlor" SEC_MAIN
   SectionIn RO
   SetShellVarContext current
   !insertmacro StopPurrlor
-  ; Replace, don't merge: files a newer build dropped shouldn't linger. $INSTDIR is always the
-  ; fixed Programs\Purrlor folder (there's no directory page), so this only ever removes our files.
+  ; Replace, don't merge: files a newer build dropped (or the whole 1.x .NET app) shouldn't linger.
+  ; $INSTDIR is always the fixed Programs\Purrlor folder (there's no directory page), so this only
+  ; ever removes our files.
   RMDir /r "$INSTDIR"
   SetOutPath "$INSTDIR"
-  File /r "..\Purrlor\bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\*.*"
-
-  Call EnsureWebView2
+  File /r "..\dist-app\win-unpacked\*.*"
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -77,6 +77,8 @@ Section "Purrlor" SEC_MAIN
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${EXE_NAME},0"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" "$0"
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
@@ -86,23 +88,19 @@ Section /o "Desktop Shortcut" SEC_DESKTOP
   CreateShortCut "$DESKTOP\Purrlor.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0
 SectionEnd
 
+; Not optional: Windows shows an app's notifications only when a Start menu shortcut carries its ID
+; (the app writes the ID onto this shortcut when it starts).
 Section "Start Menu Shortcut" SEC_STARTMENU
+  SectionIn RO
   SetShellVarContext current
   CreateDirectory "$SMPROGRAMS\Purrlor"
   CreateShortCut "$SMPROGRAMS\Purrlor\Purrlor.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0
-  CreateShortCut "$SMPROGRAMS\Purrlor\Uninstall Purrlor.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
+  ; The 1.x installer added an uninstall shortcut here; Settings → Apps does that job.
+  Delete "$SMPROGRAMS\Purrlor\Uninstall Purrlor.lnk"
 SectionEnd
 
-; An automatic update (Updater.cs) runs this silently: /S, plus /RELAUNCH to start the new version
-; afterwards (/TRAY: in the tray, as at sign-in). It leaves shortcuts as they were: the Start menu
-; one is only made again if it's still there.
-Function .onInit
-  ${If} ${Silent}
-  ${AndIfNot} ${FileExists} "$SMPROGRAMS\Purrlor\Purrlor.lnk"
-    !insertmacro UnselectSection ${SEC_STARTMENU}
-  ${EndIf}
-FunctionEnd
-
+; An automatic update (src/main/updater.ts, or a 1.x app's Updater.cs) runs this silently: /S, plus
+; /RELAUNCH to start the new version afterwards (/TRAY: in the tray, as at sign-in).
 Function .onInstSuccess
   ${GetParameters} $0
   ClearErrors
@@ -118,43 +116,16 @@ Function .onInstSuccess
   ${EndIf}
 FunctionEnd
 
-; Windows 11 ships the WebView2 Runtime; Windows 10 may not. The build downloads Microsoft's
-; small bootstrapper into this folder, and it's only run when the runtime is missing.
-Function EnsureWebView2
-  ReadRegStr $0 HKLM "SOFTWARE\WOW6432Node\${WEBVIEW2_KEY}" "pv"
-  ${If} $0 == ""
-  ${OrIf} $0 == "0.0.0.0"
-    ReadRegStr $0 HKCU "Software\${WEBVIEW2_KEY}" "pv"
-  ${EndIf}
-  ${If} $0 != ""
-  ${AndIf} $0 != "0.0.0.0"
-    Return
-  ${EndIf}
-!if /FileExists "MicrosoftEdgeWebview2Setup.exe"
-  DetailPrint "Installing the Microsoft Edge WebView2 Runtime..."
-  InitPluginsDir
-  SetOutPath "$PLUGINSDIR"
-  File "MicrosoftEdgeWebview2Setup.exe"
-  ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $1
-  SetOutPath "$INSTDIR"
-  ${If} $1 != 0
-    MessageBox MB_ICONEXCLAMATION|MB_OK "The Microsoft Edge WebView2 Runtime couldn't be installed (code $1). Purrlor needs it to run; you can get it from https://go.microsoft.com/fwlink/p/?LinkId=2124703"
-  ${EndIf}
-!else
-  MessageBox MB_ICONEXCLAMATION|MB_OK "Purrlor needs the Microsoft Edge WebView2 Runtime, which isn't installed. Get it from https://go.microsoft.com/fwlink/p/?LinkId=2124703"
-!endif
-FunctionEnd
-
 Section "Uninstall"
   SetShellVarContext current
   !insertmacro StopPurrlor
-  ; Takes Purrlor's notifications and its registration for them back off Windows (Toasts.cs).
-  ExecWait '"$INSTDIR\Purrlor.exe" --cleanup'
   Delete "$DESKTOP\Purrlor.lnk"
   Delete "$SMPROGRAMS\Purrlor\Purrlor.lnk"
   Delete "$SMPROGRAMS\Purrlor\Uninstall Purrlor.lnk"
   RMDir "$SMPROGRAMS\Purrlor"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Purrlor"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
+  ; The 1.x app's registration for its notifications (Microsoft.Toolkit's compat layer).
+  DeleteRegKey HKCU "Software\Classes\AppUserModelId\Purrlor"
   RMDir /r "$INSTDIR"
 SectionEnd

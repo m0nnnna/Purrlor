@@ -91,8 +91,9 @@ Now what was read last time is shown at once, and only what may have changed is 
 
 ## What the browser keeps
 
-The web container's nginx (`apps/web/deploy/nginx.conf`) tells the browser, and the desktop app's
-WebView2 (which keeps its cache in `%LOCALAPPDATA%\Purrlor` between runs), what it may keep:
+The web container's nginx (`apps/web/deploy/nginx.conf`) tells the browser, and the desktop app
+(which keeps its Chromium cache in `%LOCALAPPDATA%\Purrlor\App` or `~/.config/Purrlor` between
+runs), what it may keep:
 
 | What | Cache-Control | So |
 |---|---|---|

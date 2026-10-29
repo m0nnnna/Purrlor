@@ -1,7 +1,8 @@
 name: Desktop
 
-# Builds the Windows desktop app (apps/desktop) and its installer. Pushing a tag named
-# desktop-vX.Y.Z (matching <Version> in Purrlor.csproj) also publishes it as a GitHub release.
+# Builds the desktop app (apps/desktop, Electron) for Windows and Linux. Pushing a tag named
+# desktop-vX.Y.Z (matching "version" in apps/desktop/package.json) also publishes it as a GitHub
+# release, every file signed for auto-update.
 on:
   push:
     branches: [master]
@@ -15,57 +16,122 @@ permissions:
   contents: read
 
 jobs:
+  check:
+    name: typecheck and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          [ "desktop-v$version" = "${{ github.ref_name }}" ] || { echo "Tag ${{ github.ref_name }} doesn't match package.json version $version"; exit 1; }
+      - run: npm run typecheck
+      - run: npm test
+
   windows:
     name: windows installer
+    needs: check
     runs-on: windows-latest
-    permissions:
-      contents: write
     defaults:
       run:
         shell: pwsh
         working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-node@v4
         with:
-          dotnet-version: '8.0.x'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
       - name: Install NSIS
         run: |
           if (!(Get-Command makensis.exe -ErrorAction SilentlyContinue) -and !(Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) {
             choco install nsis -y --no-progress
           }
-      - name: Check the tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
-        run: |
-          $version = ([xml](Get-Content Purrlor/Purrlor.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
-          if ("desktop-v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match Purrlor.csproj version $version" }
-      - name: Build
-        run: ./Build-Purrlor.ps1
-      # Auto-update (apps/desktop/Purrlor/Updater.cs) runs only an installer signed with this key.
-      # Signed: the version and the installer's SHA-256, so an old installer can't pose as a new one.
+      - run: npm ci
+      - run: npm run dist:win
+      # Auto-update (apps/desktop/src/main/updater.ts) runs only files signed with this key, and
+      # 1.x apps (Updater.cs) check the same signature, so they update themselves onto this.
       - name: Sign the installer for auto-update
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         env:
-          SIGNING_KEY: ${{ secrets.DESKTOP_UPDATE_SIGNING_KEY }}
+          DESKTOP_UPDATE_SIGNING_KEY: ${{ secrets.DESKTOP_UPDATE_SIGNING_KEY }}
         run: |
-          if (-not $env:SIGNING_KEY) { throw "DESKTOP_UPDATE_SIGNING_KEY isn't set: installed apps would refuse this update" }
           $version = "${{ github.ref_name }}".Substring("desktop-v".Length)
-          $hash = (Get-FileHash dist/Purrlor-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          $message = [Text.Encoding]::UTF8.GetBytes("purrlor-desktop-update`n$version`n$hash`n")
-          $key = [Security.Cryptography.ECDsa]::Create()
-          $key.ImportFromPem($env:SIGNING_KEY)
-          $signature = $key.SignData($message, [Security.Cryptography.HashAlgorithmName]::SHA256)
-          [IO.File]::WriteAllText("$PWD/dist/Purrlor-Setup.exe.sig", [Convert]::ToBase64String($signature))
+          node scripts/sign-update.mjs dist-app/Purrlor-Setup.exe $version
       - uses: actions/upload-artifact@v4
         with:
-          name: Purrlor-Setup
-          path: apps/desktop/dist/Purrlor-Setup.exe
-      - name: Publish release
+          name: desktop-windows
+          path: |
+            apps/desktop/dist-app/Purrlor-Setup.exe
+            apps/desktop/dist-app/Purrlor-Setup.exe.sig
+          if-no-files-found: error
+
+  linux:
+    name: linux packages
+    needs: check
+    # The oldest supported runner, so the packages run on older distributions too.
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+      - run: npm run dist:linux
+      - name: Sign the packages for auto-update
         if: startsWith(github.ref, 'refs/tags/desktop-v')
+        env:
+          DESKTOP_UPDATE_SIGNING_KEY: ${{ secrets.DESKTOP_UPDATE_SIGNING_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#desktop-v}"
+          node scripts/sign-update.mjs dist-app/Purrlor-x86_64.AppImage "$version"
+          node scripts/sign-update.mjs dist-app/purrlor_amd64.deb "$version"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: |
+            apps/desktop/dist-app/Purrlor-x86_64.AppImage
+            apps/desktop/dist-app/Purrlor-x86_64.AppImage.sig
+            apps/desktop/dist-app/purrlor_amd64.deb
+            apps/desktop/dist-app/purrlor_amd64.deb.sig
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "${{ github.ref_name }}".Substring("desktop-v".Length)
-          gh release create "${{ github.ref_name }}" dist/Purrlor-Setup.exe dist/Purrlor-Setup.exe.sig `
-            --title "Purrlor Desktop $version" `
-            --notes "Windows desktop app for Purrlor. Download **Purrlor-Setup.exe** and run it; no admin rights needed. On first launch it asks which Purrlor server to connect to (purr.meowops.net by default). From 1.2.0 it keeps itself up to date (Purrlor-Setup.exe.sig is what it checks the download against)."
+          version="${GITHUB_REF_NAME#desktop-v}"
+          notes="apps/desktop/release-notes/v$version.md"
+          [ -f "$notes" ] || notes=apps/desktop/release-notes/default.md
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "Purrlor Desktop $version" \
+            --notes-file "$notes"
