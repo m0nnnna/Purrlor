@@ -28,6 +28,7 @@ import { ProfileView } from '../feed/ProfileView';
 import { MessageSearchModal } from '../search/MessageSearchModal';
 import { VoiceChannelPanel } from '../voice/VoiceChannelPanel';
 import { Composer } from './Composer';
+import { NsfwGate } from './NsfwGate';
 import { InviteToChannelModal } from './InviteToChannelModal';
 import { MessageTimeline } from './MessageTimeline';
 import { PinnedMessagesPanel } from './PinnedMessagesPanel';
@@ -271,6 +272,7 @@ function MainPaneContent() {
 
   if (channelType === 'voice') {
     return (
+      <NsfwGate room={room}>
       <main className="nu-main-pane" data-nu-role="main-pane">
         <div className="nu-main-pane__header" data-nu-role="main-pane-header">
           {backButton}
@@ -285,10 +287,12 @@ function MainPaneContent() {
         <VoiceChannelPanel room={room} />
         {showInvite && <InviteToChannelModal room={room} onClose={() => setShowInvite(false)} />}
       </main>
+      </NsfwGate>
     );
   }
 
   return (
+    <NsfwGate room={room}>
     <main className="nu-main-pane" data-nu-role="main-pane">
       <div className="nu-main-pane__header" data-nu-role="main-pane-header">
         {backButton}
@@ -340,5 +344,6 @@ function MainPaneContent() {
       {showThreads && <ThreadsOverviewModal room={room} onClose={() => setShowThreads(false)} />}
       {showInvite && <InviteToChannelModal room={room} onClose={() => setShowInvite(false)} />}
     </main>
+    </NsfwGate>
   );
 }

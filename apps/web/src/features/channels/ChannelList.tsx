@@ -31,6 +31,7 @@ import { mobileColumnOpenAtom } from '../../app/state/mobile';
 import { useChannelCategories } from '../../matrix/hooks/useChannelCategories';
 import { useChannelType } from '../../matrix/hooks/useChannelType';
 import { useRoomEncrypted } from '../../matrix/hooks/useRoomEncrypted';
+import { useChannelPermissions } from '../../matrix/hooks/useChannelPermissions';
 import { usePresence } from '../../matrix/hooks/usePresence';
 import { useRoom } from '../../matrix/hooks/useRoom';
 import {
@@ -185,6 +186,7 @@ function ChannelListRow({
   const presence = usePresence(counterpartId ?? '');
   const channelType = useChannelType(room);
   const encrypted = useRoomEncrypted(room);
+  const nsfw = useChannelPermissions(room).nsfw;
   const setActiveVoiceChannelId = useSetAtom(activeVoiceChannelIdAtom);
   const mx = useMatrixClient();
   const unread = useRoomUnreadCount(room);
@@ -256,6 +258,11 @@ function ChannelListRow({
         <span className={isUnread ? 'nu-channel-list__item-name nu-channel-list__item-name--unread' : 'nu-channel-list__item-name'}>
           {room.name}
         </span>
+        {nsfw && (
+          <span className="nu-channel-list__nsfw" title="NSFW channel" data-nu-role="channel-list-item-nsfw">
+            NSFW
+          </span>
+        )}
         {encrypted && (
           <span className="nu-channel-list__item-level" title="End-to-end encrypted" data-nu-role="channel-list-item-encrypted">
             <Icon name="lock" size={12} />

@@ -11,6 +11,7 @@ import {
   spaceRoleLevels,
   setSlowmode,
   setNoPlayers,
+  setNsfw,
   setVisibility,
   type PostingMode,
   type Visibility,
@@ -47,6 +48,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
   const [visibility, setVisibilityChoice] = useState<Visibility>(initial.visibility);
   const [slowmode, setSlowmodeChoice] = useState(initial.slowmodeSeconds);
   const [noPlayers, setNoPlayersChoice] = useState(initial.noPlayers);
+  const [nsfw, setNsfwChoice] = useState(initial.nsfw);
   const [channelModerators, setChannelModeratorList] = useState<string[]>(initial.channelModerators);
   const spaceMembers = useRoomMembers(space.roomId);
   const spaceLevels = spaceRoleLevels(space);
@@ -82,6 +84,7 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
       if (posting !== initial.posting) await setPostingMode(mx, channel, posting);
       if (slowmode !== initial.slowmodeSeconds) await setSlowmode(mx, channel, slowmode);
       if (noPlayers !== initial.noPlayers) await setNoPlayers(mx, channel, noPlayers);
+      if (nsfw !== initial.nsfw) await setNsfw(mx, channel, nsfw);
       if (visibility !== initial.visibility) await setVisibility(mx, channel, space, visibility);
       if (moderatorsChanged) await setChannelModerators(mx, channel, space, channelModerators);
       // Last, so a failure above doesn't leave the one change that can't be undone half-made.
@@ -148,6 +151,22 @@ export function ChannelPermissionsModal({ channel, space, onClose }: { channel: 
             apps don’t know about it.
           </span>
         </label>
+        <div className="nu-field" data-nu-role="channel-permissions-nsfw">
+          <label className="nu-field__checkbox-row">
+            <input
+              type="checkbox"
+              checked={nsfw}
+              disabled={!canChangeSlowmode}
+              data-nu-role="channel-permissions-nsfw-toggle"
+              onChange={(e) => setNsfwChoice(e.target.checked)}
+            />
+            NSFW channel
+          </label>
+          <span className="nu-field__hint">
+            Tags the channel NSFW in the list and shows a warning the first time someone opens it. Only Purrlor knows about
+            this.
+          </span>
+        </div>
         <div className="nu-field" data-nu-role="channel-permissions-no-players">
           <label className="nu-field__checkbox-row">
             <input

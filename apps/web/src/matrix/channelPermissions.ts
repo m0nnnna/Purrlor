@@ -57,6 +57,8 @@ export type ChannelPermissions = {
   channelModerators: string[];
   /** Link embeds' players draw as cards here (docs/embeds.md). Only Purrlor knows about it. */
   noPlayers: boolean;
+  /** Marked NSFW: tagged in the channel list, and a warning shows before it first opens. */
+  nsfw: boolean;
 };
 
 type PowerLevels = {
@@ -68,7 +70,7 @@ type PowerLevels = {
   [key: string]: unknown;
 };
 
-type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown; moderators?: unknown; no_players?: unknown };
+type SettingsContent = { moderators_only?: unknown; slowmode_seconds?: unknown; moderators?: unknown; no_players?: unknown; nsfw?: unknown };
 
 function powerLevels(room: Room): PowerLevels {
   return room.currentState.getStateEvents(EventType.RoomPowerLevels, '')?.getContent<PowerLevels>() ?? {};
@@ -89,6 +91,7 @@ export function readChannelPermissions(room: Room): ChannelPermissions {
       ? settings.moderators.filter((id): id is string => typeof id === 'string' && id.startsWith('@'))
       : [],
     noPlayers: settings.no_players === true,
+    nsfw: settings.nsfw === true,
   };
 }
 
@@ -131,6 +134,12 @@ export async function setSlowmode(mx: MatrixClient, room: Room, seconds: number)
   const current = room.currentState.getStateEvents(CHANNEL_SETTINGS_EVENT, '')?.getContent<Record<string, unknown>>() ?? {};
   const next = { ...current, slowmode_seconds: seconds > 0 ? Math.floor(seconds) : undefined };
   await mx.sendStateEvent(room.roomId, CHANNEL_SETTINGS_EVENT as any, next as any, '');
+}
+
+/** Marks this channel NSFW, or not. */
+export async function setNsfw(mx: MatrixClient, room: Room, on: boolean): Promise<void> {
+  const current = room.currentState.getStateEvents(CHANNEL_SETTINGS_EVENT, '')?.getContent<Record<string, unknown>>() ?? {};
+  await mx.sendStateEvent(room.roomId, CHANNEL_SETTINGS_EVENT as any, { ...current, nsfw: on || undefined } as any, '');
 }
 
 /** Turns link embeds' players into cards in this channel, or back. */

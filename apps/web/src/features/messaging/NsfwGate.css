@@ -1,0 +1,50 @@
+.nu-nsfw-gate {
+  align-items: center;
+  justify-content: center;
+  gap: var(--nu-space-3);
+  text-align: center;
+  padding: var(--nu-space-4);
+}
+
+.nu-nsfw-gate__tag {
+  padding: 2px 10px;
+  border-radius: var(--nu-radius-sm);
+  background: var(--nu-color-danger);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.nu-nsfw-gate__title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.nu-nsfw-gate__hint {
+  margin: 0;
+  max-width: 420px;
+  color: var(--nu-color-text-secondary);
+}
+
+.nu-nsfw-gate__actions {
+  display: flex;
+  gap: var(--nu-space-2);
+}
+
+.nu-nsfw-gate__back,
+.nu-nsfw-gate__enter {
+  appearance: none;
+  border: none;
+  padding: var(--nu-space-2) var(--nu-space-3);
+  border-radius: var(--nu-radius-md);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--nu-color-bg-tertiary);
+  color: var(--nu-color-text-primary);
+}
+
+.nu-nsfw-gate__enter {
+  background: var(--nu-color-danger);
+  color: #fff;
+}
