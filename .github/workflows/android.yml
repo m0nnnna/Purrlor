@@ -70,4 +70,4 @@ jobs:
           version="${GITHUB_REF_NAME#android-v}"
           gh release create "$GITHUB_REF_NAME" dist/Purrlor.apk dist/Purrlor.aab \
             --title "Purrlor for Android $version" \
-            --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+            --notes-file "$GITHUB_WORKSPACE/docs/releases/$GITHUB_REF_NAME.md"

@@ -1,4 +1,4 @@
-Purrlor for Android 2.1 is a real app: Purrlor in its own window instead of the browser, with notifications that work when it's closed.
+Purrlor for Android 2.0.1 is a real app: Purrlor in its own window instead of the browser, with notifications that work when it's closed.
 
 ### What's new
 
