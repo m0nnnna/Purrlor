@@ -1,6 +1,7 @@
 import type { MatrixClient } from 'matrix-js-sdk';
 import { getRuntimeConfig } from '../app/runtimeConfig';
 import { getOpenIdTokenCached } from './openIdToken';
+import { nativeBridge, nativePushState, waitForNativeEndpoint } from './nativeApp';
 
 /**
  * Account-wide (not per-Space, unlike voice — this follows the person, not a community) config
@@ -10,6 +11,9 @@ import { getOpenIdTokenCached } from './openIdToken';
  */
 export const PUSH_GATEWAY_ACCOUNT_DATA_EVENT = 'xyz.nekous.push_gateway';
 const APP_ID = 'xyz.nekous.webpush';
+/** The Android app's pusher: the pushkey is a random key as for the web, the gateway maps it to a UnifiedPush endpoint. */
+const NATIVE_APP_ID = 'xyz.nekous.unifiedpush';
+const appId = () => (nativeBridge() ? NATIVE_APP_ID : APP_ID);
 const PUSHKEY_STORAGE_KEY = 'nekous_push_pushkey';
 
 /** The gateway you picked in Account Settings, else this deployment's own (runtimeConfig.ts) —
@@ -55,12 +59,14 @@ function urlBase64ToUint8Array(base64Url: string): Uint8Array {
 export type PushSupport = 'unsupported' | 'supported';
 
 export function getPushSupport(): PushSupport {
+  if (nativeBridge()) return 'supported';
   return 'serviceWorker' in navigator && 'PushManager' in window ? 'supported' : 'unsupported';
 }
 
 /** Whether *this device* currently has a live push subscription — the thing that's actually
  *  true per-browser-profile, independent of whether the account-wide gateway URL is configured. */
 export async function isBackgroundPushEnabled(): Promise<boolean> {
+  if (nativeBridge()) return !!nativePushState().endpoint;
   if (getPushSupport() === 'unsupported') return false;
   const registration = await navigator.serviceWorker.getRegistration('/sw.js');
   const subscription = await registration?.pushManager.getSubscription();
@@ -103,6 +109,8 @@ export async function enableBackgroundPush(
   gatewayUrl: string,
   onStep: (step: EnableStep) => void = () => {}
 ): Promise<void> {
+  const native = nativeBridge();
+  if (native) return enableNativePush(mx, gatewayUrl, onStep);
   onStep('permission');
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
@@ -155,12 +163,42 @@ export async function enableBackgroundPush(
   await within(setOwnPusher(mx, gatewayUrl, pushkey), STEP_TIMEOUT_MS, 'Your homeserver didn’t answer. Try again in a moment.');
 }
 
+/** The Android app: its UnifiedPush endpoint stands where a browser's subscription does. */
+async function enableNativePush(mx: MatrixClient, gatewayUrl: string, onStep: (step: EnableStep) => void): Promise<void> {
+  const native = nativeBridge();
+  if (!native) return;
+  onStep('permission');
+  native.enablePush();
+  const { distributors } = nativePushState();
+  const endpoint = await waitForNativeEndpoint(
+    distributors > 0 ? 60_000 : 15_000,
+    distributors > 0
+      ? 'Your notification app didn’t answer. Open it once, then try again.'
+      : 'No UnifiedPush app is installed. Install one such as ntfy, then try again.'
+  );
+  onStep('gateway');
+  const gatewayFailed = `Couldn’t reach the push gateway at ${gatewayUrl}.`;
+  let pushkey = getOrCreatePushKey();
+  const register = () => within(registerWithGateway(mx, gatewayUrl, pushkey, { unifiedpush: { endpoint } }), STEP_TIMEOUT_MS, gatewayFailed);
+  if ((await register()) === 'taken') {
+    pushkey = rotatePushKey();
+    if ((await register()) === 'taken') throw new Error('Push gateway rejected the subscription');
+  }
+  onStep('homeserver');
+  await within(setOwnPusher(mx, gatewayUrl, pushkey), STEP_TIMEOUT_MS, 'Your homeserver didn’t answer. Try again in a moment.');
+}
+
 /**
  * Shows a notification through the service worker, the way a real push is shown, so turning
  * background push on ends with proof that notifications appear on this device. Never throws.
  */
 export async function showBackgroundPushConfirmation(): Promise<void> {
   try {
+    const native = nativeBridge();
+    if (native) {
+      native.testNotification();
+      return;
+    }
     const registration = await navigator.serviceWorker.getRegistration('/sw.js');
     await registration?.showNotification('Notifications are on', {
       body: 'You’ll get Purrlor notifications on this device, even with it closed.',
@@ -181,13 +219,17 @@ async function registerWithGateway(
   mx: MatrixClient,
   gatewayUrl: string,
   pushkey: string,
-  subscription: PushSubscription
+  subscription: PushSubscription | { unifiedpush: { endpoint: string } }
 ): Promise<'ok' | 'taken'> {
   const openIdToken = await getOpenIdTokenCached(mx);
   const subscribeRes = await fetch(`${gatewayUrl}/subscribe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ openid_token: openIdToken, pushkey, subscription: subscription.toJSON() }),
+    body: JSON.stringify({
+      openid_token: openIdToken,
+      pushkey,
+      ...('unifiedpush' in subscription ? subscription : { subscription: subscription.toJSON() }),
+    }),
   });
   if (subscribeRes.status === 403) return 'taken';
   if (!subscribeRes.ok) throw new Error('Push gateway rejected the subscription');
@@ -196,7 +238,7 @@ async function registerWithGateway(
 
 async function setOwnPusher(mx: MatrixClient, gatewayUrl: string, pushkey: string): Promise<void> {
   await mx.setPusher({
-    app_id: APP_ID,
+    app_id: appId(),
     app_display_name: 'Purrlor',
     device_display_name: navigator.userAgent.slice(0, 100) || 'Browser',
     kind: 'http',
@@ -223,6 +265,14 @@ export async function refreshBackgroundPush(mx: MatrixClient): Promise<void> {
   if (getPushSupport() === 'unsupported') return;
   const gatewayUrl = readPushGatewayUrl(mx);
   if (!gatewayUrl) return;
+  if (nativeBridge()) {
+    const { endpoint } = nativePushState();
+    if (!endpoint) return;
+    const key = getOrCreatePushKey();
+    if ((await registerWithGateway(mx, gatewayUrl, key, { unifiedpush: { endpoint } })) === 'taken') return;
+    await setOwnPusher(mx, gatewayUrl, key);
+    return;
+  }
   const registration = await navigator.serviceWorker.getRegistration('/sw.js');
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) return;
@@ -234,7 +284,7 @@ export async function refreshBackgroundPush(mx: MatrixClient): Promise<void> {
 
 export async function disableBackgroundPush(mx: MatrixClient, gatewayUrl: string): Promise<void> {
   const pushkey = getOrCreatePushKey();
-  await mx.removePusher(pushkey, APP_ID).catch(() => {}); // already gone server-side is fine
+  await mx.removePusher(pushkey, appId()).catch(() => {}); // already gone server-side is fine
   const openIdToken = await getOpenIdTokenCached(mx).catch(() => undefined);
   await fetch(`${gatewayUrl}/subscribe/${pushkey}`, {
     method: 'DELETE',
@@ -242,6 +292,11 @@ export async function disableBackgroundPush(mx: MatrixClient, gatewayUrl: string
     body: JSON.stringify({ openid_token: openIdToken }),
   }).catch(() => {});
 
+  const native = nativeBridge();
+  if (native) {
+    native.disablePush();
+    return;
+  }
   const registration = await navigator.serviceWorker.getRegistration('/sw.js');
   const subscription = await registration?.pushManager.getSubscription();
   await subscription?.unsubscribe();

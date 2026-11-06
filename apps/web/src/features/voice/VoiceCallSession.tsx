@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { useAtomValue } from 'jotai';
 import { activeVoiceChannelIdAtom } from '../../app/state/selection';
 import { useRoom } from '../../matrix/hooks/useRoom';
+import { reportCallActive } from '../../matrix/nativeApp';
 
 // livekit-client/@livekit/components-react load as their own chunk — only once a voice channel
 // is actually selected — rather than in the main bundle for every visitor. See ActiveVoiceCall.tsx.
@@ -18,6 +19,13 @@ const ActiveVoiceCall = lazy(() => import('./ActiveVoiceCall'));
 export function VoiceCallSession({ children }: { children: ReactNode }) {
   const activeVoiceChannelId = useAtomValue(activeVoiceChannelIdAtom);
   const room = useRoom(activeVoiceChannelId);
+  const inCall = !!room;
+
+  // The Android app keeps a call going when it leaves the screen (a foreground service); it has to be told.
+  useEffect(() => {
+    reportCallActive(inCall);
+    return () => reportCallActive(false);
+  }, [inCall]);
 
   if (!room) {
     return <>{children}</>;

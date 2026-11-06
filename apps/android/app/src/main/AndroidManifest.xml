@@ -1,38 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Purrlor for Android: a Trusted Web Activity. The Purrlor server chosen in the app (Server.java;
-     https://${host}/ is suggested) runs in the phone's Chrome, full screen, with its own sign-in,
-     service worker, Web Push notifications and voice; this app only launches it. See README.md. -->
+<!-- Purrlor for Android: the chosen Purrlor server (Server.java; https://${host}/ is suggested) in
+     the app's own WebView (PurrlorActivity), with notifications delivered through UnifiedPush
+     (PushReceiver) and a foreground service that keeps a voice call going (CallService).
+     See docs/android.md. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Android 13 and later: the site's notifications are shown under this app, which asks. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Lets the app see which UnifiedPush distributors (ntfy and the like) are installed. -->
+    <queries>
+        <intent>
+            <action android:name="org.unifiedpush.android.distributor.REGISTER" />
+        </intent>
+    </queries>
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
-        <meta-data
-            android:name="asset_statements"
-            android:resource="@string/assetStatements" />
-
-        <!-- Opens the chosen server (or asks for one first). Translucent: the splash screen is
-             drawn by the library, then Chrome takes over. -->
         <activity
             android:name=".PurrlorActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|density|uiMode"
             android:label="@string/appName"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Links to the suggested server open in the app (another server's open in Chrome). -->
+            <!-- Links to the suggested server open in the app (another server's open in the browser). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -40,13 +52,10 @@
                 <data android:scheme="https" android:host="${host}" />
             </intent-filter>
 
-            <!-- Pictures, videos and links shared from other apps go to the chosen server. -->
+            <!-- Text and links shared from other apps go to the chosen server. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-                <data android:mimeType="video/*" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
@@ -58,31 +67,24 @@
             android:label="@string/appName"
             android:windowSoftInputMode="adjustResize" />
 
-        <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />
-
-        <activity
-            android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity" />
-
-        <!-- Hands the splash image to Chrome. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="@string/providerAuthority"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/filepaths" />
-        </provider>
-
-        <!-- Lets Chrome show the site's notifications as this app's. -->
-        <service
-            android:name="com.google.androidbrowserhelper.trusted.DelegationService"
-            android:enabled="true"
-            android:exported="true">
+        <!-- What the phone's UnifiedPush distributor sends the app, even when it is closed. -->
+        <receiver
+            android:name=".PushReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver"
+            xmlns:tools="http://schemas.android.com/tools">
             <intent-filter>
-                <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="org.unifiedpush.android.connector.MESSAGE" />
+                <action android:name="org.unifiedpush.android.connector.UNREGISTERED" />
+                <action android:name="org.unifiedpush.android.connector.NEW_ENDPOINT" />
+                <action android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED" />
             </intent-filter>
-        </service>
+        </receiver>
+
+        <!-- Keeps a voice call going while Purrlor is off the screen. -->
+        <service
+            android:name=".CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
     </application>
 </manifest>

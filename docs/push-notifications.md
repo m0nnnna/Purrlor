@@ -128,3 +128,10 @@ homeserver (`chat.frennet.xyz` in this dev setup) needs to be able to reach the 
 `localhost` gateway works for everything *this* client-side testing needed (subscribing, and
 manually POSTing a notify to simulate what the homeserver would send), but never receives a real
 homeserver-initiated call unless it's actually deployed somewhere reachable.
+
+## The Android app (UnifiedPush)
+
+The Android app can't use Web Push, so it registers a UnifiedPush endpoint instead
+(`POST /subscribe` with `unifiedpush: {endpoint}` in place of `subscription`) and the gateway
+posts the same notification JSON to it. Keep them across restarts with `UNIFIEDPUSH_FILE`
+(`deploy/docker-compose.yml` sets it). How it works end to end: [android.md](android.md).

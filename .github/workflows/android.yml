@@ -1,7 +1,7 @@
 name: Android
 
-# Builds the Android app (apps/android): a Trusted Web Activity that opens the Purrlor site full
-# screen. Every build makes a debug APK to try. Pushing a tag named android-vX.Y.Z (matching
+# Builds the Android app (apps/android): the Purrlor site in its own WebView, with
+# UnifiedPush notifications and a call service. Every build makes a debug APK to try. Pushing a tag named android-vX.Y.Z (matching
 # versionName in apps/android/app/build.gradle) also signs the release with the upload key and
 # publishes the APK and the Play bundle (AAB) as a GitHub release.
 on:
@@ -70,4 +70,4 @@ jobs:
           version="${GITHUB_REF_NAME#android-v}"
           gh release create "$GITHUB_REF_NAME" dist/Purrlor.apk dist/Purrlor.aab \
             --title "Purrlor for Android $version" \
-            --notes "Android app for Purrlor (purr.meowops.net). Install **Purrlor.apk** on a phone, or upload **Purrlor.aab** to Google Play. It opens Purrlor in the phone's Chrome, full screen; notifications, voice and sharing work as on the website."
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md"

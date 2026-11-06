@@ -8,4 +8,12 @@
     <string name="serverInvalid">That doesn\'t look like a server address, e.g. purr.meowops.net.</string>
     <string name="serverUnreachable">Couldn\'t find Purrlor at %1$s. Check the address, or try again in a moment.</string>
     <string name="changeServer">Change server</string>
+    <string name="channelMessages">Messages</string>
+    <string name="channelCall">Voice call</string>
+    <string name="callOngoing">In a voice call</string>
+    <string name="callMute">Mute</string>
+    <string name="callUnmute">Unmute</string>
+    <string name="callLeave">Leave</string>
+    <string name="callTapToReturn">Tap to go back to Purrlor</string>
+    <string name="testNotification">Notifications work on this phone.</string>
 </resources>

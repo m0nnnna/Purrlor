@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocalParticipant } from '@livekit/components-react';
 import { desktopBridge } from '../../desktop/desktopBridge';
+import { NATIVE_CALL_ACTION_EVENT, reportCallMuted } from '../../matrix/nativeApp';
 import { toggleDeafen, toggleMute } from './callActions';
 import { useVoiceCall } from './voiceCallContext';
 import {
@@ -30,7 +31,7 @@ function isTyping(target: EventTarget | null): boolean {
  * too old to watch them, they work while Purrlor has focus. Renders nothing.
  */
 export function CallHotkeys() {
-  const { localParticipant } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const call = useVoiceCall();
   const binds = useKeybinds();
   const rebinding = useRebinding() !== null;
@@ -67,6 +68,22 @@ export function CallHotkeys() {
       if (pttHeld.current) actions.current.up('pushToTalk');
     },
   });
+
+  // The Android app's call notification has Mute and Leave buttons; it needs to know the mic state.
+  useEffect(() => {
+    reportCallMuted(!isMicrophoneEnabled);
+  }, [isMicrophoneEnabled]);
+  useEffect(() => {
+    const onAction = (evt: Event) => {
+      const { localParticipant: lp, call: c } = latest.current;
+      if (!c) return;
+      const action = (evt as CustomEvent<{ action?: string }>).detail?.action;
+      if (action === 'mute') toggleMute(lp, c.deafened, c.setDeafened);
+      else if (action === 'leave') c.leave();
+    };
+    window.addEventListener(NATIVE_CALL_ACTION_EVENT, onAction);
+    return () => window.removeEventListener(NATIVE_CALL_ACTION_EVENT, onAction);
+  }, []);
 
   // Push-to-talk mutes you on the way in, and turning it off hands the mic back: otherwise you'd
   // be left silently muted with a control bar that looks unmuted.

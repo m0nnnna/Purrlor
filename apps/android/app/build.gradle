@@ -9,11 +9,7 @@ def host = providers.gradleProperty('purrlor.host').get()
 if (!(host ==~ /^[A-Za-z0-9.-]+(:[0-9]+)?$/)) {
     throw new GradleException("purrlor.host must be a host name like purr.example, not '${host}'")
 }
-def siteUrl = "https://${host}"
 def appName = providers.gradleProperty('purrlor.appName').get()
-
-// A string resource holding JSON: its quotes escaped for the generated XML.
-def jsonRes = { String json -> json.replace('"', '\\"') }
 
 // Release signing, from the environment (the CI secrets; README.md has how to make a key). Without
 // them a release build is left unsigned.
@@ -27,16 +23,12 @@ android {
         applicationId providers.gradleProperty('purrlor.applicationId').get()
         minSdk 24
         targetSdk 36
-        versionCode 1
-        versionName '1.2.3'
+        versionCode 3
+        versionName '2.1.0'
 
         manifestPlaceholders = [host: host]
         resValue 'string', 'appName', appName
         resValue 'string', 'defaultHost', host
-        resValue 'string', 'providerAuthority', "${applicationId}.fileprovider"
-        // The suggested site, for Android's link verification; each site says it back in assetlinks.json.
-        resValue 'string', 'assetStatements', jsonRes(
-            """[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"${siteUrl}"}}]""")
     }
 
     signingConfigs {
@@ -64,9 +56,9 @@ android {
 }
 
 dependencies {
-    // Google's Trusted Web Activity launcher: opens the site in the phone's Chrome, full screen.
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
-    // Used directly by PurrlorActivity (the versions androidbrowserhelper 2.7.3 brings).
-    implementation 'androidx.browser:browser:1.10.0'
+    // UnifiedPush: the phone's push distributor (ntfy and the like) hands the app an address the
+    // push gateway posts notifications to, which wakes the app even when it is closed.
+    implementation 'org.unifiedpush.android:connector:2.5.0'
     implementation 'androidx.core:core:1.17.0'
+    testImplementation 'junit:junit:4.13.2'
 }
