@@ -1,7 +1,7 @@
 name: Android
 
-# Builds the Android app (apps/android): a Trusted Web Activity that opens the Purrlor site full
-# screen. Every build makes a debug APK to try. Pushing a tag named android-vX.Y.Z (matching
+# Builds the Android app (apps/android): the Purrlor site in its own WebView, with
+# UnifiedPush notifications and a call service. Every build makes a debug APK to try. Pushing a tag named android-vX.Y.Z (matching
 # versionName in apps/android/app/build.gradle) also signs the release with the upload key and
 # publishes the APK and the Play bundle (AAB) as a GitHub release.
 on:

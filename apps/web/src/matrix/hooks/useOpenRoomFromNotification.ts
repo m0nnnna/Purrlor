@@ -14,6 +14,7 @@ import { readMentionInvite } from '../mentionInvites';
 import { useMatrixClient } from '../MatrixClientContext';
 import { getParentSpace } from '../voice';
 import { useOpenFeedRoom } from '../../features/feed/useOpenFeedRoom';
+import { NATIVE_OPEN_ROOM_EVENT } from '../nativeApp';
 
 /**
  * Two ways a background push notification (sw.js) hands control back to the app: a page that
@@ -67,14 +68,24 @@ export function useOpenRoomFromNotification(): void {
       window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
     }
 
-    if (!('serviceWorker' in navigator)) return;
+    // The Android app: a notification tapped while the page was open.
+    const handleNative = (event: Event) => {
+      const roomId = (event as CustomEvent<{ roomId?: unknown }>).detail?.roomId;
+      if (typeof roomId === 'string' && roomId) openRoom(roomId);
+    };
+    window.addEventListener(NATIVE_OPEN_ROOM_EVENT, handleNative);
+
+    if (!('serviceWorker' in navigator)) return () => window.removeEventListener(NATIVE_OPEN_ROOM_EVENT, handleNative);
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'nekous-open-room' && event.data.roomId) {
         openRoom(event.data.roomId);
       }
     };
     navigator.serviceWorker.addEventListener('message', handleMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener(NATIVE_OPEN_ROOM_EVENT, handleNative);
+      navigator.serviceWorker.removeEventListener('message', handleMessage);
+    };
   }, [
     mx,
     setSelectedSpaceId,

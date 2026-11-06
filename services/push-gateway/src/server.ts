@@ -14,6 +14,17 @@ import {
   subscriptionCount,
   subscriptionsOf,
 } from './subscriptions.js';
+import {
+  claimEndpoint,
+  deleteEndpoint,
+  endpointCount,
+  endpointsOf,
+  getEndpoint,
+  loadUnifiedPush,
+  parseEndpoint,
+  releaseEndpoint,
+  sendUnifiedPush,
+} from './unifiedpush.js';
 import { ErrorLog, captureProcessErrors } from './errorLog.js';
 import { standardMetrics } from './metrics.js';
 import { finalErrorHandler, opsRouter } from './ops.js';
@@ -28,6 +39,7 @@ const errorLog = new ErrorLog(process.env.ERRORS_FILE || undefined, (report) => 
 captureProcessErrors(errorLog, VERSION);
 const pushes = ops.metrics.counter('pushes_total', 'Push messages, by how they went');
 ops.metrics.gauge('subscriptions', 'Browsers registered for notifications', subscriptionCount);
+ops.metrics.gauge('unifiedpush_endpoints', 'Android apps registered for notifications', endpointCount);
 ops.metrics.gauge('reminders_waiting', 'Reminders waiting to fire', reminderCount);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
@@ -48,6 +60,8 @@ webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 loadReminders(process.env.REMINDERS_FILE || undefined);
 // And browsers' subscriptions (subscriptions.ts), so notifications keep coming after a restart.
 loadSubscriptions(process.env.SUBSCRIPTIONS_FILE || undefined);
+// And the Android app's UnifiedPush endpoints (unifiedpush.ts).
+loadUnifiedPush(process.env.UNIFIEDPUSH_FILE || undefined);
 /** How often due reminders are looked for. */
 const REMINDER_SWEEP_MS = 30_000;
 
@@ -104,14 +118,34 @@ async function callerOf(body: unknown): Promise<string | undefined> {
 app.post('/subscribe', async (req, res) => {
   const pushkey: unknown = req.body?.pushkey;
   // Only the parts Web Push uses are kept (and saved): an https endpoint and its two keys.
-  const subscription = parseSubscription(req.body?.subscription);
-  if (typeof pushkey !== 'string' || !pushkey || pushkey.length > 512 || !subscription) {
-    res.status(400).json({ error: 'pushkey and subscription are required' });
+  // The Android app sends { unifiedpush: { endpoint } } instead (unifiedpush.ts).
+  const upRaw = req.body?.unifiedpush;
+  const endpoint = upRaw ? parseEndpoint((upRaw as { endpoint?: unknown }).endpoint) : undefined;
+  const subscription = upRaw ? undefined : parseSubscription(req.body?.subscription);
+  if (typeof pushkey !== 'string' || !pushkey || pushkey.length > 512 || (!subscription && !endpoint)) {
+    res.status(400).json({ error: 'pushkey and subscription (or a public https unifiedpush.endpoint) are required' });
     return;
   }
   const owner = await callerOf(req.body);
   if (!owner) {
     res.status(401).json({ error: 'A valid openid_token is required', code: 'auth_required' });
+    return;
+  }
+  if (endpoint) {
+    if (getSubscription(pushkey) && getSubscription(pushkey)?.owner !== owner) {
+      res.status(403).json({ error: 'That pushkey belongs to another account', code: 'pushkey_taken' });
+      return;
+    }
+    if (claimEndpoint(pushkey, owner, endpoint) === 'taken') {
+      res.status(403).json({ error: 'That pushkey belongs to another account', code: 'pushkey_taken' });
+      return;
+    }
+    res.status(204).end();
+    return;
+  }
+  const upOwner = getEndpoint(pushkey)?.owner;
+  if (!subscription || (upOwner !== undefined && upOwner !== owner)) {
+    res.status(403).json({ error: 'That pushkey belongs to another account', code: 'pushkey_taken' });
     return;
   }
   if (claimSubscription(pushkey, owner, subscription) === 'taken') {
@@ -132,6 +166,7 @@ app.delete('/subscribe/:pushkey', async (req, res) => {
     return;
   }
   releaseSubscription(req.params.pushkey, owner);
+  releaseEndpoint(req.params.pushkey, owner);
   res.status(204).end();
 });
 
@@ -175,6 +210,14 @@ async function send(pushkey: string, subscription: webpush.PushSubscription, pay
   }
 }
 
+/** Sends one notification to an Android app's UnifiedPush endpoint; a gone one is forgotten. */
+async function deliverUnifiedPush(pushkey: string, endpoint: string, payload: string): Promise<'sent' | 'gone' | 'failed'> {
+  const result = await sendUnifiedPush(endpoint, payload);
+  if (result === 'gone') deleteEndpoint(pushkey);
+  pushes.inc({ result });
+  return result;
+}
+
 /** Fires every reminder that's due, to each browser its account has registered. */
 async function sweepReminders(): Promise<void> {
   for (const { owner, reminder } of takeDue()) {
@@ -185,7 +228,10 @@ async function sweepReminders(): Promise<void> {
       eventId: reminder.eventId,
       tag: reminder.id,
     });
-    await Promise.all(subscriptionsOf(owner).map(({ pushkey, subscription }) => deliver(pushkey, subscription, payload)));
+    await Promise.all([
+      ...subscriptionsOf(owner).map(({ pushkey, subscription }) => deliver(pushkey, subscription, payload)),
+      ...endpointsOf(owner).map(({ pushkey, endpoint }) => deliverUnifiedPush(pushkey, endpoint, payload)),
+    ]);
   }
 }
 setInterval(() => void sweepReminders().catch((err) => console.error('Reminder sweep failed', err)), REMINDER_SWEEP_MS);
@@ -254,6 +300,13 @@ app.post('/_matrix/push/v1/notify', async (req, res) => {
   const rejected: string[] = [];
   await Promise.all(
     notification.devices.map(async (device) => {
+      const up = getEndpoint(device.pushkey);
+      if (up) {
+        const claimed = device.data?.user_id;
+        if (typeof claimed === 'string' && claimed !== up.owner) return;
+        if ((await deliverUnifiedPush(device.pushkey, up.endpoint, payload)) === 'gone') rejected.push(device.pushkey);
+        return;
+      }
       const entry = getSubscription(device.pushkey);
       if (!entry) {
         rejected.push(device.pushkey);
