@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NATIVE_PUSH_EVENT, nativeBridge, nativePushState, reportCallActive, waitForNativeEndpoint } from './nativeApp';
+import { NATIVE_PUSH_EVENT, nativeBridge, nativePushState, reportCallActive, reportCallMuted, waitForNativeEndpoint } from './nativeApp';
 
 function installBridge(state: object) {
-  const bridge = { pushState: vi.fn(() => JSON.stringify(state)), enablePush: vi.fn(), disablePush: vi.fn(), testNotification: vi.fn(), callActive: vi.fn() };
+  const bridge = { pushState: vi.fn(() => JSON.stringify(state)), enablePush: vi.fn(), disablePush: vi.fn(), testNotification: vi.fn(), callActive: vi.fn(), callMuted: vi.fn() };
   (window as unknown as { PurrlorNative?: unknown }).PurrlorNative = bridge;
   return bridge;
 }
@@ -17,6 +17,7 @@ describe('the Android app bridge', () => {
     expect(nativeBridge()).toBeUndefined();
     expect(nativePushState()).toEqual({ endpoint: '', distributors: 0, allowed: true });
     expect(() => reportCallActive(true)).not.toThrow();
+    expect(() => reportCallMuted(true)).not.toThrow();
   });
 
   it('reads the app’s push state, and tolerates nonsense', () => {
@@ -31,6 +32,13 @@ describe('the Android app bridge', () => {
     reportCallActive(true);
     reportCallActive(false);
     expect(bridge.callActive.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('tells the app when the microphone goes off or on', () => {
+    const bridge = installBridge({});
+    reportCallMuted(true);
+    reportCallMuted(false);
+    expect(bridge.callMuted.mock.calls).toEqual([[true], [false]]);
   });
 
   it('waits for the endpoint to arrive, and gives up with the message otherwise', async () => {

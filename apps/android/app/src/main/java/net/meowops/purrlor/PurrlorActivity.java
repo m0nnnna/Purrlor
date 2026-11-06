@@ -53,6 +53,12 @@ public class PurrlorActivity extends Activity {
     @Nullable private ValueCallback<Uri[]> fileCallback;
 
     /** The push endpoint changed: tell the page, if it's on screen. */
+    /** A button on the call notification was pressed ("mute" or "leave"). */
+    static void callAction(String action) {
+        PurrlorActivity activity = sCurrent;
+        if (activity != null) activity.runOnUiThread(() -> activity.fire("purrlor-call-action", "{\"action\":" + org.json.JSONObject.quote(action) + "}"));
+    }
+
     static void pushChanged() {
         PurrlorActivity activity = sCurrent;
         if (activity != null) activity.runOnUiThread(() -> activity.fire("purrlor-native-push", "{}"));

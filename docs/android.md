@@ -36,7 +36,9 @@ checked again at send time (no DNS tricks) and redirects aren't followed.
 While a voice call is on the page, `VoiceCallSession` calls `PurrlorNative.callActive(true)` and
 the app starts `CallService`, a foreground service (microphone, plus camera when granted) with an
 ongoing notification, so Android keeps the app and its audio alive when it leaves the screen.
-`callActive(false)` stops it.
+`callActive(false)` stops it. The notification has **Mute / Unmute** and **Leave** buttons: they fire
+`purrlor-call-action` (`detail.action` is `mute` or `leave`) on `window`, which `CallHotkeys` handles, and
+the page keeps the button's label right with `callMuted(bool)`.
 
 ## Bridge reference
 
@@ -46,8 +48,10 @@ ongoing notification, so Android keeps the app and its audio alive when it leave
 | `enablePush()` / `disablePush()` | register / unregister with the distributor |
 | `testNotification()` | shows a local notification |
 | `callActive(bool)` | start / stop the call service |
+| `callMuted(bool)` | the microphone is off (relabels the notification's Mute button) |
 
 | App → page (events on `window`) | |
 | --- | --- |
 | `purrlor-native-push` | push state changed; reread `pushState()` |
 | `purrlor-open-room` | `detail.roomId` — a notification was tapped |
+| `purrlor-call-action` | `detail.action` — `mute` or `leave`, from the call notification |

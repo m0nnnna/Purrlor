@@ -36,6 +36,11 @@ final class NativeBridge {
     }
 
     @JavascriptInterface
+    public void callMuted(boolean muted) {
+        CallService.setMuted(activity.getApplicationContext(), muted);
+    }
+
+    @JavascriptInterface
     public void callActive(boolean active) {
         Context app = activity.getApplicationContext();
         Intent service = new Intent(app, CallService.class);

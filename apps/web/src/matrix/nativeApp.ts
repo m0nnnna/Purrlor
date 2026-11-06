@@ -15,6 +15,8 @@ type Bridge = {
   testNotification(): void;
   /** Whether a voice call is going on, so the app keeps running when it leaves the screen. */
   callActive(active: boolean): void;
+  /** Whether the microphone is off, for the call notification's Mute / Unmute button. */
+  callMuted(muted: boolean): void;
 };
 
 export type NativePushState = {
@@ -79,5 +81,17 @@ export function reportCallActive(active: boolean): void {
     nativeBridge()?.callActive(active);
   } catch {
     // A bridge that can't be reached just means no background call.
+  }
+}
+
+/** The event the app fires on `window` when a button on the call notification is pressed: detail.action is `mute` or `leave`. */
+export const NATIVE_CALL_ACTION_EVENT = 'purrlor-call-action';
+
+/** Tells the app whether the microphone is off, so the call notification's button reads right. */
+export function reportCallMuted(muted: boolean): void {
+  try {
+    nativeBridge()?.callMuted(muted);
+  } catch {
+    // An older app without the method: the button just keeps its label.
   }
 }
